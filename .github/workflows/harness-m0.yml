@@ -1,16 +1,34 @@
+# Boundary Harness M0 CI — DevOps confirmed
+# Workflow path is frozen: .github/workflows/harness-m0.yml
+# working-directory: services/boundary-harness
+# security-anti command is frozen (do not rename):
+#   pnpm exec vitest run apps/api/tests/security-anti
+# Hard-fail: no continue-on-error
 name: harness-m0
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/boundary-harness/**"
+      - ".github/workflows/harness-m0.yml"
   push:
     branches: [main]
-  pull_request:
+    paths:
+      - "services/boundary-harness/**"
+      - ".github/workflows/harness-m0.yml"
+
+concurrency:
+  group: harness-m0-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
     working-directory: services/boundary-harness
 
 jobs:
-  lint-test:
+  unit-vitest:
+    name: vitest (ready-anti + security-anti S1–S8)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,14 +46,19 @@ jobs:
         run: pnpm rebuild better-sqlite3
       - name: Lint
         run: pnpm lint
-      - name: ready-anti
+      - name: vitest M0 packages
+        run: |
+          pnpm exec vitest run \
+            packages/domain \
+            packages/policy \
+            packages/ready \
+            apps/api \
+            apps/mcp-server \
+            --passWithNoTests=false
+      - name: vitest ready-anti
         run: pnpm exec vitest run apps/api/tests/ready-anti
-      - name: security-anti
+      - name: vitest security-anti
         run: pnpm exec vitest run apps/api/tests/security-anti
-      - name: Security acceptance contract
-        run: pnpm exec vitest run apps/api/tests/contract
-      - name: Unit + anti-pattern tests
-        run: pnpm test
       - name: Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
       - name: E2E (API + Inbox)

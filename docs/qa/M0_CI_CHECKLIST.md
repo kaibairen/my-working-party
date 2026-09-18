@@ -1,15 +1,29 @@
-# M0 CI checklist
+# M0 CI 清单 v0.4
 
-Canonical (only) workflow: [`.github/workflows/harness-m0.yml`](../../.github/workflows/harness-m0.yml)  
-Working directory: `services/boundary-harness`  
-Path freeze: M0 code stays under `services/boundary-harness/` — not top-level `harness/`.
+> 起草：HarnessDevOps · 对齐 TechLead 纠偏（2026-09-19）  
+> **落地仓：`kaibairen/my-working-party`（不分仓）**  
+> **Workflow：** [`.github/workflows/harness-m0.yml`](../../.github/workflows/harness-m0.yml)
 
-- [x] pnpm install (lockfile at `services/boundary-harness/pnpm-lock.yaml`)
-- [x] rebuild `better-sqlite3`
-- [x] `pnpm lint`
-- [x] `pnpm test` — includes BriefV1 422, Ready predicates, `policy.track`, A5 ready-anti, S1–S8 security-anti
-- [x] `pnpm test:e2e` — Playwright Gate Inbox (launch or `CDP_URL` / `connectOverCDP`)
-- [x] Compose file: `services/boundary-harness/docker-compose.yml` (`docker compose up api`)
-- [ ] Optional local: `pnpm e2e` writes `artifacts/e2e/*.log`
+## 工具链
 
-Do **not** require `CURSOR_API_KEY` for green CI (fixture / Noop path).
+| 项 | 值 |
+|----|-----|
+| Node | 22 |
+| 包管理 | **pnpm** 10.14 + `pnpm-lock.yaml` |
+| 单测 | **vitest** |
+| 服务根 | `services/boundary-harness/` |
+| Workflow | `.github/workflows/harness-m0.yml` |
+
+## 强制 vitest 步（working-directory: services/boundary-harness）
+
+Hard-fail：无 `continue-on-error`。
+
+```bash
+pnpm exec vitest run apps/api/tests/ready-anti
+pnpm exec vitest run apps/api/tests/security-anti
+```
+
+security-anti 路径：`apps/api/tests/security-anti/**/*.{test,spec}.{ts,mjs}`  
+ready-anti 路径：`apps/api/tests/ready-anti/**`
+
+**security-anti S1–S8**（缺任一 merge 红）：见 [M0_SECURITY_ANTI_FINAL_v1.md](M0_SECURITY_ANTI_FINAL_v1.md)。

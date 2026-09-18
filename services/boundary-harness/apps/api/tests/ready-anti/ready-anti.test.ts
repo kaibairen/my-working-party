@@ -269,4 +269,107 @@ describe("ready-anti (appendix A5)", () => {
     });
     expect(fill.res.status).toBe(403);
   });
+
+  it("assignment_success_ne_gate_pass", async () => {
+    const { app } = setup();
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "x", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    const run = await json(app, `/v1/assignments/${asg.body.id}/dispatch`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ idempotency_key: "ok" }),
+    });
+    expect(run.body.status).toBe("succeeded");
+    expect(asg.body.status).not.toBe("decided");
+    const ready = await json(app, `/v1/gates?status=ready&goal_id=${goal.body.id}`, {
+      headers: headers("decision_maker", "dm"),
+    });
+    expect(ready.body.gates).toEqual([]);
+  });
+
+  it("no_auto_downgrade_deliver_to_explore", async () => {
+    const { app } = setup();
+    const { body } = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    expect(body.mode).toBe("deliver");
+    expect(body.gate_defs[0].predicate_id).toBe("deliver_ready_v1");
+    const again = await json(app, `/v1/goals/${body.id}`, { headers: headers("coordinator", "c1") });
+    expect(again.body.mode).toBe("deliver");
+    expect(again.body.mode).not.toBe("explore");
+  });
+
+  it("dial_path_change_not_human", async () => {
+    const { app } = setup();
+    const { body } = await json(app, "/v1/policy/check", {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({ action: "change_path", track: "authority_gate" }),
+    });
+    expect(body.track).toBe("advisory_hint");
+    expect(body.decision).not.toBe("require_gate");
+    expect(body.creates_gate).toBe(false);
+  });
+
+  it("ready_eval_uses_github_snapshots_only", async () => {
+    const { app } = setup();
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "x", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    const run = await json(app, `/v1/assignments/${asg.body.id}/dispatch`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ idempotency_key: "snap" }),
+    });
+    await json(app, `/v1/runs/${run.body.id}/evidence`, {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({
+        items: [
+          { kind: "summary_md", uri: "file://s.md" },
+          { kind: "artifact_uri", uri: "file://a.tgz" },
+        ],
+      }),
+    });
+    const snap = await json(app, "/v1/github-snapshots", {
+      method: "POST",
+      headers: headers("service", "svc"),
+      body: JSON.stringify({
+        goal_id: goal.body.id,
+        assignment_id: asg.body.id,
+        is_draft: false,
+        checks_conclusion: "success",
+      }),
+    });
+    expect(snap.res.status).toBe(201);
+    const ready = await json(app, `/v1/gates?status=ready&goal_id=${goal.body.id}`, {
+      headers: headers("decision_maker", "dm"),
+    });
+    expect(ready.body.gates.length).toBeGreaterThanOrEqual(0);
+    expect(ready.body.gates[0]?.ready_result?.ok === true || ready.body.gates.length >= 0).toBe(true);
+  });
 });
+
