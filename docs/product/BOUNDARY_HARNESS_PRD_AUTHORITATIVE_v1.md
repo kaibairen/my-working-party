@@ -1,6 +1,6 @@
 # Boundary Harness 权威 PRD v1.0
 
-**状态：** AUTHORITATIVE（TechLead 已签核；待决策人最终确认）  
+**状态：** AUTHORITATIVE（harness 组全员已签核；**仅待决策人最终确认**）  
 **日期：** 2026-09-19  
 **产品名：** Boundary Harness（边界线束）  
 **口号：** 约束爆炸半径，不约束智能本身  
@@ -66,12 +66,18 @@
 11. Ready 谓词 MUST 版本不可变；求值 MUST NOT 仅依赖现场打 GitHub（用 snapshots）；ready 跳变走 outbox 一次。  
 12. 预算权威 MUST 为 `assignments.budget_json`（brief 内 budget 仅创建拷贝）。  
 
+**详见附录 A**（`APPENDIX_READY_PREDICATES_AND_GATE_ANTI_PATTERNS_v1.md`）与 **附录 RBAC**（`APPENDIX_RBAC_ACTION_MATRIX_v1.md`）。
+
 ## 6. Ready 底线
 
-**explore：** nullable 模板；`safety_only_v1` 或空；证据可选。  
+**explore：** `gate_template_id IS NULL` ⇒ **0 个交付 GateInstance**（「Ready 默认通过」= 无人 Inbox 卡，禁止自动生成 pass 卡）；`safety_only_v1` 仅在 `policy.check` 产出 `require_gate`（`track=authority_gate`）时实例化；证据可选。  
 **deliver `deliver_ready_v1`：** evidence `summary_md` +（若 GitHub）非 draft ∧ checks success；否则等价机读包；禁止纯聊天。
 
 规范化降级：MVP MUST NOT 自动把 deliver 降成 explore 空链。
+
+**Brief 禁键：** `steps|script|must_path` 为 **floor**；完整违禁集合以 BriefV1 为准，允许扩表（plan/playbook/workflow 等已入 §5.3）。
+
+**RBAC：** 角色与硬禁令见 §3；**动作×角色完整矩阵** 进权威附录 `APPENDIX_RBAC_ACTION_MATRIX_v1.md`（与 Tech Impl/OpenAPI 同源），不降级为仅工程私货。
 
 ## 7. UX
 
@@ -90,7 +96,7 @@
 
 ### MCP M1 最小集
 
-`harness_create_goal` · `harness_fill_assignment` · `harness_dispatch` · `harness_attach_evidence` · `harness_get_run` · `harness_list_gates` · `harness_decide_gate` · `harness_policy_check`  
+`harness_create_goal` · `harness_fill_assignment` / `harness_propose_assignment` · `harness_dispatch` / `harness_dispatch_assignment` · `harness_attach_evidence` · `harness_get_run` / `harness_get_status` · `harness_list_gates` / `harness_list_ready_gates` · `harness_decide_gate` · `harness_policy_check`  
 
 不上线：画布写、聊天推进状态、set_steps、cursor_raw_*。  
 可延后：propose 队列、canvas projection。
@@ -115,10 +121,10 @@ M3 通知与运营增强
 | 角色 | 状态 |
 |------|------|
 | HarnessTechLead | **签核 AUTHORITATIVE** ✓ |
-| HarnessReady | 底线已吸收；附录可另附 |
-| HarnessBackend | P0 已吸收进 §4–5；待其确认无遗漏 |
-| HarnessBridge | MCP/Cursor 序列已吸收；待其确认 |
-| 产品方案评审 | 3 致命改法已写入；**请终审签核** |
+| HarnessReady | **签核 ✓**（2026-09-19）：附录 A 已冻结可合并 |
+| HarnessBackend | **签核 ✓**（2026-09-19）：§4–5 / 附录 RBAC / TechImpl 实体补丁已核对，无遗漏 |
+| HarnessBridge | **签核 ✓**（2026-09-19）：MCP 清单、Cursor 最小序列、双 external id、禁 raw launch 已核对写入 |
+| 产品方案评审 | **签核 AUTHORITATIVE ✓**（2026-09-19）：无新致命问题 |
 | 决策人（用户） | **待最终确认** |
 
 ## 变更记录
@@ -127,4 +133,6 @@ M3 通知与运营增强
 |------|------|
 | v1.0-CANDIDATE | TechLead+Ready |
 | v1.0-CANDIDATE.2 | +产品3致命 +Backend P0 +Bridge MCP/Cursor |
+| v1.0-CANDIDATE.3 | Backend **同意**签核；残留下沉 Tech Impl |
 | v1.0-AUTHORITATIVE | TechLead 签核确认 |
+| v1.0-AUTHORITATIVE.1 | 组员全签；并入附录 A + RBAC；待决策人确认 |
