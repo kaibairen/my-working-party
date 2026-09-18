@@ -10,3 +10,4 @@ Under discussion: **Boundary Harness** — control plane as a harness, not a jai
 
 - [docs/product/AGENT_DELIVERY_HARNESS_PRD.md](docs/product/AGENT_DELIVERY_HARNESS_PRD.md)（v0.1.3 产品方案）
 - [docs/product/research/control-plane-as-harness-brief.md](docs/product/research/control-plane-as-harness-brief.md)（配套调研 brief）
+- [docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md](docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md)（v0.1 工程方案）
