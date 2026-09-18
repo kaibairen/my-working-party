@@ -1,7 +1,8 @@
 # M0 CI checklist
 
-Canonical workflow: [`.github/workflows/harness-m0.yml`](../../.github/workflows/harness-m0.yml)  
-Working directory: `services/boundary-harness`
+Canonical (only) workflow: [`.github/workflows/harness-m0.yml`](../../.github/workflows/harness-m0.yml)  
+Working directory: `services/boundary-harness`  
+Path freeze: M0 code stays under `services/boundary-harness/` — not top-level `harness/`.
 
 - [x] pnpm install (lockfile at `services/boundary-harness/pnpm-lock.yaml`)
 - [x] rebuild `better-sqlite3`
