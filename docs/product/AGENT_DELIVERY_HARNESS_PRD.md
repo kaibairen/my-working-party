@@ -1,16 +1,23 @@
-# Agent Delivery Harness（交付护栏控制面）产品方案 v0.1.1
+# Boundary Harness（边界线束 / Agent Delivery Harness）产品方案 v0.1.3
 
 > 仓库：`kaibairen/my-working-party`  
-> 作者：技术研讨 bot（Grok Bot）+ 研讨类协作 bot  
+> 作者：技术研讨 bot（Grok Bot）+ 研讨类协作 bot（Harness调研 / 产品方案评审）  
 > 日期：2026-09-18  
-> 状态：研讨草案 v0.1.1（已吸收「产品方案评审」A/B/C 硬改），供决策人评审迭代
+> 状态：研讨草案 v0.1.3（吸收评审 A/B/C + 调研 brief），供决策人评审迭代  
+> 配套调研：`docs/product/research/control-plane-as-harness-brief.md`
 
 ---
 
 ## 0. 一句话定位
 
-**做一层 harness（护栏），不是又一个工作流监工。**  
+> **Boundary Harness —— 约束爆炸半径，不约束智能本身。**  
+> （EN: *Fence the blast radius, not the intelligence.*）
+
+**做一层 harness（护栏），不是又一个工作流监工 / Workflow Engine。**  
 在完全对齐 Grok Bot「持久自主队友」定位的前提下，只约束「乱碰乱撞」与「把聊天当成系统真源」，**不削弱 Bot 在边界内的自主性与涌现能力**。
+
+### 事实源优先级（SoT）
+`workspace + git + evidence` ≫ Project/共享记忆 ≫ Bot 记忆 ≫ **聊天（最弱，禁止当 SoT）**
 
 ---
 
@@ -109,6 +116,22 @@ Goal 必须带 `mode`：`deliver` | `explore`（研讨/调研类默认 `explore`
 - `deliver`：才挂完整交付门禁（如 G0–G5）。  
 Brief **只含** outcome、约束、证据形态、预算；**禁止**步骤脚本与唯一路径。
 
+### P8. 模型升级就删脚手架
+每次模型能力跃迁，必须删除至少一块 harness 并做对照测量（Anthropic：context reset / sprint 曾随模型变强而退役）。死重脚手架会压抑长程能力。
+
+### P9. 扇出前明示经济学档位
+UI/协调 Bot 在 fan-out 前展示代价档：约 1×（聊天）/ 4×（单 Agent）/ 15×（多 Agent 编排）。只在独立可并行且价值覆盖代价时扇出。
+
+### P10. 看板只是投影，不是主界面
+主界面对齐 Grok Bot：**Roster + 对话/产物时间线**。Kanban/画布仅为只读投影（或协调 Bot API），不得成为开工前置，也不得把「建议阶段」写成强制阶段。
+
+### P11. hard boundary 与 advisory 分轨
+API/策略必须区分：
+- `authority_gate`：不可逾越（外发、受保护合并、超预算、破坏性删除、提权）——对应 Dial 白名单  
+- `advisory_hint`：可忽略的提示（建议拆法、建议下一步）——**禁止**升级成白名单或强制步骤  
+
+完成判定只认可验证证据，不认 advisory 是否被遵守。
+
 ---
 
 ## 4. 领域模型
@@ -164,8 +187,8 @@ Gate 卡片是决策人聊天里**唯一常规主路径**。
 ## 5. 体验形态（B 为骨，A 为皮）
 
 ### 5.1 默认体验（对齐「消失的界面」）
-- 决策人日常：只收 **Gate 卡** 与例外。  
-- 协调 Bot（可选）：在控制面派 Assignment、看池子负载。  
+- 决策人日常：Roster 扫一眼 + 只收 **Gate 卡** 与例外；主时间线是对话/产物，不是看板。  
+- 协调 Bot（默认）：派 Assignment、看池子负载（API）；人不当日常调度员。  
 - 执行 Bot：仍用自然语言干活，不感知「被管死」。
 
 ### 5.2 可选画布 / 看板（给需要的人）
@@ -189,6 +212,7 @@ Gate 卡片是决策人聊天里**唯一常规主路径**。
 | 参考 | 类型 | 可偷 | 慎用/避免 |
 |------|------|------|-----------|
 | [Loop Control Plane](https://github.com/BankNatchapol/Loop-Control-Plane) | 工程控制台 | Feature→Task、风险门、handoff 文件、CI 回写 | 过细列生命周期若强迫逐步确认会伤自主 |
+| [LoopX](https://github.com/Huangruiteng/loopx) | Guided Autonomy 控制面 | hard boundaries/quota/gate/evidence；看板当 projection | 把建议当白名单或把看板当强制阶段 |
 | [builderz-labs/mission-control](https://github.com/builderz-labs/mission-control) | Agent 运营驾驶舱 | Assignment 生命周期、质量门、花费、多 runtime | 别变成纯任务工单系统替代 Bot 对话 |
 | [CAPHTECH/state_gate](https://github.com/CAPHTECH/state_gate) | 外部状态机 | **证据提交模型**、Guard、审计、乐观锁 | 别把探索过程每一步都状态机化 |
 | [graphed-orchestrator](https://github.com/graphed-org/graphed-orchestrator) | 确定性裁判 | Ready 纯函数、角色不互聊、红灯不能 APPROVE | 三角色冻结流水线不宜套所有探索任务 |
@@ -304,6 +328,7 @@ Gate 卡片是决策人聊天里**唯一常规主路径**。
 - https://x.ai/news/introducing-grok-bot  
 - https://docs.x.ai/grok-bot/overview  
 - https://www.anthropic.com/engineering/harness-design-long-running-apps  
+- https://www.anthropic.com/engineering/building-effective-agents  
 - https://claude.com/blog/harnessing-claudes-intelligence  
 - https://cursor.com/blog/agent-autonomy-auto-review  
 - https://cursor.com/docs/cloud-agent/api/endpoints  
@@ -311,6 +336,11 @@ Gate 卡片是决策人聊天里**唯一常规主路径**。
 - https://github.com/builderz-labs/mission-control  
 - https://github.com/CAPHTECH/state_gate  
 - https://github.com/graphed-org/graphed-orchestrator  
+- https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents  
+- https://www.anthropic.com/engineering/multi-agent-research-system  
+- https://cursor.com/docs/agent/projects  
+- `docs/product/research/control-plane-as-harness-brief.md`（本仓库配套调研）  
+
 
 ---
 
