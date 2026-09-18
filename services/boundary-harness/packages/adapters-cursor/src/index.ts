@@ -1,14 +1,27 @@
+export type CursorLifecycle = "FINISHED" | "IDLE";
+
 export type CursorDispatchInput = {
   runId: string;
   assignmentId: string;
   idempotencyKey?: string;
+  lifecycle?: CursorLifecycle;
+};
+
+export type CursorLaunchRecord = {
+  url: string;
+  assignmentId: string;
+  runId: string;
+  idempotencyKey?: string;
+  lifecycle: CursorLifecycle;
+  mode: "fixture" | "stub" | "live";
+  recorded_at: string;
 };
 
 export type CursorDispatchResult = {
   adapter: "cursor";
   external_agent_id: string | null;
   external_run_id: string | null;
-  status: "succeeded" | "dispatched" | "failed";
+  status: "succeeded" | "dispatched" | "failed" | "idle";
   usage_json: Record<string, unknown>;
   error?: string;
 };
@@ -17,33 +30,60 @@ export type CursorAdapterOpts = {
   apiKey?: string;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
+  /** CURSOR_API stub: record launch payloads, never call Cursor. */
+  stub?: boolean;
+  /** Default lifecycle for fixture/stub (FINISHED ≠ IDLE). */
+  lifecycle?: CursorLifecycle;
 };
 
 /**
- * M1 Cursor adapter. Without CURSOR_API_KEY this is fixture-only and never
- * calls Cursor. Live HTTP is behind CURSOR_API_KEY. Dual external ids always
- * persist. MCP MUST NOT expose this as cursor_raw_*.
+ * M1 Cursor adapter. Real HTTP client is behind this interface.
+ * Default CI: FakeCursor fixture (no network).
+ * CURSOR_API_STUB=1: stub mode that records launch payloads.
+ * CURSOR_API_KEY: live POST /v0/agents.
+ * Dual external ids always persist. MCP MUST NOT expose this as cursor_raw_*.
  */
 export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
   const apiKey = opts.apiKey ?? process.env.CURSOR_API_KEY ?? "";
+  const stub = opts.stub ?? process.env.CURSOR_API_STUB === "1";
   const baseUrl = (opts.baseUrl ?? process.env.CURSOR_API_BASE ?? "https://api.cursor.com").replace(/\/$/, "");
   const fetchImpl = opts.fetchImpl ?? fetch;
-  const mode = apiKey ? ("live" as const) : ("fixture" as const);
+  const defaultLifecycle: CursorLifecycle = opts.lifecycle ?? "FINISHED";
+  const mode = apiKey ? ("live" as const) : stub ? ("stub" as const) : ("fixture" as const);
+  const launches: CursorLaunchRecord[] = [];
 
   return {
     name: "cursor" as const,
     mode,
+    launches,
     async dispatch(input: CursorDispatchInput): Promise<CursorDispatchResult> {
-      if (mode === "fixture") {
+      const lifecycle: CursorLifecycle = input.lifecycle ?? defaultLifecycle;
+      const recorded_at = new Date().toISOString();
+      const launch: CursorLaunchRecord = {
+        url: `${baseUrl}/v0/agents`,
+        assignmentId: input.assignmentId,
+        runId: input.runId,
+        idempotencyKey: input.idempotencyKey,
+        lifecycle,
+        mode,
+        recorded_at,
+      };
+      launches.push(launch);
+
+      if (mode === "fixture" || mode === "stub") {
+        const finished = lifecycle === "FINISHED";
         return {
           adapter: "cursor",
-          external_agent_id: `cursor-fixture-agent:${input.assignmentId}`,
-          external_run_id: `cursor-fixture-run:${input.runId}`,
-          status: "succeeded",
+          external_agent_id: `cursor-${mode}-agent:${input.assignmentId}`,
+          external_run_id: `cursor-${mode}-run:${input.runId}`,
+          status: finished ? "succeeded" : "dispatched",
           usage_json: {
-            fixture: true,
+            fixture: mode === "fixture",
+            stub: mode === "stub",
             adapter: "cursor",
-            noop_or_offline_contract: true,
+            cursor_lifecycle: lifecycle,
+            noop_or_offline_contract: finished,
+            launch,
           },
         };
       }
@@ -72,18 +112,25 @@ export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
           external_agent_id: null,
           external_run_id: null,
           status: "failed",
-          usage_json: { live: true, adapter: "cursor", http_status: res.status },
+          usage_json: { live: true, adapter: "cursor", http_status: res.status, launch },
           error: `cursor_http_${res.status}`,
         };
       }
       const agentId = String(body.id ?? body.agent_id ?? "");
       const runId = String(body.run_id ?? body.latest_run_id ?? body.id ?? "");
+      const remoteLifecycle = String(body.status ?? body.lifecycle ?? "dispatched").toUpperCase();
+      const finished = remoteLifecycle === "FINISHED";
       return {
         adapter: "cursor",
         external_agent_id: agentId || `cursor-agent:${input.assignmentId}`,
         external_run_id: runId || `cursor-run:${input.runId}`,
-        status: "dispatched",
-        usage_json: { live: true, adapter: "cursor" },
+        status: finished ? "succeeded" : "dispatched",
+        usage_json: {
+          live: true,
+          adapter: "cursor",
+          cursor_lifecycle: finished ? "FINISHED" : remoteLifecycle === "IDLE" ? "IDLE" : "DISPATCHED",
+          launch,
+        },
       };
     },
   };

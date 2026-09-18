@@ -171,6 +171,9 @@ export const outbox = sqliteTable("outbox", {
   payload: text("payload").notNull(),
   createdAt: text("created_at").notNull(),
   publishedAt: text("published_at"),
+  attempts: integer("attempts"),
+  lastError: text("last_error"),
+  nextAttemptAt: text("next_attempt_at"),
 });
 
 export const schema = {

@@ -8,7 +8,9 @@ services:
       DATABASE_PATH: /app/data/harness.db
       PORT: "8080"
       WEBHOOK_URL: ${WEBHOOK_URL:-}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:-}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      CURSOR_API_STUB: ${CURSOR_API_STUB:-}
     ports:
       - "8080:8080"
     volumes:

@@ -24,8 +24,20 @@ const TOOLS: ToolDef[] = [
     path: (args) => `/v1/goals/${args.goal_id}/assignments`,
   },
   {
+    name: "harness_propose_assignment",
+    description: "Propose/fill an Assignment (alias of harness_fill_assignment). Same BriefV1 validator.",
+    method: "POST",
+    path: (args) => `/v1/goals/${args.goal_id}/assignments`,
+  },
+  {
     name: "harness_dispatch",
-    description: "Dispatch an Assignment via Noop adapter (M0). Coordinator or service only.",
+    description: "Dispatch an Assignment via adapter. Coordinator or service only. Canvas not required.",
+    method: "POST",
+    path: (args) => `/v1/assignments/${args.assignment_id}/dispatch`,
+  },
+  {
+    name: "harness_dispatch_assignment",
+    description: "Alias of harness_dispatch.",
     method: "POST",
     path: (args) => `/v1/assignments/${args.assignment_id}/dispatch`,
   },
@@ -42,6 +54,12 @@ const TOOLS: ToolDef[] = [
     path: (args) => `/v1/runs/${args.run_id}`,
   },
   {
+    name: "harness_get_status",
+    description: "Alias of harness_get_run. IDLE/succeeded is not Gate ready.",
+    method: "GET",
+    path: (args) => `/v1/runs/${args.run_id}`,
+  },
+  {
     name: "harness_list_gates",
     description: "List GateInstances, optionally status=ready.",
     method: "GET",
@@ -51,6 +69,16 @@ const TOOLS: ToolDef[] = [
       if (args.goal_id) q.set("goal_id", String(args.goal_id));
       const qs = q.toString();
       return `/v1/gates${qs ? `?${qs}` : ""}`;
+    },
+  },
+  {
+    name: "harness_list_ready_gates",
+    description: "List ready GateInstances only (Inbox default).",
+    method: "GET",
+    path: (args) => {
+      const q = new URLSearchParams({ status: "ready" });
+      if (args.goal_id) q.set("goal_id", String(args.goal_id));
+      return `/v1/gates?${q.toString()}`;
     },
   },
   {
@@ -92,7 +120,7 @@ export async function callTool(
     tool.method === "GET"
       ? undefined
       : JSON.stringify(
-          name === "harness_dispatch"
+          name === "harness_dispatch" || name === "harness_dispatch_assignment"
             ? { idempotency_key: args.idempotency_key }
             : name === "harness_attach_evidence"
               ? { items: args.items }

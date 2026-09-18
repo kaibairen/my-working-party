@@ -22,7 +22,10 @@ import {
   health,
   isHarnessError,
   listAudit,
+  listEventsAfter,
   listGateInstances,
+  listGithubSnapshots,
+  listOutbox,
   listPools,
   parseBearer,
   parseRole,
@@ -116,16 +119,26 @@ export function createApp(harness: Harness) {
     await next();
   });
 
-  const sseEvents = (c: { get: (key: "actor") => Actor; get: (key: "harness") => Harness }) => {
+  const sseEvents = (c: {
+    get: (key: "actor") => Actor;
+    get: (key: "harness") => Harness;
+    req: { header: (n: string) => string | undefined; query: (n: string) => string | undefined };
+  }) => {
     const actor = c.get("actor");
     requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
     const h = c.get("harness");
+    const lastEventId = c.req.header("last-event-id") ?? c.req.query("last_event_id") ?? undefined;
     return streamSSE(c as never, async (stream) => {
+      const replay = listEventsAfter(h, lastEventId);
+      for (const ev of replay) {
+        await stream.writeSSE({ id: ev.id, event: ev.type, data: ev.payload });
+      }
       const onReady = async (payload: unknown) => {
-        await stream.writeSSE({ event: "gate.ready", data: JSON.stringify(payload) });
+        const id = (payload as { outbox_id?: string }).outbox_id;
+        await stream.writeSSE({ id, event: "gate.ready", data: JSON.stringify(payload) });
       };
       h.bus.on("gate.ready", onReady);
-      await stream.writeSSE({ event: "hello", data: JSON.stringify({ ok: true, actor }) });
+      await stream.writeSSE({ event: "hello", data: JSON.stringify({ ok: true, actor, last_event_id: lastEventId ?? null }) });
       await new Promise<void>((resolve) => {
         const timer = setInterval(() => {
           void stream.writeSSE({ event: "ping", data: "{}" });
@@ -168,6 +181,16 @@ export function createApp(harness: Harness) {
       enabled: body.enabled as boolean,
       reason: body.reason,
     }));
+  });
+
+  v1.get("/outbox", (c) => {
+    requireRole(c.get("actor"), ["decision_maker", "coordinator", "service", "viewer"]);
+    return c.json({ outbox: listOutbox(c.get("harness")) });
+  });
+
+  v1.get("/github-snapshots", (c) => {
+    requireRole(c.get("actor"), ["decision_maker", "coordinator", "service", "viewer"]);
+    return c.json({ snapshots: listGithubSnapshots(c.get("harness"), c.req.query("goal_id")) });
   });
 
   v1.get("/audit", (c) => {

@@ -263,9 +263,13 @@ describe("domain API", () => {
     expect(second.body.code).toBe("optimistic_lock");
   });
 
-  it("registers exactly the eight MCP stub tools and no raw cursor tools", () => {
+  it("registers MCP M1 minimal set and no raw cursor tools", () => {
     const names = listTools().map((t) => t.name);
     expect(names).toEqual([...MCP_TOOL_NAMES]);
+    expect(names).toContain("harness_propose_assignment");
+    expect(names).toContain("harness_dispatch_assignment");
+    expect(names).toContain("harness_get_status");
+    expect(names).toContain("harness_list_ready_gates");
     expect(names.some((n) => n.includes("cursor_raw"))).toBe(false);
     expect(names).not.toContain("set_steps");
   });
@@ -313,6 +317,9 @@ describe("domain API", () => {
     expect(html).not.toContain("去画布看进度");
     const ops = await app.request("/ops");
     expect(ops.status).toBe(200);
-    expect(await ops.text()).toContain("OpenAPI");
+    const opsHtml = await ops.text();
+    expect(opsHtml).toContain("OpenAPI");
+    expect(opsHtml).toContain("Outbox");
+    expect(opsHtml).toContain("data-testid=\"outbox-table\"");
   });
 });

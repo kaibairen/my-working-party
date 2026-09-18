@@ -6,6 +6,7 @@ const empty: ReadyContext = {
   githubSnapshots: [],
   policyEvents: [],
   noopOrOfflineContract: false,
+  runFinished: false,
 };
 
 describe("safety_only_v1", () => {
@@ -52,6 +53,7 @@ describe("deliver_ready_v1", () => {
         ...empty,
         evidence: [{ kind: "artifact_uri", uri: "file://out.tgz" }],
         noopOrOfflineContract: true,
+        runFinished: true,
       },
       "t",
     );
@@ -63,7 +65,7 @@ describe("deliver_ready_v1", () => {
     const onlySummary = evaluateReady(
       "deliver_ready_v1",
       1,
-      { ...empty, evidence: [{ kind: "summary_md", uri: "file://s.md" }] },
+      { ...empty, evidence: [{ kind: "summary_md", uri: "file://s.md" }], runFinished: true },
       "t",
     );
     expect(onlySummary.ok).toBe(false);
@@ -81,6 +83,7 @@ describe("deliver_ready_v1", () => {
           { kind: "artifact_uri", uri: "file://out.tgz" },
         ],
         noopOrOfflineContract: false,
+        runFinished: true,
       },
       "t",
     );
@@ -97,6 +100,7 @@ describe("deliver_ready_v1", () => {
           { kind: "artifact_uri", uri: "file://out.tgz" },
         ],
         noopOrOfflineContract: true,
+        runFinished: true,
       },
       "t",
     );
@@ -112,6 +116,7 @@ describe("deliver_ready_v1", () => {
         ...empty,
         evidence: [{ kind: "summary_md", uri: "file://s.md" }],
         githubSnapshots: [{ is_draft: false, checks_conclusion: "success" }],
+        runFinished: true,
       },
       "t",
     );
@@ -132,6 +137,26 @@ describe("deliver_ready_v1", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("idle_never_ready — FINISHED ≠ IDLE", () => {
+    const r = evaluateReady(
+      "deliver_ready_v1",
+      1,
+      {
+        ...empty,
+        evidence: [
+          { kind: "summary_md", uri: "file://s.md" },
+          { kind: "artifact_uri", uri: "file://out.tgz" },
+        ],
+        githubSnapshots: [{ is_draft: false, checks_conclusion: "success" }],
+        noopOrOfflineContract: true,
+        runFinished: false,
+      },
+      "t",
+    );
+    expect(r.ok).toBe(false);
+    expect(r.missing).toContain("run_lifecycle:FINISHED");
+  });
+
   it("does not treat shadow evidence as live", () => {
     const r = evaluateReady(
       "deliver_ready_v1",
@@ -143,6 +168,7 @@ describe("deliver_ready_v1", () => {
           { kind: "artifact_uri", uri: "file://out.tgz", shadow: true },
         ],
         noopOrOfflineContract: true,
+        runFinished: true,
       },
       "t",
     );

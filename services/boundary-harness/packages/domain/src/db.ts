@@ -37,6 +37,7 @@ export type Harness = {
   adapters: { noop: NoopAdapter; cursor: CursorAdapter };
   bus: EventEmitter;
   webhookUrl?: string;
+  webhookSecret?: string;
   now: () => string;
   newId: () => string;
 };
@@ -110,6 +111,12 @@ function applyCompat(sqlite: Database.Database): void {
   if (tableExists(sqlite, "gate_instances") && !columnNames(sqlite, "gate_instances").includes("assignment_id")) {
     sqlite.exec("ALTER TABLE gate_instances ADD COLUMN assignment_id TEXT");
   }
+  if (tableExists(sqlite, "outbox")) {
+    const cols = columnNames(sqlite, "outbox");
+    if (!cols.includes("attempts")) sqlite.exec("ALTER TABLE outbox ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0");
+    if (!cols.includes("last_error")) sqlite.exec("ALTER TABLE outbox ADD COLUMN last_error TEXT");
+    if (!cols.includes("next_attempt_at")) sqlite.exec("ALTER TABLE outbox ADD COLUMN next_attempt_at TEXT");
+  }
   if (tableExists(sqlite, "policy_events")) {
     const cols = columnNames(sqlite, "policy_events");
     if (!cols.includes("reason_code")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN reason_code TEXT");
@@ -145,6 +152,7 @@ export function createHarness(opts?: {
   newId?: () => string;
   adapters?: Partial<Harness["adapters"]>;
   webhookUrl?: string;
+  webhookSecret?: string;
 }): Harness {
   const databasePath = opts?.databasePath ?? process.env.DATABASE_PATH ?? ":memory:";
   const sqlite = new Database(databasePath);
@@ -164,6 +172,7 @@ export function createHarness(opts?: {
     },
     bus: new EventEmitter(),
     webhookUrl: opts?.webhookUrl ?? process.env.WEBHOOK_URL,
+    webhookSecret: opts?.webhookSecret ?? process.env.WEBHOOK_SIGNING_SECRET,
     now,
     newId: opts?.newId ?? (() => crypto.randomUUID()),
   };

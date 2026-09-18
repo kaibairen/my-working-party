@@ -264,7 +264,7 @@ describe("security-anti S1–S8", () => {
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({ idempotency_key: "after-freeze" }),
     });
-    expect(blocked.res.status).toBe(403);
+    expect(blocked.res.status).toBe(423);
     expect(blocked.body.error.code).toBe("dial_frozen");
   });
 

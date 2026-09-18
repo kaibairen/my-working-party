@@ -3,6 +3,7 @@ import { checkPolicy, type PolicyCheckInput, type PolicyCheckResult } from "@har
 import { evaluateReady, requiredEvidenceKinds, type ReadyContext } from "@harness/ready";
 import { parseBriefV1, parseBudget, EVIDENCE_KINDS, type EvidenceKind } from "./brief";
 import { HarnessError } from "./errors";
+import { signHarnessWebhook } from "./hmac";
 import type { Actor, Dial, Role } from "./rbac";
 import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
 import type { Harness } from "./db";
@@ -409,9 +410,15 @@ function collectReadyContext(h: Harness, goalId: string): ReadyContext {
   const runRows = assignmentRows.flatMap((a) =>
     h.db.select().from(runs).where(eq(runs.assignmentId, a.id)).all(),
   );
+  const finished = (r: (typeof runRows)[number]) => {
+    const usage = parseJson<{ cursor_lifecycle?: string; noop_or_offline_contract?: boolean }>(r.usageJson);
+    if (usage?.cursor_lifecycle === "IDLE" || r.status === "idle") return false;
+    if (usage?.cursor_lifecycle === "FINISHED") return true;
+    return r.adapter === "noop" && usage?.noop_or_offline_contract === true;
+  };
   const noopOrOfflineContract = runRows.some((r) => {
     const usage = parseJson<{ noop_or_offline_contract?: boolean }>(r.usageJson);
-    return r.adapter === "noop" && usage?.noop_or_offline_contract === true;
+    return finished(r) && r.adapter === "noop" && usage?.noop_or_offline_contract === true;
   });
   return {
     evidence: ev.map((e) => ({ kind: e.kind, uri: e.uri, shadow: e.shadow })),
@@ -425,6 +432,7 @@ function collectReadyContext(h: Harness, goalId: string): ReadyContext {
       closed: e.closed,
     })),
     noopOrOfflineContract,
+    runFinished: runRows.some(finished),
   };
 }
 
@@ -452,13 +460,17 @@ function evaluatePendingDeliverGates(h: Harness, goalId: string): void {
         })
         .where(and(eq(gateInstances.id, inst.id), eq(gateInstances.status, "pending"), eq(gateInstances.version, inst.version)))
         .run();
-      const payload = { gate_instance_id: inst.id, goal_id: goalId, result };
+      const outboxId = h.newId();
+      const payload = { gate_instance_id: inst.id, goal_id: goalId, result, outbox_id: outboxId };
       h.db.insert(outbox).values({
-        id: h.newId(),
+        id: outboxId,
         type: "gate.ready",
         payload: JSON.stringify(payload),
         createdAt: h.now(),
         publishedAt: null,
+        attempts: 0,
+        lastError: null,
+        nextAttemptAt: null,
       }).run();
       h.bus.emit("gate.ready", payload);
     } else {
@@ -530,7 +542,7 @@ export async function dispatchAssignment(
 
   const dial = ((goal as { dial?: string }).dial ?? "free") as Dial;
   if (dial === "freeze") {
-    throw new HarnessError("dial_frozen", "freeze rejects new dispatch", 403, {
+    throw new HarnessError("dial_frozen", "freeze rejects new dispatch", 423, {
       goal_id: goal.id,
       dial,
     });
@@ -729,13 +741,17 @@ export function policyCheck(
           readyResultJson: JSON.stringify(readyResult),
           version: 0,
         }).run();
-        const payload = { gate_instance_id: instId, goal_id: goal.id, result: readyResult };
+        const outboxId = h.newId();
+        const payload = { gate_instance_id: instId, goal_id: goal.id, result: readyResult, outbox_id: outboxId };
         h.db.insert(outbox).values({
-          id: h.newId(),
+          id: outboxId,
           type: "gate.ready",
           payload: JSON.stringify(payload),
           createdAt: h.now(),
           publishedAt: null,
+          attempts: 0,
+          lastError: null,
+          nextAttemptAt: null,
         }).run();
         h.bus.emit("gate.ready", payload);
         const inst = h.db.select().from(gateInstances).where(eq(gateInstances.id, instId)).get();
@@ -841,28 +857,133 @@ export async function decideGate(
   };
 }
 
+function backoffIso(nowIso: string, attempts: number): string {
+  const ms = Math.min(60_000, 250 * 2 ** Math.max(0, attempts - 1));
+  return new Date(Date.parse(nowIso) + ms).toISOString();
+}
+
+export function listOutbox(h: Harness, limit = 100) {
+  return h.db
+    .select()
+    .from(outbox)
+    .all()
+    .slice(-limit)
+    .map((row) => ({
+      id: row.id,
+      type: row.type,
+      payload: parseJson(row.payload),
+      created_at: row.createdAt,
+      published_at: row.publishedAt,
+      attempts: row.attempts ?? 0,
+      last_error: row.lastError,
+      next_attempt_at: row.nextAttemptAt,
+      status: row.publishedAt ? "published" : "pending",
+    }));
+}
+
+export function outboxStats(h: Harness) {
+  const rows = listOutbox(h, 10_000);
+  return {
+    pending: rows.filter((r) => r.status === "pending").length,
+    published: rows.filter((r) => r.status === "published").length,
+    last_error: rows.filter((r) => r.last_error).at(-1)?.last_error ?? null,
+  };
+}
+
+export function listEventsAfter(h: Harness, lastEventId?: string | null) {
+  const rows = h.db
+    .select()
+    .from(outbox)
+    .all()
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const idx = lastEventId ? rows.findIndex((r) => r.id === lastEventId) : -1;
+  return (idx === -1 ? rows : rows.slice(idx + 1)).map((row) => ({
+    id: row.id,
+    type: row.type,
+    payload: row.payload,
+    created_at: row.createdAt,
+  }));
+}
+
+export function listGithubSnapshots(h: Harness, goalId?: string) {
+  let rows = h.db.select().from(githubSnapshots).all();
+  if (goalId) rows = rows.filter((r) => r.goalId === goalId);
+  return rows.map((row) => ({
+    id: row.id,
+    goal_id: row.goalId,
+    assignment_id: row.assignmentId,
+    pr_number: row.prNumber,
+    is_draft: row.isDraft,
+    checks_conclusion: row.checksConclusion,
+    raw_hash: row.rawHash,
+    observed_at: row.observedAt,
+  }));
+}
+
+/**
+ * Exactly-once attempt: claim by incrementing attempts, mark published_at
+ * only after a successful webhook (or local ack when WEBHOOK_URL is unset).
+ * Failed deliveries stay unpublished and retry after backoff.
+ */
 export async function publishOutbox(h: Harness, limit = 50): Promise<number> {
-  const pending = h.db.select().from(outbox).where(isNull(outbox.publishedAt)).all().slice(0, limit);
-  const ts = h.now();
+  const now = h.now();
+  const pending = h.db
+    .select()
+    .from(outbox)
+    .where(isNull(outbox.publishedAt))
+    .all()
+    .filter((row) => !row.nextAttemptAt || row.nextAttemptAt <= now)
+    .slice(0, limit);
   let published = 0;
   for (const row of pending) {
+    const attempts = (row.attempts ?? 0) + 1;
+    const claimed = h.db
+      .update(outbox)
+      .set({ attempts })
+      .where(and(eq(outbox.id, row.id), isNull(outbox.publishedAt)))
+      .run();
+    if (claimed.changes === 0) continue;
+
     if (h.webhookUrl) {
+      const body = JSON.stringify({
+        id: row.id,
+        type: row.type,
+        payload: JSON.parse(row.payload),
+        created_at: row.createdAt,
+      });
+      const ts = String(Math.floor(Date.parse(now) / 1000) || Math.floor(Date.now() / 1000));
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (h.webhookSecret) {
+        headers["x-harness-signature"] = signHarnessWebhook(h.webhookSecret, ts, body);
+        headers["x-harness-timestamp"] = ts;
+      }
       try {
-        const res = await fetch(h.webhookUrl, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            type: row.type,
-            payload: JSON.parse(row.payload),
-            created_at: row.createdAt,
-          }),
-        });
-        if (!res.ok) continue;
-      } catch {
+        const res = await fetch(h.webhookUrl, { method: "POST", headers, body });
+        if (!res.ok) {
+          h.db
+            .update(outbox)
+            .set({ lastError: `http_${res.status}`, nextAttemptAt: backoffIso(now, attempts) })
+            .where(eq(outbox.id, row.id))
+            .run();
+          continue;
+        }
+      } catch (err) {
+        h.db
+          .update(outbox)
+          .set({
+            lastError: err instanceof Error ? err.message : "fetch_failed",
+            nextAttemptAt: backoffIso(now, attempts),
+          })
+          .where(eq(outbox.id, row.id))
+          .run();
         continue;
       }
     }
-    h.db.update(outbox).set({ publishedAt: ts }).where(eq(outbox.id, row.id)).run();
+    h.db
+      .update(outbox)
+      .set({ publishedAt: now, lastError: null, nextAttemptAt: null })
+      .where(eq(outbox.id, row.id))
+      .run();
     published += 1;
   }
   return published;
@@ -959,6 +1080,7 @@ export function health(h: Harness) {
     store: "sqlite",
     inbox: "/inbox",
     openapi: "/openapi.yaml",
+    outbox: outboxStats(h),
   };
 }
 

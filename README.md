@@ -36,7 +36,10 @@ Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`)
 | `services/boundary-harness/packages/*` | domain, policy, ready, adapters-noop, adapters-cursor |
 | `services/boundary-harness/docker-compose.yml` | `docker compose up api` |
 
-**Inbox URL:** http://127.0.0.1:8080/inbox (M2-preview). Health/OpenAPI: http://127.0.0.1:8080/ops
+**Inbox URL:** http://127.0.0.1:8080/inbox (M2). Health / OpenAPI / outbox: http://127.0.0.1:8080/ops
+
+M1: CursorAdapter (fixture / `CURSOR_API_STUB` / live), Dial freeze → **423** `dial_frozen`, BriefV1 422 on HTTP+MCP, dual external ids, FINISHED≠IDLE. MCP aliases from PRD §8; no `cursor_raw_*` / `set_steps`.
+M3: outbox exactly-once attempts + HMAC-SHA256 outbound (`X-Harness-Signature` / `X-Harness-Timestamp`). SSE `/v1/events` replays from `Last-Event-ID`.
 
 ```bash
 cd services/boundary-harness

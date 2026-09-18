@@ -218,10 +218,14 @@ export function redactPayload(payload: unknown): unknown {
 export const MCP_TOOL_NAMES = [
   "harness_create_goal",
   "harness_fill_assignment",
+  "harness_propose_assignment",
   "harness_dispatch",
+  "harness_dispatch_assignment",
   "harness_attach_evidence",
   "harness_get_run",
+  "harness_get_status",
   "harness_list_gates",
+  "harness_list_ready_gates",
   "harness_decide_gate",
   "harness_policy_check",
 ] as const;

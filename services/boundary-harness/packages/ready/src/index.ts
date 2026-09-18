@@ -14,6 +14,9 @@ export const DELIVER_READY_V1 = {
   version: 1,
   all: [
     {
+      type: "run_finished",
+    },
+    {
       type: "evidence_present",
       kinds: ["summary_md"],
     },
@@ -74,6 +77,8 @@ export type ReadyContext = {
   githubSnapshots: ReadyGithubSnapshot[];
   policyEvents: ReadyPolicyEvent[];
   noopOrOfflineContract: boolean;
+  /** Cursor FINISHED or Noop stub equivalent. IDLE never counts. */
+  runFinished?: boolean;
 };
 
 export type ReadyResult = {
@@ -143,6 +148,10 @@ function evalNode(node: DslNode, ctx: ReadyContext): { ok: boolean; missing: str
   if (type === "noop_or_offline_contract") {
     const ok = ctx.noopOrOfflineContract === true;
     return { ok, missing: ok ? [] : ["noop_or_offline_contract"] };
+  }
+  if (type === "run_finished") {
+    const ok = ctx.runFinished === true;
+    return { ok, missing: ok ? [] : ["run_lifecycle:FINISHED"] };
   }
   if (type === "policy_clearance") {
     const open = ctx.policyEvents.some(
