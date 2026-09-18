@@ -86,7 +86,7 @@ describe("domain API", () => {
       body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
     });
     expect(body.gate_defs).toHaveLength(1);
-    expect(body.gate_defs[0].predicateId).toBe("deliver_ready_v1");
+    expect(body.gate_defs[0].predicate_id).toBe("deliver_ready_v1");
   });
 
   it("canvas_not_required_for_dispatch — goal → assignment → noop → evidence → gate", async () => {

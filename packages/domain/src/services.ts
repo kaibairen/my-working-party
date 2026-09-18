@@ -142,7 +142,14 @@ export function listPools(h: Harness) {
 export function getGoal(h: Harness, id: string) {
   const row = h.db.select().from(goals).where(eq(goals.id, id)).get();
   if (!row) throw new HarnessError("not_found", `goal ${id} not found`, 404);
-  const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, id)).all();
+  const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, id)).all().map((d) => ({
+    id: d.id,
+    goal_id: d.goalId,
+    predicate_id: d.predicateId,
+    predicate_version: d.predicateVersion,
+    ordinal: d.ordinal,
+    on_fail: d.onFail,
+  }));
   return { ...publicGoal(row), gate_defs: defs };
 }
 
