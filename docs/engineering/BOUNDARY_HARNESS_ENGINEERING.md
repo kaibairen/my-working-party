@@ -6,7 +6,7 @@
 > 日期：2026-09-19  
 > 状态：工程草案
 >
-> **M0 实现已落本仓**（`apps/` + `packages/`，见 README `## Harness M0`）。权威冻结稿：[`docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md`](../product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md)。冲突以权威 PRD MUST 为准；本文件为历史工程草案。
+> **M0 实现已落本仓**（**仅** `services/boundary-harness/`，禁止顶层 `harness/`；见 README `## Harness M0` 与 `.github/workflows/harness-m0.yml`）。权威冻结稿：[`docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md`](../product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md)。冲突以权威 PRD MUST 为准；本文件为历史工程草案。
 
 ---
 
