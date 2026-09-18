@@ -80,6 +80,7 @@ async function startApi(): Promise<ChildProcess> {
       PORT: "8080",
     },
     stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
   });
   child.stdout?.on("data", (b) => process.stdout.write(b));
   child.stderr?.on("data", (b) => process.stderr.write(b));
@@ -90,6 +91,18 @@ async function startApi(): Promise<ChildProcess> {
   });
   await waitHealthz();
   return child;
+}
+
+function stopApi(child: ChildProcess): void {
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+  if (child.pid) {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      child.kill("SIGTERM");
+    }
+  }
 }
 
 const briefOk = {
@@ -205,9 +218,7 @@ async function main(): Promise<void> {
 
     console.log("SMOKE PASS (对照门; compose smoke still required for M0 Done)");
   } finally {
-    if (spawned?.pid) {
-      spawned.kill("SIGTERM");
-    }
+    if (spawned) stopApi(spawned);
   }
 }
 
