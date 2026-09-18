@@ -11,5 +11,6 @@ Under discussion: **Boundary Harness** — control plane as a harness, not a jai
 - [docs/product/AGENT_DELIVERY_HARNESS_PRD.md](docs/product/AGENT_DELIVERY_HARNESS_PRD.md)（v0.1.3 产品方案）
 - [docs/product/research/control-plane-as-harness-brief.md](docs/product/research/control-plane-as-harness-brief.md)（配套调研 brief）
 - [docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md](docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md)（v0.1 工程方案）
-- [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1_DRAFT.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1_DRAFT.md)（**DRAFT** — 权威 PRD v1.0，pending harness team sign-off）
-- [docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md](docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md)（**DRAFT** — 完整技术实现方案 v1.0，pending harness team sign-off）
+- [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md)（**AUTHORITATIVE-CANDIDATE.2** — 权威 PRD v1.0，pending user sign-off）
+- [docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md](docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md)（与 AUTHORITATIVE-CANDIDATE.2 对齐的技术实现方案）
+- [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1_DRAFT.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1_DRAFT.md)（**superseded** — 已被 AUTHORITATIVE-CANDIDATE.2 替代）

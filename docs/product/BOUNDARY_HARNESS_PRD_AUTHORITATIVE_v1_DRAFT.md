@@ -1,6 +1,8 @@
 # Boundary Harness 权威 PRD v1.0-DRAFT（待 harness 组签核）
 
-**状态：** DRAFT — 经组内研讨与 TechLead 收敛后改为 AUTHORITATIVE  
+> **Superseded.** Use [`BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md`](./BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md) (**AUTHORITATIVE-CANDIDATE.2**, pending user sign-off). This draft is kept for history only.
+
+**状态：** SUPERSEDED — 已被 AUTHORITATIVE-CANDIDATE.2 替代  
 **产品名：** Boundary Harness（边界线束）  
 **口号：** 约束爆炸半径，不约束智能本身  
 
