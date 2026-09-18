@@ -1,8 +1,15 @@
 export const SCHEMA_VERSION = 1;
 
+/**
+ * Compiled IF NOT EXISTS view of Backend migrations
+ * `migrations/0001_m0_schema.sql` + `migrations/0002_m0_security.sql`
+ * plus M0 runtime extras (goals.dial, gate_instances.assignment_id).
+ * applySchema() executes the migration files as source of truth.
+ */
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS schema_meta (
-  schema_version INTEGER NOT NULL
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS pools (
@@ -24,6 +31,14 @@ CREATE TABLE IF NOT EXISTS goals (
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ready_predicates (
+  id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  dsl_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (id, version)
 );
 
 CREATE TABLE IF NOT EXISTS gate_defs (
@@ -84,30 +99,22 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE TABLE IF NOT EXISTS evidence_items (
   id TEXT PRIMARY KEY,
   run_id TEXT,
-  goal_id TEXT NOT NULL,
+  goal_id TEXT,
   assignment_id TEXT,
   kind TEXT NOT NULL,
-  uri TEXT NOT NULL,
   sha256 TEXT,
+  uri TEXT NOT NULL,
   shadow INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY (run_id) REFERENCES runs(id)
 );
 
-CREATE TABLE IF NOT EXISTS ready_predicates (
-  id TEXT NOT NULL,
-  version INTEGER NOT NULL,
-  dsl_json TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (id, version)
-);
-
 CREATE TABLE IF NOT EXISTS github_snapshots (
   id TEXT PRIMARY KEY,
-  goal_id TEXT NOT NULL,
+  goal_id TEXT,
   assignment_id TEXT,
   pr_number INTEGER,
-  is_draft INTEGER NOT NULL,
+  is_draft INTEGER,
   checks_conclusion TEXT,
   raw_hash TEXT,
   observed_at TEXT NOT NULL
@@ -139,13 +146,16 @@ CREATE TABLE IF NOT EXISTS exception_grants (
 
 CREATE TABLE IF NOT EXISTS policy_events (
   id TEXT PRIMARY KEY,
+  track TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  reason_code TEXT,
+  fail_count INTEGER NOT NULL,
   goal_id TEXT,
   assignment_id TEXT,
-  action TEXT NOT NULL,
-  decision TEXT NOT NULL,
-  track TEXT NOT NULL,
-  fail_count INTEGER NOT NULL,
-  closed INTEGER NOT NULL,
+  run_id TEXT,
+  payload_json TEXT,
+  action TEXT,
+  closed INTEGER,
   created_at TEXT NOT NULL
 );
 
@@ -161,7 +171,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   payload_json TEXT
 );
 
-CREATE TABLE IF NOT EXISTS admin_freeze (
+CREATE TABLE IF NOT EXISTS freeze_state (
   id TEXT PRIMARY KEY,
   enabled INTEGER NOT NULL,
   reason TEXT,

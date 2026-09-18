@@ -10,7 +10,8 @@ export const EVIDENCE_KINDS = [
   "artifact_uri",
 ] as const;
 
-export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
+export const EvidenceKind = z.enum(EVIDENCE_KINDS);
+export type EvidenceKind = z.infer<typeof EvidenceKind>;
 
 /** Floor + BriefV1 expanded set. HTTP and MCP share this validator. */
 export const BRIEF_FORBIDDEN_KEYS = [
@@ -30,9 +31,9 @@ export const BRIEF_FORBIDDEN_KEYS = [
 
 export const BriefV1Schema = z
   .object({
-    outcome: z.string().min(1),
-    constraints: z.array(z.string()),
-    evidence_shape: z.array(z.enum(EVIDENCE_KINDS)).min(1),
+    outcome: z.string().min(1).max(2000),
+    constraints: z.array(z.string().max(500)).max(32),
+    evidence_shape: z.array(EvidenceKind).min(1),
   })
   .strict();
 
@@ -69,6 +70,11 @@ export function parseBriefV1(input: unknown): BriefV1 {
     throw new HarnessError("brief_invalid", "BriefV1 failed validation", 422, parsed.error.flatten());
   }
   return parsed.data;
+}
+
+/** Backend canonical name — same validator as parseBriefV1 (HTTP + MCP). */
+export function parseBriefOrThrow(raw: unknown): BriefV1 {
+  return parseBriefV1(raw);
 }
 
 export function parseBudget(input: unknown): Budget {

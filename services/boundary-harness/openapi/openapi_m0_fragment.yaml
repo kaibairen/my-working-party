@@ -1,0 +1,272 @@
+# Domain OpenAPI M0 — merge into services/boundary-harness/openapi/openapi.yaml
+# Align: M0_SECURITY_FREEZE_v1 · M0_SCHEMA_v1 · APPENDIX_RBAC
+openapi: 3.1.0
+info:
+  title: Boundary Harness Domain API M0
+  version: 0.1.0
+security:
+  - bearerAuth: []
+paths:
+  /v1/admin/freeze:
+    get:
+      summary: Read global freeze
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreezeState" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      summary: Set global freeze (decision_maker|service)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FreezeSetRequest" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreezeState" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /v1/policy/check:
+    post:
+      summary: Dial preflight; response MUST include track
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PolicyCheckResponse" }
+  /v1/goals:
+    post:
+      summary: Create goal; coordinator_ref required
+      responses:
+        "422":
+          description: missing coordinator_ref / illegal mode
+  /v1/goals/{id}/assignments:
+    post:
+      summary: Fill assignment; BriefV1; 422 brief_forbidden_field
+      responses:
+        "422":
+          description: brief_forbidden_field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorBody" }
+  /v1/assignments/{id}/dispatch:
+    post:
+      summary: Create Run; Idempotency-Key; blocked when freeze_active
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "201": { description: Run created }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "423":
+          description: freeze_active — reject new dispatch (incl MCP)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorBody" }
+              example: { code: freeze_active, message: "Freeze enabled; new dispatch rejected" }
+  /v1/runs/{id}/evidence:
+    post:
+      summary: Attach evidence (only completion path)
+  /v1/gates:
+    get:
+      summary: Gate Inbox — GateInstance status=ready
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [ready] }
+  /v1/gates/{id}/decide:
+    post:
+      summary: Decide GateInstance; optimistic lock
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GateDecideRequest" }
+      responses:
+        "200": { description: decided }
+        "409":
+          description: optimistic lock conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorBody" }
+  /v1/events/stream:
+    get:
+      summary: SSE gate.ready / run.failed / budget.exceeded / freeze.changed
+  /v1/hooks/github:
+    post:
+      summary: Inbound GitHub webhook (M2 Ready input; M0 stub may 501)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/HarnessSignature"
+        - $ref: "#/components/parameters/HarnessTimestamp"
+      responses:
+        "202": { description: accepted → outbox / snapshot refresh }
+        "401":
+          description: webhook_bad_signature | webhook_skew
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorBody" }
+  /v1/hooks/cursor:
+    post:
+      summary: Optional Cursor hook; same HMAC rules
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/HarnessSignature"
+        - $ref: "#/components/parameters/HarnessTimestamp"
+      responses:
+        "202": { description: accepted }
+        "401":
+          description: webhook_bad_signature | webhook_skew
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT claims MUST include: sub, role, pool_ids[], iat, exp.
+        Optional: tid. Cross-pool → 403 pool_forbidden.
+  parameters:
+    HarnessSignature:
+      name: X-Harness-Signature
+      in: header
+      required: true
+      schema: { type: string, pattern: '^sha256=[0-9a-f]+$' }
+      description: HMAC-SHA256 over `{timestamp}.{raw_body}`; secret WEBHOOK_SIGNING_SECRET
+    HarnessTimestamp:
+      name: X-Harness-Timestamp
+      in: header
+      required: true
+      schema: { type: integer }
+      description: unix seconds; skew ±300s else 401 webhook_skew
+  responses:
+    Forbidden:
+      description: RBAC / pool_forbidden / human fan-out without exception
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorBody" }
+  schemas:
+    Role:
+      type: string
+      enum: [decision_maker, coordinator, executor, viewer, service]
+    JwtClaims:
+      type: object
+      required: [sub, role, pool_ids, iat, exp]
+      properties:
+        sub: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        pool_ids:
+          type: array
+          items: { type: string }
+        iat: { type: integer }
+        exp: { type: integer }
+        tid: { type: string, description: optional tenant }
+    SecretRef:
+      type: string
+      description: |
+        M0 allowed: `file:/abs/or/mounted/path` | `env:VAR_NAME`.
+        Delayed: sops: / cloud KMS. API NEVER echoes resolved plaintext.
+      pattern: '^(file:/|env:)[A-Za-z0-9._/:-]+$'
+    Pool:
+      type: object
+      required: [id, kind, secret_ref]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [cursor_account, bot_group, noop] }
+        secret_ref: { $ref: "#/components/schemas/SecretRef" }
+      additionalProperties: false
+    FreezeSetRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        reason: { type: string }
+    FreezeState:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        reason: { type: string, nullable: true }
+        updated_by: { type: string }
+        updated_at: { type: string, format: date-time }
+    AuditLogEntry:
+      type: object
+      required: [id, at, actor_sub, actor_role, action]
+      description: Append-only; no PATCH/DELETE endpoints
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        actor_sub: { type: string }
+        actor_role: { $ref: "#/components/schemas/Role" }
+        action: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        request_id: { type: string }
+        payload_json:
+          type: object
+          description: redacted; never contains secret plaintext
+    BriefV1:
+      type: object
+      additionalProperties: false
+      required: [outcome, constraints, evidence_shape]
+      properties:
+        outcome: { type: string }
+        constraints:
+          type: array
+          items: { type: string }
+        evidence_shape:
+          type: array
+          items: { $ref: "#/components/schemas/EvidenceKind" }
+    EvidenceKind:
+      type: string
+      enum: [pr, report_md, summary_md, screenshot, ci_check, artifact_uri]
+    PolicyCheckResponse:
+      type: object
+      required: [decision, track, reason_code]
+      properties:
+        decision:
+          type: string
+          enum: [allow, redirect_hint, require_gate, deny]
+        track:
+          type: string
+          enum: [authority_gate, advisory_hint]
+        reason_code: { type: string }
+        redirect:
+          type: object
+          properties:
+            hint: { type: string }
+            fail_count: { type: integer }
+            threshold: { type: integer }
+    GateDecideRequest:
+      type: object
+      required: [decision, version]
+      properties:
+        decision: { type: string, enum: [pass, revise, defer] }
+        version: { type: integer }
+        note: { type: string }
+        structural_change: { type: boolean, default: false }
+    ErrorBody:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum:
+            - brief_forbidden_field
+            - freeze_active
+            - webhook_bad_signature
+            - webhook_skew
+            - pool_forbidden
+            - secret_ref_unsupported
+            - predicate_evidence_mismatch
+            - optimistic_lock
+        message: { type: string }
+        keys:
+          type: array
+          items: { type: string }

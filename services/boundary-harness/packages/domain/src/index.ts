@@ -4,6 +4,7 @@ export {
   BriefV1Schema,
   BudgetSchema,
   EVIDENCE_KINDS,
+  parseBriefOrThrow,
   parseBriefV1,
   parseBudget,
   type BriefV1,
@@ -56,3 +57,4 @@ export {
   assertAdminNotFrozen,
   assertNoClientStatusWrite,
 } from "./services";
+export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";

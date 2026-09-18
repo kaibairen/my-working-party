@@ -54,7 +54,7 @@ describe("JWT claims and secret_ref", () => {
       assertSecretRef("env:lowercase");
     } catch (err) {
       expect(isHarnessError(err)).toBe(true);
-      if (isHarnessError(err)) expect(err.code).toBe("secret_ref_invalid");
+      if (isHarnessError(err)) expect(err.code).toBe("secret_ref_unsupported");
     }
   });
 });

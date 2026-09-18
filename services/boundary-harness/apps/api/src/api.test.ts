@@ -118,7 +118,7 @@ describe("domain API", () => {
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({ idempotency_key: "k1" }),
     });
-    expect(run.res.status).toBe(200);
+    expect(run.res.status).toBe(201);
     expect(run.body.adapter).toBe("noop");
     expect(run.body.external_agent_id).toBeTruthy();
     expect(run.body.external_run_id).toBeTruthy();
@@ -259,7 +259,8 @@ describe("domain API", () => {
       body: JSON.stringify({ decision: "pass", version: ver }),
     });
     expect(second.res.status).toBe(409);
-    expect(second.body.error.code).toBe("gate_version_conflict");
+    expect(second.body.error.code).toBe("optimistic_lock");
+    expect(second.body.code).toBe("optimistic_lock");
   });
 
   it("registers exactly the eight MCP stub tools and no raw cursor tools", () => {

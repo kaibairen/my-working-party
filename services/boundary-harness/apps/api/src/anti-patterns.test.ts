@@ -96,7 +96,7 @@ describe("appendix A anti-patterns", () => {
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({ idempotency_key: "after-advisory" }),
     });
-    expect(run.res.status).toBe(200);
+    expect(run.res.status).toBe(201);
     expect(run.body.status).toBe("succeeded");
   });
 

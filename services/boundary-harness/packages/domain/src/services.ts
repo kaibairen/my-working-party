@@ -7,7 +7,7 @@ import type { Actor, Dial, Role } from "./rbac";
 import { DIALS, redactPayload, requirePoolAccess, requireRole } from "./rbac";
 import type { Harness } from "./db";
 import {
-  adminFreeze,
+  freezeState,
   assignments,
   auditLog,
   evidenceItems,
@@ -489,7 +489,7 @@ export async function dispatchAssignment(
     .from(runs)
     .where(and(eq(runs.assignmentId, assignmentId), eq(runs.idempotencyKey, idempotencyKey)))
     .get();
-  if (existing) return publicRun(existing);
+  if (existing) return { ...publicRun(existing), created: false };
 
   assertAdminNotFrozen(h);
 
@@ -553,7 +553,7 @@ export async function dispatchAssignment(
   audit(h, actor, "dispatch", "run", runId, { assignment_id: assignmentId, adapter: result.adapter });
   const run = h.db.select().from(runs).where(eq(runs.id, runId)).get();
   if (!run) throw new HarnessError("not_found", "run missing after dispatch", 500);
-  return publicRun(run);
+  return { ...publicRun(run), created: true };
 }
 
 export function getRun(h: Harness, id: string) {
@@ -652,12 +652,15 @@ export function policyCheck(
   const eventId = h.newId();
   h.db.insert(policyEvents).values({
     id: eventId,
+    track: result.track,
+    decision: result.decision,
+    reasonCode: result.reason_code,
+    failCount: Number(input.context?.fail_count ?? 0),
     goalId: input.goal_id ?? null,
     assignmentId: input.assignment_id ?? null,
+    runId: null,
+    payloadJson: JSON.stringify(result),
     action: input.action,
-    decision: result.decision,
-    track: result.track,
-    failCount: Number(input.context?.fail_count ?? 0),
     closed: false,
     createdAt: h.now(),
   }).run();
@@ -756,7 +759,7 @@ export async function decideGate(
     )
     .run();
   if (updated.changes === 0) {
-    throw new HarnessError("gate_version_conflict", "gate decide conflict", 409, {
+    throw new HarnessError("optimistic_lock", "gate decide conflict", 409, {
       id: gateInstanceId,
       version: inst.version,
       status: inst.status,
@@ -828,7 +831,7 @@ export async function publishOutbox(h: Harness, limit = 50): Promise<number> {
 }
 
 export function getAdminFreeze(h: Harness) {
-  const row = h.db.select().from(adminFreeze).where(eq(adminFreeze.id, "default")).get();
+  const row = h.db.select().from(freezeState).where(eq(freezeState.id, "global")).get();
   return {
     enabled: row?.enabled === true,
     reason: row?.reason ?? null,
@@ -847,28 +850,28 @@ export function setAdminFreeze(
     throw new HarnessError("freeze_invalid", "enabled must be a boolean", 422);
   }
   const ts = h.now();
-  const existing = h.db.select().from(adminFreeze).where(eq(adminFreeze.id, "default")).get();
+  const existing = h.db.select().from(freezeState).where(eq(freezeState.id, "global")).get();
   if (existing) {
     h.db
-      .update(adminFreeze)
+      .update(freezeState)
       .set({
         enabled: input.enabled,
         reason: input.reason ?? null,
         updatedBy: actor.id,
         updatedAt: ts,
       })
-      .where(eq(adminFreeze.id, "default"))
+      .where(eq(freezeState.id, "global"))
       .run();
   } else {
-    h.db.insert(adminFreeze).values({
-      id: "default",
+    h.db.insert(freezeState).values({
+      id: "global",
       enabled: input.enabled,
       reason: input.reason ?? null,
       updatedBy: actor.id,
       updatedAt: ts,
     }).run();
   }
-  audit(h, actor, input.enabled ? "admin_freeze_enable" : "admin_freeze_disable", "admin_freeze", "default", {
+  audit(h, actor, input.enabled ? "admin_freeze_enable" : "admin_freeze_disable", "freeze_state", "global", {
     enabled: input.enabled,
     reason: input.reason ?? null,
   });
@@ -878,7 +881,7 @@ export function setAdminFreeze(
 export function assertAdminNotFrozen(h: Harness): void {
   const freeze = getAdminFreeze(h);
   if (freeze.enabled) {
-    throw new HarnessError("freeze_active", "admin freeze rejects new dispatch", 423, {
+    throw new HarnessError("freeze_active", "Freeze enabled; new dispatch rejected", 423, {
       reason: freeze.reason,
     });
   }
@@ -904,12 +907,12 @@ export function listAudit(h: Harness, limit = 200) {
 }
 
 export function health(h: Harness) {
-  const row = h.sqlite.prepare("SELECT schema_version FROM schema_meta LIMIT 1").get() as
-    | { schema_version: number }
+  const row = h.sqlite.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version' LIMIT 1").get() as
+    | { value: string }
     | undefined;
   return {
     ok: true,
-    schema_version: row?.schema_version ?? 0,
+    schema_version: Number(row?.value ?? 0),
     adapter: "noop" as const,
     adapters: {
       noop: true,

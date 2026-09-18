@@ -7,8 +7,8 @@ if (path !== ":memory:") {
   mkdirSync(dirname(path), { recursive: true });
 }
 const h = createHarness({ databasePath: path });
-const row = h.sqlite.prepare("SELECT schema_version FROM schema_meta LIMIT 1").get() as
-  | { schema_version: number }
+const row = h.sqlite.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version' LIMIT 1").get() as
+  | { value: string }
   | undefined;
-console.log(JSON.stringify({ ok: true, database: path, schema_version: row?.schema_version ?? 0 }));
+console.log(JSON.stringify({ ok: true, database: path, schema_version: Number(row?.value ?? 0) }));
 h.sqlite.close();

@@ -81,8 +81,18 @@ export function createApp(harness: Harness) {
 
   app.onError((err, c) => {
     if (isHarnessError(err)) {
+      const keys =
+        err.details && typeof err.details === "object" && err.details !== null && "keys" in err.details
+          ? (err.details as { keys?: string[] }).keys
+          : undefined;
       return c.json(
-        { error: { code: err.code, message: err.message, details: err.details ?? null } },
+        {
+          code: err.code,
+          message: err.message,
+          keys,
+          details: err.details ?? null,
+          error: { code: err.code, message: err.message, details: err.details ?? null },
+        },
         err.status as 400 | 401 | 403 | 404 | 405 | 409 | 422 | 423 | 500,
       );
     }
@@ -105,11 +115,11 @@ export function createApp(harness: Harness) {
     await next();
   });
 
-  v1.get("/events", (c) => {
+  const sseEvents = (c: { get: (key: "actor") => Actor; get: (key: "harness") => Harness }) => {
     const actor = c.get("actor");
     requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
     const h = c.get("harness");
-    return streamSSE(c, async (stream) => {
+    return streamSSE(c as never, async (stream) => {
       const onReady = async (payload: unknown) => {
         await stream.writeSSE({ event: "gate.ready", data: JSON.stringify(payload) });
       };
@@ -126,7 +136,10 @@ export function createApp(harness: Harness) {
         });
       });
     });
-  });
+  };
+
+  v1.get("/events", sseEvents as never);
+  v1.get("/events/stream", sseEvents as never);
 
   v1.get("/pools", (c) => c.json({ pools: listPools(c.get("harness")) }));
 
@@ -186,7 +199,9 @@ export function createApp(harness: Harness) {
   v1.post("/assignments/:id/dispatch", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const key = String(body.idempotency_key ?? c.req.header("idempotency-key") ?? "");
-    return c.json(await dispatchAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), key));
+    const result = await dispatchAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), key);
+    const { created, ...run } = result as typeof result & { created?: boolean };
+    return c.json(run, created === false ? 200 : 201);
   });
 
   v1.get("/runs/:id", (c) => c.json(getRun(c.get("harness"), c.req.param("id"))));
@@ -227,24 +242,20 @@ export function createApp(harness: Harness) {
     return c.json(recordGithubSnapshot(c.get("harness"), body), 201);
   });
 
-  app.post("/hooks/github", async (c) => {
+  const inboundHook = (note: string) => async (c: { req: { text: () => Promise<string>; header: (n: string) => string | undefined } }) => {
     const rawBody = await c.req.text();
     verifyHarnessWebhook({
       signature: c.req.header("x-harness-signature"),
       timestamp: c.req.header("x-harness-timestamp"),
       rawBody,
     });
-    return c.json({ ok: true, accepted: false, note: "GitHub Ready snapshots are M2; event must go through outbox" });
-  });
-  app.post("/hooks/cursor", async (c) => {
-    const rawBody = await c.req.text();
-    verifyHarnessWebhook({
-      signature: c.req.header("x-harness-signature"),
-      timestamp: c.req.header("x-harness-timestamp"),
-      rawBody,
-    });
-    return c.json({ ok: true, accepted: false, note: "Cursor hook HMAC-SHA256 verified; event must go through outbox" });
-  });
+    return (c as { json: (body: unknown, status: 202) => Response }).json({ ok: true, accepted: false, note }, 202);
+  };
+
+  app.post("/hooks/github", inboundHook("GitHub Ready snapshots are M2; event must go through outbox") as never);
+  app.post("/hooks/cursor", inboundHook("Cursor hook HMAC-SHA256 verified; event must go through outbox") as never);
+  app.post("/v1/hooks/github", inboundHook("GitHub Ready snapshots are M2; event must go through outbox") as never);
+  app.post("/v1/hooks/cursor", inboundHook("Cursor hook HMAC-SHA256 verified; event must go through outbox") as never);
 
   for (const path of ["/audit", "/policy-events", "/gate-decisions"]) {
     v1.on("PATCH", path, () => {

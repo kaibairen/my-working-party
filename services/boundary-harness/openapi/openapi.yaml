@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Boundary Harness Domain API
-  version: "0.0.1"
+  title: Boundary Harness Domain API M0
+  version: "0.1.0"
   description: |
     M0 Domain API. DB is system of record.
     Security: Authorization Bearer JWT claims sub,role,pool_ids,iat,exp (optional tid).
@@ -41,10 +41,22 @@ paths:
         - $ref: "#/components/parameters/HarnessSignature"
         - $ref: "#/components/parameters/HarnessTimestamp"
       responses:
-        "200":
-          description: Accepted for outbox (M0 may no-op body)
+        "202":
+          description: accepted → outbox / snapshot refresh
         "401":
-          description: webhook_skew or webhook_bad_signature
+          description: webhook_bad_signature | webhook_skew
+  /v1/hooks/github:
+    post:
+      security: []
+      summary: Inbound GitHub webhook (M2 Ready input; M0 stub may 501)
+      parameters:
+        - $ref: "#/components/parameters/HarnessSignature"
+        - $ref: "#/components/parameters/HarnessTimestamp"
+      responses:
+        "202":
+          description: accepted → outbox / snapshot refresh
+        "401":
+          description: webhook_bad_signature | webhook_skew
   /hooks/cursor:
     post:
       security: []
@@ -53,10 +65,28 @@ paths:
         - $ref: "#/components/parameters/HarnessSignature"
         - $ref: "#/components/parameters/HarnessTimestamp"
       responses:
-        "200":
-          description: OK
+        "202":
+          description: accepted
         "401":
-          description: webhook_skew or webhook_bad_signature
+          description: webhook_bad_signature | webhook_skew
+  /v1/hooks/cursor:
+    post:
+      security: []
+      summary: Optional Cursor hook; same HMAC rules
+      parameters:
+        - $ref: "#/components/parameters/HarnessSignature"
+        - $ref: "#/components/parameters/HarnessTimestamp"
+      responses:
+        "202":
+          description: accepted
+        "401":
+          description: webhook_bad_signature | webhook_skew
+  /v1/events/stream:
+    get:
+      summary: SSE gate.ready / run.failed / budget.exceeded / freeze.changed
+      responses:
+        "200":
+          description: text/event-stream
   /v1/admin/freeze:
     get:
       summary: Read admin freeze (decision_maker or service)
@@ -66,7 +96,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AdminFreeze"
+                $ref: "#/components/schemas/FreezeState"
         "401":
           description: unauthorized
         "403":
@@ -78,21 +108,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [enabled]
-              additionalProperties: false
-              properties:
-                enabled:
-                  type: boolean
-                reason:
-                  type: string
+              $ref: "#/components/schemas/FreezeSetRequest"
       responses:
         "200":
           description: Updated freeze state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AdminFreeze"
+                $ref: "#/components/schemas/FreezeState"
         "401":
           description: unauthorized
         "403":
@@ -234,30 +257,40 @@ paths:
           description: OK
   /v1/assignments/{id}/dispatch:
     post:
-      summary: Dispatch. Coordinator or service. Admin freeze rejects new dispatch (incl. MCP).
+      summary: Create Run; Idempotency-Key; blocked when freeze_active
       parameters:
         - $ref: "#/components/parameters/Id"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [idempotency_key]
               properties:
                 idempotency_key:
                   type: string
       responses:
-        "200":
-          description: Run (dual external ids + dial_at_dispatch snapshot)
+        "201":
+          description: Run created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Run"
+        "200":
+          description: Idempotent replay
         "403":
-          description: executor forbidden, dial_frozen, or pool_forbidden
+          $ref: "#/components/responses/Forbidden"
         "423":
-          description: freeze_active — admin freeze rejects new dispatch
+          description: freeze_active — reject new dispatch (incl MCP)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+              example: { code: freeze_active, message: "Freeze enabled; new dispatch rejected" }
   /v1/runs/{id}:
     get:
       summary: Get Run (advisory; MUST NOT be used as Gate ready)
@@ -367,12 +400,10 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+      bearerFormat: JWT
       description: |
-        JWT HS256 with frozen claims: sub, role, pool_ids, iat, exp (optional tid).
-        role ∈ decision_maker|coordinator|executor|viewer|service.
-        Cross pool_ids → 403 pool_forbidden. Insufficient role → 403.
-        Compatibility alias (non-authoritative): `role` or `role:actor`,
-        plus X-Harness-Role / X-Harness-Actor.
+        JWT claims MUST include: sub, role, pool_ids[], iat, exp.
+        Optional: tid. Cross-pool → 403 pool_forbidden.
   parameters:
     Id:
       name: id
@@ -386,15 +417,22 @@ components:
       required: true
       schema:
         type: string
-        pattern: "^sha256=[0-9a-fA-F]+$"
-      description: HMAC-SHA256 hex of `{timestamp}.{raw_body}`
+        pattern: "^sha256=[0-9a-f]+$"
+      description: HMAC-SHA256 over `{timestamp}.{raw_body}`; secret WEBHOOK_SIGNING_SECRET
     HarnessTimestamp:
       name: X-Harness-Timestamp
       in: header
       required: true
       schema:
-        type: string
-      description: Unix seconds. Skew ±300s → 401 webhook_skew.
+        type: integer
+      description: unix seconds; skew ±300s else 401 webhook_skew
+  responses:
+    Forbidden:
+      description: RBAC / pool_forbidden / human fan-out without exception
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
   schemas:
     Dial:
       type: string
@@ -413,9 +451,7 @@ components:
           type: string
           enum: [cursor_account, bot_group, noop]
         secret_ref:
-          type: string
-          description: file:/abs/or/mounted/path or env:VAR_NAME. Never echo resolved plaintext.
-          pattern: "^(file:/\\S+|env:[A-Z_][A-Z0-9_]*)$"
+          $ref: "#/components/schemas/SecretRef"
     PoolPublic:
       type: object
       additionalProperties: false
@@ -431,7 +467,31 @@ components:
         created_at:
           type: string
       description: Pool listing may include secret_ref URI; never resolved plaintext.
-    AdminFreeze:
+    SecretRef:
+      type: string
+      description: |
+        M0 allowed: `file:/abs/or/mounted/path` | `env:VAR_NAME`.
+        Delayed: sops: / cloud KMS. API NEVER echoes resolved plaintext.
+      pattern: "^(file:/|env:)[A-Za-z0-9._/:-]+$"
+    JwtClaims:
+      type: object
+      required: [sub, role, pool_ids, iat, exp]
+      properties:
+        sub: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        pool_ids:
+          type: array
+          items: { type: string }
+        iat: { type: integer }
+        exp: { type: integer }
+        tid: { type: string, description: optional tenant }
+    FreezeSetRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        reason: { type: string }
+    FreezeState:
       type: object
       required: [enabled]
       properties:
@@ -592,8 +652,12 @@ components:
         reason_code:
           type: string
         redirect:
-          type: string
+          type: object
           nullable: true
+          properties:
+            hint: { type: string }
+            fail_count: { type: integer }
+            threshold: { type: integer }
         action:
           type: string
         blocks:
@@ -639,29 +703,36 @@ components:
         structural_change:
           type: boolean
           default: false
+    ErrorBody:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum:
+            - brief_forbidden_field
+            - freeze_active
+            - webhook_bad_signature
+            - webhook_skew
+            - pool_forbidden
+            - secret_ref_unsupported
+            - predicate_evidence_mismatch
+            - optimistic_lock
+        message:
+          type: string
+        keys:
+          type: array
+          items: { type: string }
     Error:
       type: object
       properties:
+        code: { type: string }
+        message: { type: string }
         error:
           type: object
           required: [code, message]
           properties:
             code:
               type: string
-              enum:
-                - brief_forbidden_field
-                - coordinator_ref_required
-                - forbidden
-                - unauthorized
-                - gate_version_conflict
-                - predicate_evidence_mismatch
-                - dial_frozen
-                - freeze_active
-                - freeze_invalid
-                - webhook_skew
-                - webhook_bad_signature
-                - pool_forbidden
-                - secret_ref_invalid
-                - plaintext_credential_forbidden
             message:
               type: string

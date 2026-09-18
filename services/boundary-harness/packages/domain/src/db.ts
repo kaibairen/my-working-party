@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createCursorAdapter, type CursorAdapter } from "@harness/adapters-cursor";
@@ -6,7 +9,7 @@ import { createNoopAdapter, type NoopAdapter } from "@harness/adapters-noop";
 import { DELIVER_READY_V1, SAFETY_ONLY_V1 } from "@harness/ready";
 import { assertSecretRef } from "./rbac";
 import { schema } from "./schema";
-import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema-sql";
+import { SCHEMA_VERSION } from "./schema-sql";
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
@@ -38,8 +41,22 @@ export type Harness = {
   newId: () => string;
 };
 
+const here = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(here, "../migrations");
+
+function tableExists(sqlite: Database.Database, name: string): boolean {
+  const row = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) as
+    | { name: string }
+    | undefined;
+  return Boolean(row);
+}
+
+function columnNames(sqlite: Database.Database, table: string): string[] {
+  return (sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+}
+
 function seed(sqlite: Database.Database, now: string): void {
-  sqlite.prepare("INSERT OR IGNORE INTO schema_meta (schema_version) VALUES (?)").run(SCHEMA_VERSION);
+  sqlite.prepare("INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, ?)").run("schema_version", String(SCHEMA_VERSION));
   sqlite
     .prepare(
       `INSERT OR IGNORE INTO ready_predicates (id, version, dsl_json, created_at)
@@ -80,43 +97,43 @@ function seed(sqlite: Database.Database, now: string): void {
     .run(cursorRef);
   sqlite
     .prepare(
-      `INSERT OR IGNORE INTO admin_freeze (id, enabled, reason, updated_by, updated_at)
-       VALUES ('default', 0, NULL, NULL, ?)`,
+      `INSERT OR IGNORE INTO freeze_state (id, enabled, reason, updated_by, updated_at)
+       VALUES ('global', 0, NULL, 'system', ?)`,
     )
     .run(now);
 }
 
-function migrateAuditLog(sqlite: Database.Database): void {
-  const cols = sqlite.prepare("PRAGMA table_info(audit_log)").all() as { name: string }[];
-  const names = cols.map((c) => c.name);
-  if (names.includes("actor_sub")) return;
-  if (!names.includes("actor")) return;
-  sqlite.exec(`
-    CREATE TABLE audit_log_v2 (
-      id TEXT PRIMARY KEY,
-      at TEXT NOT NULL,
-      actor_sub TEXT NOT NULL,
-      actor_role TEXT NOT NULL,
-      action TEXT NOT NULL,
-      resource_type TEXT,
-      resource_id TEXT,
-      request_id TEXT,
-      payload_json TEXT
-    );
-    INSERT INTO audit_log_v2 (id, at, actor_sub, actor_role, action, resource_type, resource_id, request_id, payload_json)
-    SELECT id, created_at, actor, role, action, entity_type, entity_id, NULL, payload_json FROM audit_log;
-    DROP TABLE audit_log;
-    ALTER TABLE audit_log_v2 RENAME TO audit_log;
-  `);
+function applyCompat(sqlite: Database.Database): void {
+  if (tableExists(sqlite, "goals") && !columnNames(sqlite, "goals").includes("dial")) {
+    sqlite.exec("ALTER TABLE goals ADD COLUMN dial TEXT NOT NULL DEFAULT 'free'");
+  }
+  if (tableExists(sqlite, "gate_instances") && !columnNames(sqlite, "gate_instances").includes("assignment_id")) {
+    sqlite.exec("ALTER TABLE gate_instances ADD COLUMN assignment_id TEXT");
+  }
+  if (tableExists(sqlite, "policy_events")) {
+    const cols = columnNames(sqlite, "policy_events");
+    if (!cols.includes("action")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN action TEXT");
+    if (!cols.includes("closed")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN closed INTEGER NOT NULL DEFAULT 0");
+  }
+  if (tableExists(sqlite, "schema_meta") && columnNames(sqlite, "schema_meta").includes("schema_version") && !columnNames(sqlite, "schema_meta").includes("key")) {
+    sqlite.exec(`
+      CREATE TABLE schema_meta_v2 (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT OR IGNORE INTO schema_meta_v2(key, value)
+        SELECT 'schema_version', CAST(schema_version AS TEXT) FROM schema_meta;
+      DROP TABLE schema_meta;
+      ALTER TABLE schema_meta_v2 RENAME TO schema_meta;
+    `);
+  }
 }
 
 export function applySchema(sqlite: Database.Database): void {
-  sqlite.exec(SCHEMA_SQL);
-  const cols = sqlite.prepare("PRAGMA table_info(goals)").all() as { name: string }[];
-  if (!cols.some((c) => c.name === "dial")) {
-    sqlite.exec("ALTER TABLE goals ADD COLUMN dial TEXT NOT NULL DEFAULT 'free'");
+  if (!tableExists(sqlite, "schema_meta")) {
+    sqlite.exec(readFileSync(join(migrationsDir, "0001_m0_schema.sql"), "utf8"));
   }
-  migrateAuditLog(sqlite);
+  if (!tableExists(sqlite, "freeze_state")) {
+    sqlite.exec(readFileSync(join(migrationsDir, "0002_m0_security.sql"), "utf8"));
+  }
+  applyCompat(sqlite);
 }
 
 export function createHarness(opts?: {

@@ -22,11 +22,17 @@ export type PolicyCheckInput = {
   context?: Record<string, unknown>;
 };
 
+export type PolicyRedirect = {
+  hint: string;
+  fail_count: number;
+  threshold: number;
+};
+
 export type PolicyCheckResult = {
   decision: PolicyDecision;
   track: PolicyTrack;
   reason_code: string;
-  redirect: string | null;
+  redirect: PolicyRedirect | null;
   action: string;
   blocks: boolean;
   creates_gate: boolean;
@@ -71,7 +77,9 @@ export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
 
   if (requestedTrack === "advisory_hint" || track === "advisory_hint") {
     const redirect =
-      requestedTrack === "advisory_hint" ? "continue_without_human; advisory never blocks" : null;
+      requestedTrack === "advisory_hint"
+        ? { hint: "continue_without_human; advisory never blocks", fail_count: 0, threshold: 3 }
+        : null;
     return {
       decision: requestedTrack === "advisory_hint" ? "redirect_hint" : "allow",
       track: "advisory_hint",
@@ -114,7 +122,7 @@ export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
     decision: "redirect_hint",
     track: "advisory_hint",
     reason_code: "redirect_before_human",
-    redirect: "retry_with_alternate_path",
+    redirect: { hint: "retry_with_alternate_path", fail_count: Number(input.context?.fail_count ?? 0), threshold: 3 },
     action,
     blocks: false,
     creates_gate: false,

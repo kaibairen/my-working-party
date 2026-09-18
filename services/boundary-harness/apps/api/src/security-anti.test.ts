@@ -306,7 +306,7 @@ describe("security-anti S1–S8", () => {
       const raw = JSON.stringify({ ping: true });
       const now = Math.floor(Date.now() / 1000);
       const okSig = signHarnessWebhook("hook-test-secret", now, raw);
-      const ok = await json(app, "/hooks/github", {
+      const ok = await json(app, "/v1/hooks/github", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -315,7 +315,7 @@ describe("security-anti S1–S8", () => {
         },
         body: raw,
       });
-      expect(ok.res.status).toBe(200);
+      expect(ok.res.status).toBe(202);
 
       const skewTs = String(now - 301);
       const skewSig = signHarnessWebhook("hook-test-secret", skewTs, raw);
@@ -378,7 +378,7 @@ describe("security-anti S1–S8", () => {
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({ idempotency_key: "before-admin-freeze" }),
     });
-    expect(run.res.status).toBe(200);
+    expect(run.res.status).toBe(201);
 
     const frozen = await json(app, "/v1/admin/freeze", {
       method: "POST",

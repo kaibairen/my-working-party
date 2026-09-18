@@ -32,8 +32,10 @@ export type JwtClaims = {
   tid?: string;
 };
 
-export const SECRET_REF_FILE = /^file:\/\S+$/;
-export const SECRET_REF_ENV = /^env:[A-Z_][A-Z0-9_]*$/;
+/** Backend OpenAPI SecretRef: `file:/…` | `env:VAR` */
+export const SECRET_REF_PATTERN = /^(file:\/|env:)[A-Za-z0-9._/:-]+$/;
+export const SECRET_REF_FILE = /^file:\/[A-Za-z0-9._/:-]+$/;
+export const SECRET_REF_ENV = /^env:[A-Za-z0-9._/:-]+$/;
 
 export function jwtSecret(): string {
   return process.env.JWT_SIGNING_SECRET ?? process.env.AUTH_JWT_SECRET ?? "harness-m0-dev-jwt";
@@ -162,11 +164,11 @@ export function requirePoolAccess(actor: Actor, poolId: string): void {
 }
 
 export function assertSecretRef(ref: string): void {
-  if (SECRET_REF_FILE.test(ref) || SECRET_REF_ENV.test(ref)) return;
+  if (SECRET_REF_PATTERN.test(ref)) return;
   throw new HarnessError(
-    "secret_ref_invalid",
+    "secret_ref_unsupported",
     "secret_ref must be file:/abs/or/mounted/path or env:VAR_NAME",
-    422,
+    400,
     { secret_ref: ref },
   );
 }

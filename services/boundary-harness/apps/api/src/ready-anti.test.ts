@@ -247,7 +247,7 @@ describe("ready-anti (appendix A5)", () => {
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({ idempotency_key: "no-canvas" }),
     });
-    expect(run.res.status).toBe(200);
+    expect(run.res.status).toBe(201);
     expect(run.body.external_agent_id).toBeTruthy();
     expect(run.body.external_run_id).toBeTruthy();
   });

@@ -1,7 +1,8 @@
 import { integer, sqliteTable, text, unique, primaryKey } from "drizzle-orm/sqlite-core";
 
 export const schemaMeta = sqliteTable("schema_meta", {
-  schemaVersion: integer("schema_version").notNull(),
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
 });
 
 export const pools = sqliteTable("pools", {
@@ -131,13 +132,16 @@ export const exceptionGrants = sqliteTable("exception_grants", {
 
 export const policyEvents = sqliteTable("policy_events", {
   id: text("id").primaryKey(),
+  track: text("track").notNull(),
+  decision: text("decision").notNull(),
+  reasonCode: text("reason_code"),
+  failCount: integer("fail_count").notNull(),
   goalId: text("goal_id"),
   assignmentId: text("assignment_id"),
-  action: text("action").notNull(),
-  decision: text("decision").notNull(),
-  track: text("track").notNull(),
-  failCount: integer("fail_count").notNull(),
-  closed: integer("closed", { mode: "boolean" }).notNull(),
+  runId: text("run_id"),
+  payloadJson: text("payload_json"),
+  action: text("action"),
+  closed: integer("closed", { mode: "boolean" }),
   createdAt: text("created_at").notNull(),
 });
 
@@ -153,7 +157,7 @@ export const auditLog = sqliteTable("audit_log", {
   payloadJson: text("payload_json"),
 });
 
-export const adminFreeze = sqliteTable("admin_freeze", {
+export const freezeState = sqliteTable("freeze_state", {
   id: text("id").primaryKey(),
   enabled: integer("enabled", { mode: "boolean" }).notNull(),
   reason: text("reason"),
@@ -184,6 +188,6 @@ export const schema = {
   exceptionGrants,
   policyEvents,
   auditLog,
-  adminFreeze,
+  freezeState,
   outbox,
 };
