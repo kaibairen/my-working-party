@@ -1,4 +1,4 @@
-import { HarnessError } from "./errors.ts";
+import { HarnessError } from "./errors";
 
 export const ROLES = [
   "decision_maker",
@@ -15,9 +15,21 @@ export type Actor = {
   role: Role;
 };
 
+export const DIALS = ["free", "guided", "gated", "freeze"] as const;
+export type Dial = (typeof DIALS)[number];
+
+/** JWT claims are not frozen. M0 Bearer token is `role` or `role:actor`. */
+export function parseBearer(authorization: string | undefined): { role?: string; actor?: string } {
+  if (!authorization) return {};
+  const match = /^Bearer\s+(\S+)/i.exec(authorization.trim());
+  if (!match) return {};
+  const [role, actor] = match[1].split(":");
+  return { role, actor };
+}
+
 export function parseRole(value: string | undefined): Role {
   if (!value || !(ROLES as readonly string[]).includes(value)) {
-    throw new HarnessError("unauthorized", "missing or invalid X-Harness-Role", 401);
+    throw new HarnessError("unauthorized", "missing or invalid Bearer role", 401);
   }
   return value as Role;
 }
@@ -28,6 +40,33 @@ export function requireRole(actor: Actor, allowed: readonly Role[]): void {
       role: actor.role,
       allowed,
     });
+  }
+}
+
+export const PLAINTEXT_CREDENTIAL_KEYS = [
+  "password",
+  "api_key",
+  "token",
+  "secret",
+  "credential",
+  "credentials",
+  "access_token",
+  "private_key",
+] as const;
+
+export function assertNoPlaintextCredentials(body: unknown): void {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return;
+  const keys = Object.keys(body as Record<string, unknown>);
+  const hit = keys.filter((k) =>
+    (PLAINTEXT_CREDENTIAL_KEYS as readonly string[]).includes(k.toLowerCase()),
+  );
+  if (hit.length > 0) {
+    throw new HarnessError(
+      "plaintext_credential_forbidden",
+      "plaintext credential fields are forbidden; use secret_ref",
+      422,
+      { keys: hit },
+    );
   }
 }
 

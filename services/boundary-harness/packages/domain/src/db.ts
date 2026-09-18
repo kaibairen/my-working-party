@@ -67,6 +67,10 @@ function seed(sqlite: Database.Database, now: string): void {
 
 export function applySchema(sqlite: Database.Database): void {
   sqlite.exec(SCHEMA_SQL);
+  const cols = sqlite.prepare("PRAGMA table_info(goals)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "dial")) {
+    sqlite.exec("ALTER TABLE goals ADD COLUMN dial TEXT NOT NULL DEFAULT 'free'");
+  }
 }
 
 export function createHarness(opts?: {

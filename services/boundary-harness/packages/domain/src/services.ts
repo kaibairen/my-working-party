@@ -3,8 +3,8 @@ import { checkPolicy, type PolicyCheckInput, type PolicyCheckResult } from "@har
 import { evaluateReady, requiredEvidenceKinds, type ReadyContext } from "@harness/ready";
 import { parseBriefV1, parseBudget, EVIDENCE_KINDS, type EvidenceKind } from "./brief";
 import { HarnessError } from "./errors";
-import type { Actor, Role } from "./rbac";
-import { requireRole } from "./rbac";
+import type { Actor, Dial, Role } from "./rbac";
+import { DIALS, requireRole } from "./rbac";
 import type { Harness } from "./db";
 import {
   assignments,
@@ -29,6 +29,7 @@ export type CreateGoalInput = {
   dispatch_policy?: "coordinator_only" | "human_allowed";
   gate_template_id?: string | null;
   safety_gate?: boolean;
+  dial?: Dial;
 };
 
 export type FillAssignmentInput = {
@@ -82,6 +83,7 @@ function publicGoal(row: typeof goals.$inferSelect) {
     dispatch_policy: row.dispatchPolicy,
     coordinator_ref: row.coordinatorRef,
     gate_template_id: row.gateTemplateId,
+    dial: row.dial,
     status: row.status,
     created_by: row.createdBy,
     created_at: row.createdAt,
@@ -199,6 +201,7 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
     dispatchPolicy: input.dispatch_policy ?? "coordinator_only",
     coordinatorRef: input.coordinator_ref,
     gateTemplateId: template,
+    dial: input.dial && (DIALS as readonly string[]).includes(input.dial) ? input.dial : "free",
     status: "active",
     createdBy: actor.id,
     createdAt: ts,
@@ -227,6 +230,17 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
 
   audit(h, actor, "create_goal", "goal", id, { mode: input.mode, template });
   return getGoal(h, id);
+}
+
+export function setGoalDial(h: Harness, actor: Actor, goalId: string, dial: string) {
+  requireRole(actor, ["coordinator", "decision_maker"]);
+  if (!(DIALS as readonly string[]).includes(dial)) {
+    throw new HarnessError("dial_invalid", "dial must be free|guided|gated|freeze", 422);
+  }
+  getGoal(h, goalId);
+  h.db.update(goals).set({ dial, updatedAt: h.now() }).where(eq(goals.id, goalId)).run();
+  audit(h, actor, "set_dial", "goal", goalId, { dial });
+  return getGoal(h, goalId);
 }
 
 function consumeGrant(h: Harness, actor: Actor, goalId: string, grantId: string, scope: string) {
@@ -471,6 +485,14 @@ export async function dispatchAssignment(
     .get();
   if (existing) return publicRun(existing);
 
+  const dial = ((goal as { dial?: string }).dial ?? "free") as Dial;
+  if (dial === "freeze") {
+    throw new HarnessError("dial_frozen", "freeze rejects new dispatch", 403, {
+      goal_id: goal.id,
+      dial,
+    });
+  }
+
   const pool = h.db.select().from(pools).where(eq(pools.id, assignment.poolId)).get();
   const adapterName = pool?.kind === "cursor_account" ? "cursor" : "noop";
   const adapter = adapterName === "cursor" ? h.adapters.cursor : h.adapters.noop;
@@ -484,7 +506,7 @@ export async function dispatchAssignment(
     externalAgentId: null,
     externalRunId: null,
     idempotencyKey,
-    dialAtDispatch: "free",
+    dialAtDispatch: dial,
     status: "queued",
     usageJson: null,
     error: null,

@@ -3,29 +3,69 @@ info:
   title: Boundary Harness Domain API
   version: "0.0.1"
   description: |
-    M0 Domain API. DB is system of record. BriefV1 forbids steps/script/must_path
-    and the expanded key set. advisory_hint never blocks dispatch/run/ready.
-    Cursor is not wired in M0 (Noop adapter only).
+    M0 Domain API. DB is system of record.
+    Security: Authorization Bearer role or role:actor
+    (JWT claims not frozen). Roles: decision_maker|coordinator|executor|viewer|service.
+    Insufficient role → 403. Pool.secret_ref never echoed as plaintext.
+    policy/check returns decision, track, reason_code, redirect.
+    Freeze rejects new dispatch (403 dial_frozen, M0 provisional).
+    audit/policy_events/gate_decisions are append-only (no PATCH/DELETE).
 servers:
   - url: http://127.0.0.1:8080
+security:
+  - bearerAuth: []
 paths:
   /health:
     get:
+      security: []
       summary: Liveness and schema version
       responses:
         "200":
           description: OK
-  /v1/pools:
-    get:
-      summary: List execution pools (secret_ref never echoed)
-      security: [{ harnessRole: [] }]
+  /hooks/github:
+    post:
+      security: []
+      summary: Inbound GitHub hook (HMAC required; algorithm/header not frozen)
+      description: |
+        Fail-closed. Missing WEBHOOK_SIGNING_SECRET or signature → 401 hmac_unverified.
+        Signature header provisional: X-Harness-Signature or X-Hub-Signature-256.
+        Ready snapshots are M2; accepted events must go through outbox.
+      responses:
+        "200":
+          description: Accepted for outbox (M0 may no-op body)
+        "401":
+          description: hmac_unverified
+  /hooks/cursor:
+    post:
+      security: []
+      summary: Inbound Cursor hook (HMAC required; algorithm/header not frozen)
       responses:
         "200":
           description: OK
+        "401":
+          description: hmac_unverified
+  /v1/pools:
+    get:
+      summary: List execution pools (responses sanitized; secret_ref never echoed)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pools:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PoolPublic"
+        "401":
+          description: unauthorized
+        "403":
+          description: forbidden
   /v1/goals:
     post:
       summary: Create Goal (coordinator_ref required)
-      security: [{ harnessRole: [] }]
       requestBody:
         required: true
         content:
@@ -35,21 +75,46 @@ paths:
       responses:
         "201":
           description: Created
+        "403":
+          description: RBAC
         "422":
-          description: coordinator_ref_required or mode_template_mismatch
+          description: coordinator_ref_required or mode_template_mismatch or plaintext_credential_forbidden
   /v1/goals/{id}:
     get:
       summary: Get Goal plus GateDefs
-      security: [{ harnessRole: [] }]
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
         "200":
           description: OK
+        "403":
+          description: forbidden
+  /v1/goals/{id}/dial:
+    post:
+      summary: Set Goal dial (M0 provisional until Freeze API is frozen)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dial]
+              additionalProperties: false
+              properties:
+                dial:
+                  $ref: "#/components/schemas/Dial"
+      responses:
+        "200":
+          description: Updated
+        "403":
+          description: forbidden
+        "422":
+          description: dial_invalid
   /v1/goals/{id}/assignments:
     post:
       summary: Fill Assignment (BriefV1). budget → budget_json.
-      security: [{ harnessRole: [] }]
       parameters:
         - $ref: "#/components/parameters/Id"
       requestBody:
@@ -63,21 +128,23 @@ paths:
           description: Created
         "400":
           description: predicate_evidence_mismatch
+        "403":
+          description: RBAC / human fan-out without exception
         "422":
           description: brief_forbidden_field
   /v1/goals/{id}/exception-grants:
     post:
       summary: Decision-maker scoped human fan-out grant
-      security: [{ harnessRole: [] }]
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
         "201":
           description: Created
+        "403":
+          description: forbidden
   /v1/assignments/{id}:
     get:
       summary: Get Assignment
-      security: [{ harnessRole: [] }]
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
@@ -85,8 +152,7 @@ paths:
           description: OK
   /v1/assignments/{id}/dispatch:
     post:
-      summary: Dispatch via Noop adapter. Coordinator or service only.
-      security: [{ harnessRole: [] }]
+      summary: Dispatch. Coordinator or service. Freeze rejects new dispatch.
       parameters:
         - $ref: "#/components/parameters/Id"
       requestBody:
@@ -101,22 +167,28 @@ paths:
                   type: string
       responses:
         "200":
-          description: Run (dual external ids persisted)
+          description: Run (dual external ids + dial_at_dispatch snapshot)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
         "403":
-          description: executor forbidden
+          description: executor forbidden or dial_frozen
   /v1/runs/{id}:
     get:
       summary: Get Run (advisory; MUST NOT be used as Gate ready)
-      security: [{ harnessRole: [] }]
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
   /v1/runs/{id}/evidence:
     post:
       summary: Unique completion entry. shadow=true is Path B and cannot write Gate.
-      security: [{ harnessRole: [] }]
       parameters:
         - $ref: "#/components/parameters/Id"
       requestBody:
@@ -128,10 +200,11 @@ paths:
       responses:
         "201":
           description: Created
+        "403":
+          description: forbidden
   /v1/policy/check:
     post:
-      summary: Policy check. Response always includes track.
-      security: [{ harnessRole: [] }]
+      summary: Policy/Dial check. Authority whitelist is exactly five keys.
       requestBody:
         required: true
         content:
@@ -140,11 +213,16 @@ paths:
               $ref: "#/components/schemas/PolicyCheck"
       responses:
         "200":
-          description: allow | redirect_hint | require_gate | deny
+          description: decision + track + reason_code + redirect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyCheckResult"
+        "403":
+          description: forbidden
   /v1/gates:
     get:
       summary: List GateInstances (Inbox uses status=ready)
-      security: [{ harnessRole: [] }]
       parameters:
         - in: query
           name: status
@@ -158,10 +236,11 @@ paths:
       responses:
         "200":
           description: OK
+        "403":
+          description: forbidden
   /v1/gates/{id}/decide:
     post:
       summary: Decide a ready GateInstance (decision_maker, optimistic lock)
-      security: [{ harnessRole: [] }]
       parameters:
         - $ref: "#/components/parameters/Id"
       requestBody:
@@ -173,14 +252,53 @@ paths:
       responses:
         "200":
           description: Decided
+        "403":
+          description: only decision_maker
         "409":
           description: gate_version_conflict
+  /v1/audit:
+    patch:
+      summary: Forbidden — audit_log is append-only
+      responses:
+        "405":
+          description: Method not allowed
+    delete:
+      summary: Forbidden — audit_log is append-only
+      responses:
+        "405":
+          description: Method not allowed
+  /v1/policy-events:
+    patch:
+      summary: Forbidden — policy_events are append-only
+      responses:
+        "405":
+          description: Method not allowed
+    delete:
+      summary: Forbidden — policy_events are append-only
+      responses:
+        "405":
+          description: Method not allowed
+  /v1/gate-decisions:
+    patch:
+      summary: Forbidden — gate_decisions are append-only
+      responses:
+        "405":
+          description: Method not allowed
+    delete:
+      summary: Forbidden — gate_decisions are append-only
+      responses:
+        "405":
+          description: Method not allowed
 components:
   securitySchemes:
-    harnessRole:
-      type: apiKey
-      in: header
-      name: X-Harness-Role
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        M0 token is `role` or `role:actor` where role ∈
+        decision_maker|coordinator|executor|viewer|service.
+        JWT claim names are not frozen. Insufficient role → 403.
+        Compatibility alias (non-authoritative): X-Harness-Role / X-Harness-Actor.
   parameters:
     Id:
       name: id
@@ -189,6 +307,38 @@ components:
       schema:
         type: string
   schemas:
+    Dial:
+      type: string
+      enum: [free, guided, gated, freeze]
+    Role:
+      type: string
+      enum: [decision_maker, coordinator, executor, viewer, service]
+    Pool:
+      type: object
+      additionalProperties: false
+      required: [id, kind, secret_ref]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [cursor_account, bot_group, noop]
+        secret_ref:
+          type: string
+          writeOnly: true
+          description: Required secret reference. Never echo plaintext credentials.
+    PoolPublic:
+      type: object
+      additionalProperties: false
+      required: [id, kind, created_at]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        created_at:
+          type: string
+      description: Sanitized pool. secret_ref and plaintext credentials are omitted.
     CreateGoal:
       type: object
       additionalProperties: false
@@ -210,6 +360,8 @@ components:
           nullable: true
         safety_gate:
           type: boolean
+        dial:
+          $ref: "#/components/schemas/Dial"
     BriefV1:
       type: object
       additionalProperties: false
@@ -274,6 +426,7 @@ components:
       properties:
         action:
           type: string
+          description: Authority whitelist is only the five Dial keys
         track:
           type: string
           enum: [authority_gate, advisory_hint]
@@ -284,6 +437,52 @@ components:
         context:
           type: object
           additionalProperties: true
+    PolicyCheckResult:
+      type: object
+      required: [decision, track, reason_code, redirect]
+      properties:
+        decision:
+          type: string
+          enum: [allow, redirect_hint, require_gate, deny]
+        track:
+          type: string
+          enum: [authority_gate, advisory_hint]
+        reason_code:
+          type: string
+        redirect:
+          type: string
+          nullable: true
+        action:
+          type: string
+        blocks:
+          type: boolean
+        creates_gate:
+          type: boolean
+    Run:
+      type: object
+      required: [id, adapter, dial_at_dispatch]
+      properties:
+        id:
+          type: string
+        assignment_id:
+          type: string
+        adapter:
+          type: string
+        external_agent_id:
+          type: string
+          nullable: true
+        external_run_id:
+          type: string
+          nullable: true
+        idempotency_key:
+          type: string
+        dial_at_dispatch:
+          $ref: "#/components/schemas/Dial"
+        status:
+          type: string
+        advisory:
+          type: boolean
+          description: get_run is advisory and MUST NOT drive Gate ready
     DecideGate:
       type: object
       required: [decision, version]
@@ -298,3 +497,24 @@ components:
         structural_change:
           type: boolean
           default: false
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - brief_forbidden_field
+                - coordinator_ref_required
+                - forbidden
+                - unauthorized
+                - gate_version_conflict
+                - predicate_evidence_mismatch
+                - dial_frozen
+                - hmac_unverified
+                - plaintext_credential_forbidden
+            message:
+              type: string

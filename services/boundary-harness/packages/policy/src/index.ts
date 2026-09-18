@@ -25,6 +25,8 @@ export type PolicyCheckInput = {
 export type PolicyCheckResult = {
   decision: PolicyDecision;
   track: PolicyTrack;
+  reason_code: string;
+  redirect: string | null;
   action: string;
   blocks: boolean;
   creates_gate: boolean;
@@ -46,7 +48,7 @@ export function normalizeTrack(input: PolicyCheckInput): PolicyTrack {
 }
 
 /**
- * Policy/Dial check. MUST distinguish authority_gate vs advisory_hint.
+ * Policy/Dial check. Authority whitelist is exactly five keys.
  * advisory_hint MUST NOT block dispatch / Run / Ready and MUST NOT create a GateInstance.
  */
 export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
@@ -58,6 +60,8 @@ export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
     return {
       decision: "allow",
       track: "advisory_hint",
+      reason_code: "low_risk_not_whitelisted",
+      redirect: null,
       action,
       blocks: false,
       creates_gate: false,
@@ -65,11 +69,14 @@ export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
     };
   }
 
-  // Caller-marked advisory MUST remain advisory even for high-risk names (never escalate).
   if (requestedTrack === "advisory_hint" || track === "advisory_hint") {
+    const redirect =
+      requestedTrack === "advisory_hint" ? "continue_without_human; advisory never blocks" : null;
     return {
       decision: requestedTrack === "advisory_hint" ? "redirect_hint" : "allow",
       track: "advisory_hint",
+      reason_code: "advisory_hint_not_blocking",
+      redirect,
       action,
       blocks: false,
       creates_gate: false,
@@ -81,6 +88,8 @@ export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
     return {
       decision: "require_gate",
       track: "authority_gate",
+      reason_code: "authority_whitelist",
+      redirect: null,
       action,
       blocks: true,
       creates_gate: true,
@@ -92,6 +101,8 @@ export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
     return {
       decision: "require_gate",
       track: "authority_gate",
+      reason_code: "redirect_exhausted",
+      redirect: null,
       action,
       blocks: true,
       creates_gate: true,
@@ -102,6 +113,8 @@ export function checkPolicy(input: PolicyCheckInput): PolicyCheckResult {
   return {
     decision: "redirect_hint",
     track: "advisory_hint",
+    reason_code: "redirect_before_human",
+    redirect: "retry_with_alternate_path",
     action,
     blocks: false,
     creates_gate: false,

@@ -6,6 +6,7 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import {
   assertNoClientStatusWrite,
+  assertNoPlaintextCredentials,
   attachEvidence,
   createExceptionGrant,
   createGoal,
@@ -15,14 +16,17 @@ import {
   getAssignment,
   getGoal,
   getRun,
+  HarnessError,
   health,
   isHarnessError,
   listGateInstances,
   listPools,
+  parseBearer,
   parseRole,
   policyCheck,
   recordGithubSnapshot,
   requireRole,
+  setGoalDial,
   type Actor,
   type Harness,
   type Role,
@@ -43,9 +47,26 @@ const openapiPath = join(here, "../../../openapi/openapi.yaml");
 function readActor(c: {
   req: { header: (name: string) => string | undefined; query: (name: string) => string | undefined };
 }): Actor {
-  const role = parseRole(c.req.header("x-harness-role") ?? c.req.query("role"));
-  const id = c.req.header("x-harness-actor") ?? c.req.query("actor") ?? `anon:${role}`;
+  const bearer = parseBearer(c.req.header("authorization"));
+  const role = parseRole(bearer.role ?? c.req.header("x-harness-role") ?? c.req.query("role"));
+  const id =
+    bearer.actor ??
+    c.req.header("x-harness-actor") ??
+    c.req.query("actor") ??
+    `anon:${role}`;
   return { id, role: role as Role };
+}
+
+function verifyInboundHmac(c: { req: { header: (name: string) => string | undefined } }): void {
+  const secret = process.env.WEBHOOK_SIGNING_SECRET;
+  const sig = c.req.header("x-harness-signature") ?? c.req.header("x-hub-signature-256");
+  if (!secret || !sig) {
+    throw new HarnessError(
+      "hmac_unverified",
+      "inbound hook rejected: signature not verified (HMAC algorithm/header not frozen)",
+      401,
+    );
+  }
 }
 
 export function createApp(harness: Harness) {
@@ -60,7 +81,7 @@ export function createApp(harness: Harness) {
     if (isHarnessError(err)) {
       return c.json(
         { error: { code: err.code, message: err.message, details: err.details ?? null } },
-        err.status as 400 | 401 | 403 | 404 | 409 | 422 | 500,
+        err.status as 400 | 401 | 403 | 404 | 405 | 409 | 422 | 500,
       );
     }
     console.error(err);
@@ -109,13 +130,20 @@ export function createApp(harness: Harness) {
 
   v1.post("/goals", async (c) => {
     const body = await c.req.json();
+    assertNoPlaintextCredentials(body);
     return c.json(createGoal(c.get("harness"), c.get("actor"), body), 201);
+  });
+
+  v1.post("/goals/:id/dial", async (c) => {
+    const body = (await c.req.json()) as { dial?: string };
+    return c.json(setGoalDial(c.get("harness"), c.get("actor"), c.req.param("id"), String(body.dial ?? "")));
   });
 
   v1.get("/goals/:id", (c) => c.json(getGoal(c.get("harness"), c.req.param("id"))));
 
   v1.post("/goals/:id/assignments", async (c) => {
     const body = (await c.req.json()) as Record<string, unknown>;
+    assertNoPlaintextCredentials(body);
     assertNoClientStatusWrite(c.get("actor").role, body);
     return c.json(
       fillAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), {
@@ -178,6 +206,24 @@ export function createApp(harness: Harness) {
     const body = await c.req.json();
     return c.json(recordGithubSnapshot(c.get("harness"), body), 201);
   });
+
+  app.post("/hooks/github", async (c) => {
+    verifyInboundHmac(c);
+    return c.json({ ok: true, accepted: false, note: "GitHub Ready snapshots are M2; event must go through outbox" });
+  });
+  app.post("/hooks/cursor", async (c) => {
+    verifyInboundHmac(c);
+    return c.json({ ok: true, accepted: false, note: "Cursor hook HMAC header/algorithm not frozen" });
+  });
+
+  for (const path of ["/audit", "/policy-events", "/gate-decisions"]) {
+    v1.on("PATCH", path, () => {
+      throw new HarnessError("append_only", "audit/policy_events/gate_decisions are append-only", 405);
+    });
+    v1.on("DELETE", path, () => {
+      throw new HarnessError("append_only", "audit/policy_events/gate_decisions are append-only", 405);
+    });
+  }
 
   app.route("/v1", v1);
   return app;

@@ -18,6 +18,7 @@ export const goals = sqliteTable("goals", {
   dispatchPolicy: text("dispatch_policy").notNull(),
   coordinatorRef: text("coordinator_ref").notNull(),
   gateTemplateId: text("gate_template_id"),
+  dial: text("dial").notNull(),
   status: text("status").notNull(),
   createdBy: text("created_by").notNull(),
   createdAt: text("created_at").notNull(),

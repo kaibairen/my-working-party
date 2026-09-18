@@ -21,7 +21,7 @@ Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product 
 
 ## Harness M0
 
-Implementation lives in **`services/boundary-harness/`** (same repo; no separate `boundary-harness` GitHub project). Existing `docs/` stay. Spec: [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md). Test matrix: [docs/qa/M0_TEST_MATRIX_v1.md](docs/qa/M0_TEST_MATRIX_v1.md).
+Implementation lives in **`services/boundary-harness/`** (same repo; no separate `boundary-harness` GitHub project). Existing `docs/` stay. Spec: [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md). Test matrix: [docs/qa/M0_TEST_MATRIX_v1.md](docs/qa/M0_TEST_MATRIX_v1.md). Security checklist: [docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md).
 
 Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`); GateDef/GateInstance; dual external ids; `advisory_hint` never blocks. M0 runtime is **Noop**. M1 Cursor adapter is fixture-mode unless `CURSOR_API_KEY` is set (MCP still MUST NOT expose `cursor_raw_*`).
 

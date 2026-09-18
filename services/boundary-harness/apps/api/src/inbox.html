@@ -52,6 +52,7 @@
     const $ = (id) => document.getElementById(id);
     const headers = () => ({
       "content-type": "application/json",
+      authorization: `Bearer ${$("role").value}:${$("actor").value}`,
       "x-harness-role": $("role").value,
       "x-harness-actor": $("actor").value,
     });

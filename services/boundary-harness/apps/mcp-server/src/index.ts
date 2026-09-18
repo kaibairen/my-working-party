@@ -109,6 +109,7 @@ export async function callTool(
     method: tool.method,
     headers: {
       "content-type": "application/json",
+      authorization: `Bearer ${headers["x-harness-role"] ?? String(args.role ?? "coordinator")}:${headers["x-harness-actor"] ?? String(args.actor ?? "mcp")}`,
       "x-harness-role": headers["x-harness-role"] ?? String(args.role ?? "coordinator"),
       "x-harness-actor": headers["x-harness-actor"] ?? String(args.actor ?? "mcp"),
     },

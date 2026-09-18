@@ -22,7 +22,8 @@
 | A5-10 | `human_dispatch_forbidden_without_exception` | `ready-anti.test.ts` |
 
 Also: `safety_only_v1` / `deliver_ready_v1` pure-function tests in `packages/ready/src/ready.test.ts`.  
-`policy.track` tests in `packages/policy/src/policy.test.ts`.
+`policy.track` tests in `packages/policy/src/policy.test.ts`.  
+Security checklist: [HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](HARNESSSECURITY_M0_SECURITY_CHECKLIST.md).
 
 ## Security anti-patterns S1–S8
 

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS goals (
   dispatch_policy TEXT NOT NULL,
   coordinator_ref TEXT NOT NULL,
   gate_template_id TEXT,
+  dial TEXT NOT NULL DEFAULT 'free',
   status TEXT NOT NULL,
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL,

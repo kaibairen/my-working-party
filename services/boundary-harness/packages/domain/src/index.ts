@@ -10,7 +10,18 @@ export {
   type Budget,
   type EvidenceKind,
 } from "./brief";
-export { ROLES, MCP_TOOL_NAMES, parseRole, requireRole, type Actor, type Role } from "./rbac";
+export {
+  ROLES,
+  DIALS,
+  MCP_TOOL_NAMES,
+  parseBearer,
+  parseRole,
+  requireRole,
+  assertNoPlaintextCredentials,
+  type Actor,
+  type Role,
+  type Dial,
+} from "./rbac";
 export { schema } from "./schema";
 export { SCHEMA_SQL, SCHEMA_VERSION } from "./schema-sql";
 export { applySchema, closeHarness, createHarness, type Harness, type Db } from "./db";
@@ -30,5 +41,6 @@ export {
   policyCheck,
   publishOutbox,
   recordGithubSnapshot,
+  setGoalDial,
   assertNoClientStatusWrite,
 } from "./services";
