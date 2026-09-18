@@ -8,4 +8,4 @@ grokbot 工作 画布 规划 状态
 
 Under discussion: **Agent Delivery Harness** — control plane as a harness, not a jail; aligns with Grok Bot autonomy.
 
-- [docs/product/AGENT_DELIVERY_HARNESS_PRD.md](docs/product/AGENT_DELIVERY_HARNESS_PRD.md)（v0.1 研讨草案）
+- [docs/product/AGENT_DELIVERY_HARNESS_PRD.md](docs/product/AGENT_DELIVERY_HARNESS_PRD.md)（v0.1.1 研讨草案）
