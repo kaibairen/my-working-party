@@ -1,0 +1,21 @@
+{
+    "gates": [
+        {
+            "id": "54ffa4f4-f997-42a6-8e88-f6e56db6dc40",
+            "goal_id": "044084fa-7b3c-4055-8e4f-5fded567c773",
+            "gate_def_id": "7d938cab-c651-47ba-81cd-4b0c014cb9a1",
+            "assignment_id": "f86cbc7c-de02-42ff-ae31-48e48cdad051",
+            "status": "ready",
+            "ready_at": "2026-09-18T17:06:21.806Z",
+            "decided_at": null,
+            "ready_result": {
+                "ok": true,
+                "missing": [],
+                "predicate_id": "deliver_ready_v1",
+                "predicate_version": 1,
+                "evaluated_at": "2026-09-18T17:06:21.806Z"
+            },
+            "version": 1
+        }
+    ]
+}

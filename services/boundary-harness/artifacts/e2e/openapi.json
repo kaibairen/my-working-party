@@ -1,0 +1,300 @@
+openapi: 3.1.0
+info:
+  title: Boundary Harness Domain API
+  version: "0.0.1"
+  description: |
+    M0 Domain API. DB is system of record. BriefV1 forbids steps/script/must_path
+    and the expanded key set. advisory_hint never blocks dispatch/run/ready.
+    Cursor is not wired in M0 (Noop adapter only).
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /health:
+    get:
+      summary: Liveness and schema version
+      responses:
+        "200":
+          description: OK
+  /v1/pools:
+    get:
+      summary: List execution pools (secret_ref never echoed)
+      security: [{ harnessRole: [] }]
+      responses:
+        "200":
+          description: OK
+  /v1/goals:
+    post:
+      summary: Create Goal (coordinator_ref required)
+      security: [{ harnessRole: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGoal"
+      responses:
+        "201":
+          description: Created
+        "422":
+          description: coordinator_ref_required or mode_template_mismatch
+  /v1/goals/{id}:
+    get:
+      summary: Get Goal plus GateDefs
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: OK
+  /v1/goals/{id}/assignments:
+    post:
+      summary: Fill Assignment (BriefV1). budget → budget_json.
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FillAssignment"
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: predicate_evidence_mismatch
+        "422":
+          description: brief_forbidden_field
+  /v1/goals/{id}/exception-grants:
+    post:
+      summary: Decision-maker scoped human fan-out grant
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "201":
+          description: Created
+  /v1/assignments/{id}:
+    get:
+      summary: Get Assignment
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: OK
+  /v1/assignments/{id}/dispatch:
+    post:
+      summary: Dispatch via Noop adapter. Coordinator or service only.
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idempotency_key]
+              properties:
+                idempotency_key:
+                  type: string
+      responses:
+        "200":
+          description: Run (dual external ids persisted)
+        "403":
+          description: executor forbidden
+  /v1/runs/{id}:
+    get:
+      summary: Get Run (advisory; MUST NOT be used as Gate ready)
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: OK
+  /v1/runs/{id}/evidence:
+    post:
+      summary: Unique completion entry. shadow=true is Path B and cannot write Gate.
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttachEvidence"
+      responses:
+        "201":
+          description: Created
+  /v1/policy/check:
+    post:
+      summary: Policy check. Response always includes track.
+      security: [{ harnessRole: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyCheck"
+      responses:
+        "200":
+          description: allow | redirect_hint | require_gate | deny
+  /v1/gates:
+    get:
+      summary: List GateInstances (Inbox uses status=ready)
+      security: [{ harnessRole: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, ready, decided, cancelled]
+        - in: query
+          name: goal_id
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+  /v1/gates/{id}/decide:
+    post:
+      summary: Decide a ready GateInstance (decision_maker, optimistic lock)
+      security: [{ harnessRole: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideGate"
+      responses:
+        "200":
+          description: Decided
+        "409":
+          description: gate_version_conflict
+components:
+  securitySchemes:
+    harnessRole:
+      type: apiKey
+      in: header
+      name: X-Harness-Role
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    CreateGoal:
+      type: object
+      additionalProperties: false
+      required: [title, mode, coordinator_ref]
+      properties:
+        title:
+          type: string
+        mode:
+          type: string
+          enum: [explore, deliver]
+        coordinator_ref:
+          type: string
+        dispatch_policy:
+          type: string
+          enum: [coordinator_only, human_allowed]
+          default: coordinator_only
+        gate_template_id:
+          type: string
+          nullable: true
+        safety_gate:
+          type: boolean
+    BriefV1:
+      type: object
+      additionalProperties: false
+      required: [outcome, constraints, evidence_shape]
+      properties:
+        outcome:
+          type: string
+        constraints:
+          type: array
+          items:
+            type: string
+        evidence_shape:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/EvidenceKind"
+    FillAssignment:
+      type: object
+      additionalProperties: false
+      required: [pool_id, brief]
+      properties:
+        pool_id:
+          type: string
+        brief:
+          $ref: "#/components/schemas/BriefV1"
+        budget:
+          type: object
+          additionalProperties: false
+          properties:
+            max_usd:
+              type: number
+            max_tokens:
+              type: integer
+            max_runs:
+              type: integer
+        exception_grant_id:
+          type: string
+    EvidenceKind:
+      type: string
+      enum: [pr, report_md, summary_md, screenshot, ci_check, artifact_uri]
+    AttachEvidence:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [kind, uri]
+            properties:
+              kind:
+                $ref: "#/components/schemas/EvidenceKind"
+              uri:
+                type: string
+              sha256:
+                type: string
+              shadow:
+                type: boolean
+    PolicyCheck:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+        track:
+          type: string
+          enum: [authority_gate, advisory_hint]
+        goal_id:
+          type: string
+        assignment_id:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+    DecideGate:
+      type: object
+      required: [decision, version]
+      properties:
+        decision:
+          type: string
+          enum: [pass, revise, defer]
+        version:
+          type: integer
+        note:
+          type: string
+        structural_change:
+          type: boolean
+          default: false

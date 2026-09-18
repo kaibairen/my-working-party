@@ -9,6 +9,8 @@ data
 .turbo
 .DS_Store
 *.log
+services/boundary-harness/test-results
+services/boundary-harness/playwright-report
 .env
 .env.local
 .eslintcache

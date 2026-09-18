@@ -1,0 +1,17 @@
+{
+    "run_id": "6944276c-521c-4596-a883-02d17fb4a6c8",
+    "items": [
+        {
+            "id": "0456195e-581b-4af9-b7fb-1ff620ad8e39",
+            "kind": "summary_md",
+            "uri": "file://summary.md",
+            "shadow": false
+        },
+        {
+            "id": "553a8904-8903-4811-9e22-255fb37214b9",
+            "kind": "artifact_uri",
+            "uri": "file://out.tgz",
+            "shadow": false
+        }
+    ]
+}

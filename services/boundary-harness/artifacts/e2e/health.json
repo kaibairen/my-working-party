@@ -1,0 +1,12 @@
+{
+    "ok": true,
+    "schema_version": 1,
+    "adapter": "noop",
+    "adapters": {
+        "noop": true,
+        "cursor": "fixture"
+    },
+    "store": "sqlite",
+    "inbox": "/inbox",
+    "openapi": "/openapi.yaml"
+}

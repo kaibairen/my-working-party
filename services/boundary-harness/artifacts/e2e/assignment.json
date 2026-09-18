@@ -1,0 +1,22 @@
+{
+    "id": "f86cbc7c-de02-42ff-ae31-48e48cdad051",
+    "goal_id": "044084fa-7b3c-4055-8e4f-5fded567c773",
+    "pool_id": "pool_noop",
+    "brief": {
+        "outcome": "working M0",
+        "constraints": [
+            "no Cursor"
+        ],
+        "evidence_shape": [
+            "summary_md",
+            "artifact_uri"
+        ]
+    },
+    "budget": {
+        "max_runs": 1
+    },
+    "status": "accepted",
+    "risk": null,
+    "created_at": "2026-09-18T17:06:21.701Z",
+    "updated_at": "2026-09-18T17:06:21.701Z"
+}
