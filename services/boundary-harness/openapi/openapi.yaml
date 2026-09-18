@@ -136,7 +136,7 @@ paths:
                   audit:
                     type: array
                     items:
-                      $ref: "#/components/schemas/AuditLog"
+                      $ref: "#/components/schemas/AuditLogEntry"
         "403":
           description: forbidden
     patch:
@@ -440,6 +440,15 @@ components:
     Role:
       type: string
       enum: [decision_maker, coordinator, executor, viewer, service]
+    DialAuthorityAction:
+      type: string
+      enum:
+        - external_send
+        - protected_merge
+        - over_budget
+        - destructive_delete
+        - privilege_escalation
+      description: Authority whitelist only. change_path / create_file / propose_assignment MUST NOT be included.
     Pool:
       type: object
       additionalProperties: false
@@ -506,7 +515,7 @@ components:
         updated_at:
           type: string
           nullable: true
-    AuditLog:
+    AuditLogEntry:
       type: object
       additionalProperties: false
       required:
@@ -627,8 +636,7 @@ components:
       required: [action]
       properties:
         action:
-          type: string
-          description: Authority whitelist is only the five Dial keys
+          $ref: "#/components/schemas/DialAuthorityAction"
         track:
           type: string
           enum: [authority_gate, advisory_hint]
@@ -651,6 +659,7 @@ components:
           enum: [authority_gate, advisory_hint]
         reason_code:
           type: string
+          description: authority_whitelist when action ∈ DialAuthorityAction
         redirect:
           type: object
           nullable: true

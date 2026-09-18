@@ -38,6 +38,20 @@ Security checklist: [HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](HARNESSSECURITY_M
 | S7 | `shadow_evidence_cannot_write_gate` | `shadow=true` never moves Gate to ready |
 | S8 | `cursor_raw_not_registered` | MCP tool list has no `cursor_raw_*` / `set_steps` |
 
+## Security acceptance contract (immutable codes)
+
+| Case | Expect | File |
+|------|--------|------|
+| `hmac_bad_signature_401` | 401 `webhook_bad_signature` | `apps/api/tests/contract` |
+| `hmac_timestamp_skew_401` | 401 `webhook_skew` | `apps/api/tests/contract` |
+| `freeze_blocks_dispatch_423` | 423 `freeze_active` (HTTP+MCP) | `apps/api/tests/contract` |
+| `secret_ref_never_echoed` | `file:`/`env:` URI only | `apps/api/tests/contract` |
+| `audit_log_append_only` | nine columns; no PATCH/DELETE | `apps/api/tests/contract` |
+| `jwt_pool_forbidden_403` | 403 `pool_forbidden` | `apps/api/tests/contract` |
+| `dial_whitelist_not_overbroad` | only five authority keys | `apps/api/tests/contract` |
+
+Acceptance: [HARNESSSECURITY_M0_OPENAPI_ACCEPTANCE.md](HARNESSSECURITY_M0_OPENAPI_ACCEPTANCE.md).
+
 ## Happy path
 
 goal (deliver + coordinator_ref) → assignment (BriefV1 + budget_json) → Noop dispatch (dual external ids) → evidence (`summary_md` + `artifact_uri`) → GateInstance ready + `missing[]` → decide pass.

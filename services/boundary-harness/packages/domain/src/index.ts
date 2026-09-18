@@ -58,3 +58,4 @@ export {
   assertNoClientStatusWrite,
 } from "./services";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
+export { AUTHORITY_ACTIONS, checkPolicy } from "@harness/policy";

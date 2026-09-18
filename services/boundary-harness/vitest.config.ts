@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     include: [
       "apps/*/src/**/*.test.ts",
+      "apps/*/tests/**/*.test.ts",
       "packages/*/src/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**", "tests/e2e/**"],

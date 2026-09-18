@@ -28,6 +28,8 @@ jobs:
         run: pnpm rebuild better-sqlite3
       - name: Lint
         run: pnpm lint
+      - name: Security acceptance contract
+        run: pnpm exec vitest run apps/api/tests/contract
       - name: Unit + anti-pattern tests
         run: pnpm test
       - name: Playwright browsers
