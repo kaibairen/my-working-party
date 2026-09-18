@@ -19,6 +19,7 @@ cd services/boundary-harness
 npm install
 npm test                  # unit + ready-anti (14) + security-anti (9)
 npm start                 # API on :8080, applies 0001+0002 on boot
+npm run smoke             # 对照门: real HTTP on :8080 (starts API if needed; no Docker)
 npx tsx apps/api/src/issue-token.ts --role coordinator --sub coord-1 --pools pool_noop
 # or: npm run token -- --role coordinator --sub coord-1 --pools pool_noop
 ```
@@ -44,7 +45,13 @@ docker compose -f docker-compose.m0.yml up api
 
 If CI cannot mount `./secrets/*`, `build api` still works; document the bootstrap step for `up`.
 
-## Smoke (explore → assignment → noop → evidence → ready stub)
+## Smoke (对照门 only)
+
+`npm run smoke` hits a **listening** API on `:8080` (no Docker): `/healthz` 200, brief `steps` → 422, freeze → dispatch 423, then the explore/noop ready stub.
+
+This is a **对照门 only**. M0 Done still requires compose smoke (`deploy/docker-compose.m0.yml`) and a PR that is ready-for-review (not draft).
+
+Manual curl (explore → assignment → noop → evidence → ready stub):
 
 ```bash
 export TOKEN=$(npm run token --silent -- --role coordinator --sub coord-1 --pools pool_noop)
