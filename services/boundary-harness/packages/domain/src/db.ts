@@ -112,6 +112,9 @@ function applyCompat(sqlite: Database.Database): void {
   }
   if (tableExists(sqlite, "policy_events")) {
     const cols = columnNames(sqlite, "policy_events");
+    if (!cols.includes("reason_code")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN reason_code TEXT");
+    if (!cols.includes("fail_count")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0");
+    if (!cols.includes("payload_json")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN payload_json TEXT");
     if (!cols.includes("action")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN action TEXT");
     if (!cols.includes("closed")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN closed INTEGER NOT NULL DEFAULT 0");
   }

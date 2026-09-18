@@ -14,7 +14,7 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: `DATABASE_PATH=/tmp/harness-e2e.db PORT=${port} HARNESS_MODE=api pnpm --filter @harness/api start`,
+        command: `rm -f /tmp/harness-e2e.db /tmp/harness-e2e.db-wal /tmp/harness-e2e.db-shm && DATABASE_PATH=/tmp/harness-e2e.db PORT=${port} HARNESS_MODE=api pnpm --filter @harness/api start`,
         url: `${baseURL}/health`,
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,

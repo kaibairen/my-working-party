@@ -53,6 +53,13 @@ export async function api<T = Json>(
   return { status: res.status, body };
 }
 
+async function requireOk<T>(label: string, result: { status: number; body: T }, ok: number[] = [200, 201]): Promise<T> {
+  if (!ok.includes(result.status)) {
+    throw new Error(`${label} failed ${result.status}: ${JSON.stringify(result.body)}`);
+  }
+  return result.body;
+}
+
 function uniq(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -73,120 +80,153 @@ export async function drainReadyGates(baseURL: string) {
 }
 
 export async function seedDeliverPending(baseURL: string) {
-  const goal = await api<{ id: string }>(baseURL, "/v1/goals", {
-    method: "POST",
-    headers: headers.coordinator,
-    body: JSON.stringify({
-      title: `e2e pending ${uniq("g")}`,
-      mode: "deliver",
-      coordinator_ref: "coord-1",
+  const goal = await requireOk(
+    "create goal",
+    await api<{ id: string }>(baseURL, "/v1/goals", {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        title: `e2e pending ${uniq("g")}`,
+        mode: "deliver",
+        coordinator_ref: "coord-1",
+      }),
     }),
-  });
-  const asg = await api<{ id: string }>(baseURL, `/v1/goals/${goal.body.id}/assignments`, {
-    method: "POST",
-    headers: headers.coordinator,
-    body: JSON.stringify({
-      pool_id: "pool_noop",
-      brief: { outcome: "pending only", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
-    }),
-  });
-  const run = await api<{ id: string; status: string }>(baseURL, `/v1/assignments/${asg.body.id}/dispatch`, {
-    method: "POST",
-    headers: headers.coordinator,
-    body: JSON.stringify({ idempotency_key: uniq("pending") }),
-  });
-  const pending = await api<{ gates: Array<{ id: string; status: string; version: number }> }>(
-    baseURL,
-    `/v1/gates?goal_id=${goal.body.id}`,
-    { headers: headers.coordinator },
   );
-  const gate = (pending.body.gates ?? []).find((g) => g.status === "pending");
-  return { goal: goal.body, assignment: asg.body, run: run.body, gate };
+  const asg = await requireOk(
+    "fill assignment",
+    await api<{ id: string }>(baseURL, `/v1/goals/${goal.id}/assignments`, {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "pending only", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    }),
+  );
+  const run = await requireOk(
+    "dispatch",
+    await api<{ id: string; status: string }>(baseURL, `/v1/assignments/${asg.id}/dispatch`, {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({ idempotency_key: uniq("pending") }),
+    }),
+  );
+  const pending = await requireOk(
+    "list gates",
+    await api<{ gates: Array<{ id: string; status: string; version: number }> }>(
+      baseURL,
+      `/v1/gates?goal_id=${goal.id}`,
+      { headers: headers.coordinator },
+    ),
+  );
+  const gate = (pending.gates ?? []).find((g) => g.status === "pending");
+  return { goal, assignment: asg, run, gate };
 }
 
 export async function seedDeliverReady(baseURL: string) {
   const seeded = await seedDeliverPending(baseURL);
-  await api(baseURL, `/v1/runs/${seeded.run.id}/evidence`, {
-    method: "POST",
-    headers: headers.executor,
-    body: JSON.stringify({
-      items: [
-        { kind: "summary_md", uri: "file://summary.md" },
-        { kind: "artifact_uri", uri: "file://out.tgz" },
-      ],
+  await requireOk(
+    "attach evidence",
+    await api(baseURL, `/v1/runs/${seeded.run.id}/evidence`, {
+      method: "POST",
+      headers: headers.executor,
+      body: JSON.stringify({
+        items: [
+          { kind: "summary_md", uri: "file://summary.md" },
+          { kind: "artifact_uri", uri: "file://out.tgz" },
+        ],
+      }),
     }),
-  });
-  const ready = await api<{
-    gates: Array<{
-      id: string;
-      status: string;
-      version: number;
-      assignment_id?: string;
-      predicate_id?: string;
-      predicate_version?: number;
-      ready_at?: string;
-      ready_result?: { ok?: boolean; missing?: string[] };
-    }>;
-  }>(baseURL, `/v1/gates?status=ready&goal_id=${seeded.goal.id}`, { headers: headers.decisionMaker });
-  const gate = (ready.body.gates ?? [])[0];
+  );
+  const ready = await requireOk(
+    "list ready",
+    await api<{
+      gates: Array<{
+        id: string;
+        status: string;
+        version: number;
+        assignment_id?: string;
+        predicate_id?: string;
+        predicate_version?: number;
+        ready_at?: string;
+        ready_result?: { ok?: boolean; missing?: string[] };
+      }>;
+    }>(baseURL, `/v1/gates?status=ready&goal_id=${seeded.goal.id}`, { headers: headers.decisionMaker }),
+  );
+  const gate = (ready.gates ?? [])[0];
   return { ...seeded, gate };
 }
 
 export async function seedAuthorityReady(baseURL: string, action = "destructive_delete") {
-  const goal = await api<{ id: string }>(baseURL, "/v1/goals", {
-    method: "POST",
-    headers: headers.coordinator,
-    body: JSON.stringify({
-      title: `e2e authority ${uniq("g")}`,
-      mode: "explore",
-      coordinator_ref: "coord-1",
-      gate_template_id: "safety_only_v1",
+  const goal = await requireOk(
+    "create explore safety goal",
+    await api<{ id: string }>(baseURL, "/v1/goals", {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        title: `e2e authority ${uniq("g")}`,
+        mode: "explore",
+        coordinator_ref: "coord-1",
+        gate_template_id: "safety_only_v1",
+      }),
     }),
-  });
-  const check = await api<{
-    gate_instance?: {
-      id: string;
-      status: string;
-      version: number;
-      ready_result?: { missing?: string[] };
-    };
-  }>(baseURL, "/v1/policy/check", {
-    method: "POST",
-    headers: headers.executor,
-    body: JSON.stringify({
-      action,
-      track: "authority_gate",
-      goal_id: goal.body.id,
-      context: {},
+  );
+  const check = await requireOk(
+    "policy check",
+    await api<{
+      gate_instance?: {
+        id: string;
+        status: string;
+        version: number;
+        ready_result?: { missing?: string[] };
+      };
+    }>(baseURL, "/v1/policy/check", {
+      method: "POST",
+      headers: headers.executor,
+      body: JSON.stringify({
+        action,
+        track: "authority_gate",
+        goal_id: goal.id,
+        context: {},
+      }),
     }),
-  });
-  return { goal: goal.body, gate: check.body.gate_instance };
+  );
+  return { goal, gate: check.gate_instance };
 }
 
 export async function seedExploreNoGate(baseURL: string) {
-  const goal = await api<{ id: string }>(baseURL, "/v1/goals", {
-    method: "POST",
-    headers: headers.coordinator,
-    body: JSON.stringify({
-      title: `e2e explore ${uniq("g")}`,
-      mode: "explore",
-      coordinator_ref: "coord-1",
+  const goal = await requireOk(
+    "create explore goal",
+    await api<{ id: string }>(baseURL, "/v1/goals", {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        title: `e2e explore ${uniq("g")}`,
+        mode: "explore",
+        coordinator_ref: "coord-1",
+      }),
     }),
-  });
-  const asg = await api<{ id: string }>(baseURL, `/v1/goals/${goal.body.id}/assignments`, {
-    method: "POST",
-    headers: headers.coordinator,
-    body: JSON.stringify({
-      pool_id: "pool_noop",
-      brief: { outcome: "chat only", constraints: [], evidence_shape: ["summary_md"] },
+  );
+  const asg = await requireOk(
+    "fill explore assignment",
+    await api<{ id: string }>(baseURL, `/v1/goals/${goal.id}/assignments`, {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "chat only", constraints: [], evidence_shape: ["summary_md"] },
+      }),
     }),
-  });
-  const run = await api<{ id: string; status: string }>(baseURL, `/v1/assignments/${asg.body.id}/dispatch`, {
-    method: "POST",
-    headers: headers.coordinator,
-    body: JSON.stringify({ idempotency_key: uniq("explore") }),
-  });
-  return { goal: goal.body, assignment: asg.body, run: run.body };
+  );
+  const run = await requireOk(
+    "dispatch explore",
+    await api<{ id: string; status: string }>(baseURL, `/v1/assignments/${asg.id}/dispatch`, {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({ idempotency_key: uniq("explore") }),
+    }),
+  );
+  return { goal, assignment: asg, run };
 }
 
 export const VERBAL_DONE_RE =
