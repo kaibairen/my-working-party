@@ -23,11 +23,18 @@ export function evalGoalReady(db: Db, goalId: string, assignmentId?: string, run
     )
     .get(goalId) as SnapshotRow | undefined;
 
-  const run = runId
-    ? (db.prepare("SELECT adapter, status FROM runs WHERE id = ?").get(runId) as
-        | { adapter: string; status: string }
-        | undefined)
-    : undefined;
+  const run = (
+    runId
+      ? db.prepare("SELECT adapter, status FROM runs WHERE id = ?").get(runId)
+      : db
+          .prepare(
+            `SELECT r.adapter, r.status FROM runs r
+             JOIN assignments a ON a.id = r.assignment_id
+             WHERE a.goal_id = ?
+             ORDER BY r.created_at DESC LIMIT 1`,
+          )
+          .get(goalId)
+  ) as { adapter: string; status: string } | undefined;
 
   const github =
     snap == null

@@ -17,7 +17,7 @@ import {
   parseBriefOrThrow,
   evalDeliverReadyV1,
   policyCheck,
-} from "../../../../packages/domain/dist/m0_anti_harness.js";
+} from "../../../packages/domain/dist/m0_anti_harness.js";
 
 const briefOk = {
   outcome: "x",

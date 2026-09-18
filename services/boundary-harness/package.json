@@ -12,7 +12,7 @@
     "test:unit": "node --import tsx --test apps/api/test/*.test.ts",
     "test:ready-anti": "node --test qa/a5/fourteen/appendix_a5_fourteen.test.mjs",
     "start": "npm run build -w @boundary-harness/domain && npm run start -w @boundary-harness/api",
-    "token": "npm run token -w @boundary-harness/api"
+    "token": "tsx apps/api/src/issue-token.ts"
   },
   "engines": {
     "node": ">=22"

@@ -19,7 +19,8 @@ cd services/boundary-harness
 npm install
 npm test                  # unit + ready-anti (14 named cases)
 npm start                 # API on :8080, applies 0001+0002 on boot
-npm run token -- --role coordinator --sub coord-1 --pools pool_noop
+npx tsx apps/api/src/issue-token.ts --role coordinator --sub coord-1 --pools pool_noop
+# or: npm run token -- --role coordinator --sub coord-1 --pools pool_noop
 ```
 
 `GET /healthz` is unauthenticated and returns `{ ok, schema_version }`.
