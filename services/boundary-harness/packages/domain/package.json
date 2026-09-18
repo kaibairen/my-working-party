@@ -1,0 +1,23 @@
+{
+  "name": "@boundary-harness/domain",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./m0_anti_harness": {
+      "types": "./dist/m0_anti_harness.d.ts",
+      "import": "./dist/m0_anti_harness.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

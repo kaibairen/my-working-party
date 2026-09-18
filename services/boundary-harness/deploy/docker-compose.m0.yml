@@ -1,0 +1,98 @@
+# Boundary Harness — M0 Compose
+# Align: TechLead 2026-09-19（api+SQLite；可选 postgres=M1 预演；无 canvas）
+# Repo: kaibairen/my-working-party — services/boundary-harness/deploy/docker-compose.m0.yml
+#
+# Build from this directory:
+#   docker compose -f docker-compose.m0.yml build api
+# Secrets are bind-mounted at `up` time, not build time. If `up` fails because
+# ./secrets/* is missing, run ./secrets/bootstrap.sh (creates local placeholders).
+#
+# 服务名（CI / 文档冻结）：
+#   - api          必起：Gateway+Domain+Ready+SSE
+#   - mcp-stub     可选：M0_MCP_STUB（Noop 路径）；不绑 Gate Inbox / 真 Cursor
+#   - postgres     profile=m1-preview：仅预演，M0 默认不用
+#
+# 禁止：canvas、Gate Inbox Web、真 Cursor Bridge 作为 depends_on 必起服务
+
+services:
+  api:
+    image: boundary-harness/api:m0-dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: harness-api
+    environment:
+      DATABASE_URL: file:/data/harness.m0.db
+      AUTH_JWT_SECRET_FILE: /run/secrets/auth_jwt_secret
+      WEBHOOK_SIGNING_SECRET_FILE: /run/secrets/webhook_signing_secret
+      CURSOR_POOL_SECRET_REF: file:/run/secrets/cursor_pool_key
+      HARNESS_MODE: all
+      DIAL_DEFAULT: guided
+      LOG_FORMAT: json
+      LOG_FIELDS: request_id,goal_id,assignment_id,run_id
+      READY_POLL_SECONDS: "10"
+      NOTIFY_WEBHOOK_URL: ${NOTIFY_WEBHOOK_URL:-}
+    volumes:
+      - harness_sqlite:/data
+    secrets:
+      - auth_jwt_secret
+      - webhook_signing_secret
+      - cursor_pool_key
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  mcp-stub:
+    image: boundary-harness/mcp-stub:m0-dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.mcp-stub
+    container_name: harness-mcp-stub
+    environment:
+      HARNESS_API_BASE: http://api:8080
+      ADAPTER: noop
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles:
+      - with-mcp
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: harness-postgres
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: harness
+    secrets:
+      - postgres_password
+    volumes:
+      - harness_pg:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    profiles:
+      - m1-preview
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+secrets:
+  auth_jwt_secret:
+    file: ./secrets/auth_jwt_secret
+  webhook_signing_secret:
+    file: ./secrets/webhook_signing_secret
+  cursor_pool_key:
+    file: ./secrets/cursor_pool_key
+  postgres_password:
+    file: ./secrets/postgres_password
+
+volumes:
+  harness_sqlite:
+  harness_pg:
