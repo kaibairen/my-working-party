@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      HARNESS_MODE: all
+      DATABASE_PATH: /app/data/harness.db
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - harness-data:/app/data
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["pnpm", "--filter", "@harness/worker", "start"]
+    environment:
+      DATABASE_PATH: /app/data/harness.db
+      WORKER_INTERVAL_MS: "500"
+    volumes:
+      - harness-data:/app/data
+    depends_on:
+      - api
+    profiles: ["split"]
+
+  mcp-server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["pnpm", "--filter", "@harness/mcp-server", "start"]
+    environment:
+      HARNESS_API_URL: http://api:8080
+    depends_on:
+      - api
+    profiles: ["mcp"]
+    stdin_open: true
+
+volumes:
+  harness-data:

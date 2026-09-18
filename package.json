@@ -1,0 +1,29 @@
+{
+  "name": "my-working-party",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.14.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev:api": "pnpm --filter @harness/api dev",
+    "dev:worker": "pnpm --filter @harness/worker dev",
+    "dev:mcp": "pnpm --filter @harness/mcp-server dev",
+    "migrate": "pnpm --filter @harness/domain migrate"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@types/node": "^22.18.0",
+    "eslint": "^9.35.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.43.0",
+    "vitest": "^3.2.4"
+  }
+}

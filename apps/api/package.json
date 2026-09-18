@@ -1,0 +1,16 @@
+{
+  "name": "@harness/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@harness/domain": "workspace:*",
+    "@hono/node-server": "^1.19.1",
+    "hono": "^4.9.6",
+    "tsx": "^4.20.5"
+  }
+}

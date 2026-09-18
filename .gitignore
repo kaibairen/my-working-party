@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.turbo
+.DS_Store
+*.log
+.env
+.env.local
+.eslintcache

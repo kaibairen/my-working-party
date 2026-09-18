@@ -1,0 +1,13 @@
+{
+  "id": "m0-schema-v1",
+  "prevId": "",
+  "version": "7",
+  "dialect": "sqlite",
+  "tables": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  }
+}
