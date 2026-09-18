@@ -126,7 +126,12 @@ function publicRun(row: typeof runs.$inferSelect) {
   };
 }
 
-function publicGate(row: typeof gateInstances.$inferSelect) {
+function publicGate(row: typeof gateInstances.$inferSelect, def?: typeof gateDefs.$inferSelect | null) {
+  const ready = parseJson<{
+    missing?: string[];
+    predicate_id?: string;
+    predicate_version?: number;
+  }>(row.readyResultJson);
   return {
     id: row.id,
     goal_id: row.goalId,
@@ -135,8 +140,10 @@ function publicGate(row: typeof gateInstances.$inferSelect) {
     status: row.status,
     ready_at: row.readyAt,
     decided_at: row.decidedAt,
-    ready_result: parseJson(row.readyResultJson),
+    ready_result: ready,
     version: row.version,
+    predicate_id: def?.predicateId ?? ready?.predicate_id ?? null,
+    predicate_version: def?.predicateVersion ?? ready?.predicate_version ?? null,
   };
 }
 
@@ -750,7 +757,10 @@ export function listGateInstances(
   let rows = h.db.select().from(gateInstances).all();
   if (query.status) rows = rows.filter((r) => r.status === query.status);
   if (query.goal_id) rows = rows.filter((r) => r.goalId === query.goal_id);
-  return rows.map(publicGate);
+  return rows.map((r) => {
+    const def = h.db.select().from(gateDefs).where(eq(gateDefs.id, r.gateDefId)).get();
+    return publicGate(r, def);
+  });
 }
 
 export async function decideGate(

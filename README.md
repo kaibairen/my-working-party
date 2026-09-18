@@ -24,7 +24,7 @@ Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product 
 
 **Path freeze (TechLead / DevOps):** the M0 monorepo lives only at **`services/boundary-harness/`**. Do **not** use a top-level `harness/` (or repo-root `apps/` / `packages/`) alternative. Canonical CI is [`.github/workflows/harness-m0.yml`](.github/workflows/harness-m0.yml) (`working-directory: services/boundary-harness`).
 
-Implementation is in this repo (no separate `boundary-harness` GitHub project). Existing `docs/` stay. Spec: [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md). Backend SoT: [openapi_m0_fragment.yaml](services/boundary-harness/openapi/openapi_m0_fragment.yaml), [0001_m0_schema.sql](services/boundary-harness/packages/domain/migrations/0001_m0_schema.sql), [0002_m0_security.sql](services/boundary-harness/packages/domain/migrations/0002_m0_security.sql). Test matrix: [docs/qa/M0_TEST_MATRIX_v1.md](docs/qa/M0_TEST_MATRIX_v1.md). Security freeze: [docs/engineering/M0_SECURITY_FREEZE_v1.md](docs/engineering/M0_SECURITY_FREEZE_v1.md). Security checklist: [docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md).
+Implementation is in this repo (no separate `boundary-harness` GitHub project). Existing `docs/` stay. Spec: [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md). Backend SoT: [openapi_m0_fragment.yaml](services/boundary-harness/openapi/openapi_m0_fragment.yaml), [0001_m0_schema.sql](services/boundary-harness/packages/domain/migrations/0001_m0_schema.sql), [0002_m0_security.sql](services/boundary-harness/packages/domain/migrations/0002_m0_security.sql). Test matrix: [docs/qa/M0_TEST_MATRIX_v1.md](docs/qa/M0_TEST_MATRIX_v1.md). Security freeze: [docs/engineering/M0_SECURITY_FREEZE_v1.md](docs/engineering/M0_SECURITY_FREEZE_v1.md). Security checklist: [docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md). Gate Inbox Playwright CDP: [docs/qa/GATE_INBOX_PLAYWRIGHT_CDP_v1.md](docs/qa/GATE_INBOX_PLAYWRIGHT_CDP_v1.md) (specs at `services/boundary-harness/apps/web/e2e/gate-inbox/`).
 
 Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`); GateDef/GateInstance; dual external ids; `advisory_hint` never blocks. M0 runtime is **Noop**. M1 Cursor adapter is fixture-mode unless `CURSOR_API_KEY` is set (MCP still MUST NOT expose `cursor_raw_*`).
 
@@ -91,4 +91,6 @@ Auth: Bearer JWT claims `sub,role,pool_ids,iat,exp` (optional `tid`). Compatibil
 ```bash
 pnpm lint
 pnpm test
+pnpm test:e2e
+pnpm test:e2e:inbox   # GATE_INBOX_PLAYWRIGHT_CDP_v1 (ready / decide+409 / missing[] / 禁口头 done)
 ```

@@ -13,6 +13,7 @@ export default tseslint.config(
       "packages/domain/drizzle.config.ts",
       "artifacts/**",
       "tests/e2e/**",
+      "apps/web/e2e/**",
       "playwright.config.ts",
     ],
   },

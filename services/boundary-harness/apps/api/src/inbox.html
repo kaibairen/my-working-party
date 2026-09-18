@@ -17,13 +17,15 @@
     button { cursor: pointer; background: #243044; }
     button.ok { background: #163526; border-color: #245c3d; color: var(--ok); }
     button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
+    button.muted { background: #1a222c; color: var(--muted); }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 12px 0; }
     .missing { color: var(--warn); font-family: ui-monospace, monospace; font-size: 13px; }
+    .missing-list { margin: 8px 0 0; padding-left: 18px; }
     .status { text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
     .ready { color: var(--ok); }
-    .decided { color: var(--muted); }
     .flash { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #163526; color: var(--ok); display: none; }
     .flash.show { display: block; }
+    .flash.conflict { background: #3a2e14; color: var(--warn); }
     a { color: #8cb4ff; }
   </style>
 </head>
@@ -40,13 +42,13 @@
         <option value="coordinator">coordinator</option>
       </select>
       <input id="actor" value="dm-1" />
-      <button id="reload">Reload ready</button>
+      <button id="reload" data-testid="reload-ready">Reload ready</button>
     </div>
   </header>
-  <main>
-    <div id="flash" class="flash"></div>
+  <main data-testid="gate-inbox">
+    <div id="flash" class="flash" data-testid="inbox-flash"></div>
     <p class="sub" id="hint">Showing <code>status=ready</code> GateInstances. Cards include <code>missing[]</code>.</p>
-    <div id="list"></div>
+    <div id="list" data-testid="gate-list"></div>
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
@@ -56,30 +58,45 @@
       "x-harness-role": $("role").value,
       "x-harness-actor": $("actor").value,
     });
-    function flash(msg) {
+    function flash(msg, kind) {
       $("flash").textContent = msg;
       $("flash").classList.add("show");
+      $("flash").classList.toggle("conflict", kind === "conflict");
+    }
+    function missingHtml(missing) {
+      if (!missing.length) {
+        return `<p class="missing" data-testid="missing-empty">missing[]: (empty — ready)</p>`;
+      }
+      return `<div class="missing">missing[]
+        <ul class="missing-list">${missing.map((m) => `<li data-testid="missing-item">${m}</li>`).join("")}</ul>
+      </div>`;
     }
     async function load() {
       const res = await fetch("/v1/gates?status=ready", { headers: headers() });
       const body = await res.json();
-      const gates = body.gates || [];
+      const gates = (body.gates || []).filter((g) => g.status === "ready");
       $("list").innerHTML = gates.length ? gates.map((g) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
-        return `<article class="card" data-id="${g.id}" data-version="${g.version}">
+        const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
+        const pver = g.predicate_version ?? (g.ready_result && g.ready_result.predicate_version) ?? "";
+        return `<article class="card" data-testid="gate-card" data-id="${g.id}" data-version="${g.version}">
           <div class="row">
-            <strong>${g.id}</strong>
-            <span class="status ready">${g.status}</span>
+            <strong data-testid="gate-id">${g.id}</strong>
+            <span class="status ready" data-testid="gate-status">${g.status}</span>
             <span class="sub">v${g.version}</span>
           </div>
+          <p class="sub" data-testid="predicate-id">predicate_id ${pred}</p>
+          <p class="sub" data-testid="predicate-version">predicate_version ${pver}</p>
+          <p class="sub" data-testid="ready-at">ready_at ${g.ready_at || ""}</p>
           <p class="sub">goal ${g.goal_id}</p>
-          <p class="missing">missing[]: ${missing.length ? missing.join(", ") : "(empty — ready)"}</p>
+          ${missingHtml(missing)}
           <div class="row">
-            <button class="ok" data-act="pass">Pass</button>
-            <button class="warn" data-act="revise">Revise</button>
+            <button class="ok" data-act="pass" data-testid="decide-pass">Pass</button>
+            <button class="warn" data-act="revise" data-testid="decide-revise">Revise</button>
+            <button class="muted" data-act="defer" data-testid="decide-defer">Defer</button>
           </div>
         </article>`;
-      }).join("") : `<p class="sub">No ready gates.</p>`;
+      }).join("") : `<p class="sub" data-testid="inbox-empty">No ready gates.</p>`;
     }
     $("list").addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-act]");
@@ -93,8 +110,14 @@
         body: JSON.stringify({ decision: btn.dataset.act, version, structural_change: false }),
       });
       const body = await res.json();
+      const code = (body && body.code) || (body.error && body.error.code);
       if (!res.ok) {
-        flash(`Decide failed: ${(body.error && body.error.code) || res.status}`);
+        if (res.status === 409 || code === "optimistic_lock") {
+          flash(`conflict optimistic_lock — refreshing card`, "conflict");
+          await load();
+          return;
+        }
+        flash(`Decide failed: ${code || res.status}`);
         return;
       }
       flash(`Decide ${btn.dataset.act} succeeded for ${id}`);

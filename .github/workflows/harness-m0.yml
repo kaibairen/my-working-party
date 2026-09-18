@@ -65,3 +65,27 @@ jobs:
         run: pnpm test:e2e
         env:
           CI: "true"
+
+  e2e-gate-inbox:
+    name: e2e-gate-inbox
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/boundary-harness/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Rebuild native modules
+        run: pnpm rebuild better-sqlite3
+      - name: Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Gate Inbox Playwright CDP
+        run: pnpm test:e2e:inbox
+        env:
+          CI: "true"

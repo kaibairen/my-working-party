@@ -300,7 +300,17 @@ describe("domain API", () => {
     const { app } = setup();
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);
-    expect(await inbox.text()).toContain("Gate Inbox");
+    const html = await inbox.text();
+    expect(html).toContain("Gate Inbox");
+    expect(html).toContain('data-testid="gate-card"');
+    expect(html).toContain('data-testid="missing-item"');
+    expect(html).toContain('data-testid="decide-pass"');
+    expect(html).toContain('data-testid="decide-revise"');
+    expect(html).toContain('data-testid="decide-defer"');
+    expect(html).toContain("/v1/gates?status=ready");
+    expect(html).not.toContain("标记完成");
+    expect(html).not.toContain("mark done");
+    expect(html).not.toContain("去画布看进度");
     const ops = await app.request("/ops");
     expect(ops.status).toBe(200);
     expect(await ops.text()).toContain("OpenAPI");

@@ -4,8 +4,8 @@ const port = process.env.E2E_PORT ?? "8099";
 const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
-  testDir: "./tests/e2e",
   fullyParallel: false,
+  workers: 1,
   retries: 0,
   use: {
     baseURL,
@@ -19,4 +19,8 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
       },
+  projects: [
+    { name: "inbox-legacy", testDir: "./tests/e2e" },
+    { name: "gate-inbox", testDir: "./apps/web/e2e/gate-inbox" },
+  ],
 });

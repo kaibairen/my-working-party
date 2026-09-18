@@ -1,0 +1,197 @@
+import { test as base, chromium, expect, type Browser, type Page } from "@playwright/test";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const shotDir = join(dirname(fileURLToPath(import.meta.url)), "../../../../artifacts/screenshots");
+mkdirSync(shotDir, { recursive: true });
+
+export const test = base.extend<{ page: Page }>({
+  page: async ({ page: defaultPage }, use) => {
+    if (!process.env.CDP_URL) {
+      await use(defaultPage);
+      return;
+    }
+    const browser: Browser = await chromium.connectOverCDP(process.env.CDP_URL);
+    const context = browser.contexts()[0] ?? (await browser.newContext());
+    const page = await context.newPage();
+    await use(page);
+    await page.close();
+  },
+});
+
+export { expect };
+
+export type Json = Record<string, unknown>;
+
+const jsonHeaders = (role: string, actor: string) => ({
+  "content-type": "application/json",
+  authorization: `Bearer ${role}:${actor}`,
+  "x-harness-role": role,
+  "x-harness-actor": actor,
+});
+
+export const headers = {
+  coordinator: jsonHeaders("coordinator", "coord-1"),
+  executor: jsonHeaders("executor", "exec-1"),
+  decisionMaker: jsonHeaders("decision_maker", "dm-1"),
+};
+
+export async function api<T = Json>(
+  baseURL: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<{ status: number; body: T }> {
+  const res = await fetch(`${baseURL}${path}`, init);
+  const text = await res.text();
+  let body = {} as T;
+  try {
+    body = text ? (JSON.parse(text) as T) : ({} as T);
+  } catch {
+    body = { raw: text } as T;
+  }
+  return { status: res.status, body };
+}
+
+function uniq(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function drainReadyGates(baseURL: string) {
+  const { body } = await api<{ gates: Array<{ id: string; version: number }> }>(
+    baseURL,
+    "/v1/gates?status=ready",
+    { headers: headers.decisionMaker },
+  );
+  for (const gate of body.gates ?? []) {
+    await api(baseURL, `/v1/gates/${gate.id}/decide`, {
+      method: "POST",
+      headers: headers.decisionMaker,
+      body: JSON.stringify({ decision: "defer", version: gate.version }),
+    });
+  }
+}
+
+export async function seedDeliverPending(baseURL: string) {
+  const goal = await api<{ id: string }>(baseURL, "/v1/goals", {
+    method: "POST",
+    headers: headers.coordinator,
+    body: JSON.stringify({
+      title: `e2e pending ${uniq("g")}`,
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+    }),
+  });
+  const asg = await api<{ id: string }>(baseURL, `/v1/goals/${goal.body.id}/assignments`, {
+    method: "POST",
+    headers: headers.coordinator,
+    body: JSON.stringify({
+      pool_id: "pool_noop",
+      brief: { outcome: "pending only", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    }),
+  });
+  const run = await api<{ id: string; status: string }>(baseURL, `/v1/assignments/${asg.body.id}/dispatch`, {
+    method: "POST",
+    headers: headers.coordinator,
+    body: JSON.stringify({ idempotency_key: uniq("pending") }),
+  });
+  const pending = await api<{ gates: Array<{ id: string; status: string; version: number }> }>(
+    baseURL,
+    `/v1/gates?goal_id=${goal.body.id}`,
+    { headers: headers.coordinator },
+  );
+  const gate = (pending.body.gates ?? []).find((g) => g.status === "pending");
+  return { goal: goal.body, assignment: asg.body, run: run.body, gate };
+}
+
+export async function seedDeliverReady(baseURL: string) {
+  const seeded = await seedDeliverPending(baseURL);
+  await api(baseURL, `/v1/runs/${seeded.run.id}/evidence`, {
+    method: "POST",
+    headers: headers.executor,
+    body: JSON.stringify({
+      items: [
+        { kind: "summary_md", uri: "file://summary.md" },
+        { kind: "artifact_uri", uri: "file://out.tgz" },
+      ],
+    }),
+  });
+  const ready = await api<{
+    gates: Array<{
+      id: string;
+      status: string;
+      version: number;
+      assignment_id?: string;
+      predicate_id?: string;
+      predicate_version?: number;
+      ready_at?: string;
+      ready_result?: { ok?: boolean; missing?: string[] };
+    }>;
+  }>(baseURL, `/v1/gates?status=ready&goal_id=${seeded.goal.id}`, { headers: headers.decisionMaker });
+  const gate = (ready.body.gates ?? [])[0];
+  return { ...seeded, gate };
+}
+
+export async function seedAuthorityReady(baseURL: string, action = "destructive_delete") {
+  const goal = await api<{ id: string }>(baseURL, "/v1/goals", {
+    method: "POST",
+    headers: headers.coordinator,
+    body: JSON.stringify({
+      title: `e2e authority ${uniq("g")}`,
+      mode: "explore",
+      coordinator_ref: "coord-1",
+      gate_template_id: "safety_only_v1",
+    }),
+  });
+  const check = await api<{
+    gate_instance?: {
+      id: string;
+      status: string;
+      version: number;
+      ready_result?: { missing?: string[] };
+    };
+  }>(baseURL, "/v1/policy/check", {
+    method: "POST",
+    headers: headers.executor,
+    body: JSON.stringify({
+      action,
+      track: "authority_gate",
+      goal_id: goal.body.id,
+      context: {},
+    }),
+  });
+  return { goal: goal.body, gate: check.body.gate_instance };
+}
+
+export async function seedExploreNoGate(baseURL: string) {
+  const goal = await api<{ id: string }>(baseURL, "/v1/goals", {
+    method: "POST",
+    headers: headers.coordinator,
+    body: JSON.stringify({
+      title: `e2e explore ${uniq("g")}`,
+      mode: "explore",
+      coordinator_ref: "coord-1",
+    }),
+  });
+  const asg = await api<{ id: string }>(baseURL, `/v1/goals/${goal.body.id}/assignments`, {
+    method: "POST",
+    headers: headers.coordinator,
+    body: JSON.stringify({
+      pool_id: "pool_noop",
+      brief: { outcome: "chat only", constraints: [], evidence_shape: ["summary_md"] },
+    }),
+  });
+  const run = await api<{ id: string; status: string }>(baseURL, `/v1/assignments/${asg.body.id}/dispatch`, {
+    method: "POST",
+    headers: headers.coordinator,
+    body: JSON.stringify({ idempotency_key: uniq("explore") }),
+  });
+  return { goal: goal.body, assignment: asg.body, run: run.body };
+}
+
+export const VERBAL_DONE_RE =
+  /标记完成|mark done|mark as done|i(?:'|’)m done|我确认好了|我确认了|口头完成/i;
+export const CANVAS_CTA_RE = /去画布看进度|go to canvas|view progress on canvas|open canvas/i;
+export const RUN_GREEN_PASS_RE = /Run 绿了直接通过|run succeeded.?pass|pass because run (?:is )?green/i;
+export const PLEASE_APPROVE_ONLY_RE = /请批准/;
+export const MISSING_EVIDENCE_FAKE_RE = /缺证据|missing evidence required/;

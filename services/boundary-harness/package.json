@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:inbox": "playwright test --project=gate-inbox",
     "e2e": "bash scripts/e2e.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:api": "pnpm --filter @harness/api dev",
