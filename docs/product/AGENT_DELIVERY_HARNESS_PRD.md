@@ -1,3 +1,5 @@
+> SUPERSEDED by BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md — do not implement from this file.
+
 # Boundary Harness（边界线束 / Agent Delivery Harness）产品方案 v0.1.3
 
 > 仓库：`kaibairen/my-working-party`  
