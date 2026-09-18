@@ -16,3 +16,7 @@ Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product 
 - [docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md](docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md)
 - [docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md](docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md)（supporting — historical engineering plan）
 - [docs/product/research/control-plane-as-harness-brief.md](docs/product/research/control-plane-as-harness-brief.md)（supporting — research）
+
+## Implementation preview
+
+- [services/boundary-harness/apps/web](services/boundary-harness/apps/web) — M2-preview **Gate Inbox** (decision-maker HITL; mock by default)
