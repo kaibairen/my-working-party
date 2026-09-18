@@ -150,6 +150,26 @@ paths:
         "405":
           description: Method not allowed
   /v1/pools:
+    post:
+      summary: Create pool (decision_maker|service). secret_ref file:|env: only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, secret_ref]
+              properties:
+                id: { type: string }
+                kind: { type: string, enum: [cursor_account, bot_group, noop] }
+                secret_ref: { $ref: "#/components/schemas/SecretRef" }
+      responses:
+        "201":
+          description: Created (secret_ref URI only)
+        "400":
+          description: secret_ref_unsupported
+        "403":
+          $ref: "#/components/responses/Forbidden"
     get:
       summary: List execution pools (secret_ref URI returned; plaintext never echoed)
       responses:

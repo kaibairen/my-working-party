@@ -4,7 +4,7 @@ import { evaluateReady, requiredEvidenceKinds, type ReadyContext } from "@harnes
 import { parseBriefV1, parseBudget, EVIDENCE_KINDS, type EvidenceKind } from "./brief";
 import { HarnessError } from "./errors";
 import type { Actor, Dial, Role } from "./rbac";
-import { DIALS, redactPayload, requirePoolAccess, requireRole } from "./rbac";
+import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
 import type { Harness } from "./db";
 import {
   freezeState,
@@ -142,6 +142,34 @@ function publicGate(row: typeof gateInstances.$inferSelect) {
 
 export function listPools(h: Harness) {
   return h.db.select().from(pools).all().map(publicPool);
+}
+
+export function createPool(
+  h: Harness,
+  actor: Actor,
+  input: { id?: string; kind: string; secret_ref: string },
+) {
+  requireRole(actor, ["decision_maker", "service"]);
+  const kinds = ["cursor_account", "bot_group", "noop"] as const;
+  if (!(kinds as readonly string[]).includes(input.kind)) {
+    throw new HarnessError("pool_kind_invalid", "kind must be cursor_account|bot_group|noop", 422);
+  }
+  assertSecretRef(input.secret_ref);
+  const id = input.id?.trim() || h.newId();
+  const existing = h.db.select().from(pools).where(eq(pools.id, id)).get();
+  if (existing) {
+    throw new HarnessError("pool_exists", `pool ${id} already exists`, 409);
+  }
+  h.db.insert(pools).values({
+    id,
+    kind: input.kind,
+    secretRef: input.secret_ref,
+    createdAt: h.now(),
+  }).run();
+  audit(h, actor, "create_pool", "pool", id, { kind: input.kind, secret_ref: input.secret_ref });
+  const row = h.db.select().from(pools).where(eq(pools.id, id)).get();
+  if (!row) throw new HarnessError("not_found", "pool missing after insert", 500);
+  return publicPool(row);
 }
 
 export function getGoal(h: Harness, id: string) {

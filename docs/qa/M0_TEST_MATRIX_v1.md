@@ -25,18 +25,20 @@ Also: `safety_only_v1` / `deliver_ready_v1` pure-function tests in `packages/rea
 `policy.track` tests in `packages/policy/src/policy.test.ts`.  
 Security checklist: [HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](HARNESSSECURITY_M0_SECURITY_CHECKLIST.md).
 
-## Security anti-patterns S1–S8
+## Security anti-patterns S1–S8 (QA freeze · merge-blocking)
+
+Path: `apps/api/tests/security-anti/**`. See [M0_SECURITY_ANTI_FINAL_v1.md](M0_SECURITY_ANTI_FINAL_v1.md).
 
 | ID | Case | Assert |
 |----|------|--------|
-| S1 | `secret_ref_never_echoed` | `GET /v1/pools` returns `file:`/`env:` URI only; never resolved plaintext |
-| S2 | `missing_role_is_401` | no `X-Harness-Role` → 401 |
-| S3 | `executor_cannot_dispatch` | executor `POST .../dispatch` → 403 |
-| S4 | `viewer_cannot_attach_evidence` | viewer evidence POST → 403 |
-| S5 | `only_decision_maker_decides` | coordinator decide → 403 |
-| S6 | `client_cannot_write_status` | assignment body `status` → 422 `status_immutable` |
-| S7 | `shadow_evidence_cannot_write_gate` | `shadow=true` never moves Gate to ready |
-| S8 | `cursor_raw_not_registered` | MCP tool list has no `cursor_raw_*` / `set_steps` |
+| S1 | `hmac_bad_signature_401` | hooks 坏签 → **401** `webhook_bad_signature` |
+| S2 | `hmac_timestamp_skew_401` | skew > 300s → **401** `webhook_skew` |
+| S3 | `freeze_blocks_dispatch_423` | freeze on → dispatch **423** `freeze_active` |
+| S4 | `secret_ref_never_echoed` | Pool 响应仅 `secret_ref` 串，无解析明文 |
+| S5 | `secret_ref_unsupported_400` | 非 `file:`/`env:` → **400** `secret_ref_unsupported` |
+| S6 | `audit_log_append_only` | 无 PATCH/DELETE audit；九列只追加 |
+| S7 | `jwt_pool_forbidden_403` | 目标 pool ∉ JWT `pool_ids` → **403** `pool_forbidden` |
+| S8 | `dial_whitelist_not_overbroad` | 非五键不得 `require_gate`/authority |
 
 ## Security acceptance contract (immutable codes)
 

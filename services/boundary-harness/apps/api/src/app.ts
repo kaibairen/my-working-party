@@ -10,6 +10,7 @@ import {
   attachEvidence,
   createExceptionGrant,
   createGoal,
+  createPool,
   decideGate,
   dispatchAssignment,
   fillAssignment,
@@ -142,6 +143,19 @@ export function createApp(harness: Harness) {
   v1.get("/events/stream", sseEvents as never);
 
   v1.get("/pools", (c) => c.json({ pools: listPools(c.get("harness")) }));
+
+  v1.post("/pools", async (c) => {
+    const body = (await c.req.json()) as { id?: string; kind?: string; secret_ref?: string };
+    assertNoPlaintextCredentials(body);
+    return c.json(
+      createPool(c.get("harness"), c.get("actor"), {
+        id: body.id,
+        kind: String(body.kind ?? ""),
+        secret_ref: String(body.secret_ref ?? ""),
+      }),
+      201,
+    );
+  });
 
   v1.get("/admin/freeze", (c) => {
     requireRole(c.get("actor"), ["decision_maker", "service"]);

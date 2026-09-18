@@ -38,6 +38,7 @@ export {
   attachEvidence,
   createExceptionGrant,
   createGoal,
+  createPool,
   decideGate,
   dispatchAssignment,
   fillAssignment,

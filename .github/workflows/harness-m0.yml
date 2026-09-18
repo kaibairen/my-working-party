@@ -28,6 +28,10 @@ jobs:
         run: pnpm rebuild better-sqlite3
       - name: Lint
         run: pnpm lint
+      - name: ready-anti
+        run: pnpm exec vitest run apps/api/tests/ready-anti
+      - name: security-anti
+        run: pnpm exec vitest run apps/api/tests/security-anti
       - name: Security acceptance contract
         run: pnpm exec vitest run apps/api/tests/contract
       - name: Unit + anti-pattern tests
