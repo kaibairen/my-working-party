@@ -17,11 +17,19 @@ export {
   parseBearer,
   parseRole,
   requireRole,
+  requirePoolAccess,
   assertNoPlaintextCredentials,
+  assertSecretRef,
+  redactPayload,
+  signJwt,
+  verifyJwt,
+  jwtSecret,
   type Actor,
   type Role,
   type Dial,
+  type JwtClaims,
 } from "./rbac";
+export { WEBHOOK_SKEW_SECONDS, signHarnessWebhook, verifyHarnessWebhook } from "./hmac";
 export { schema } from "./schema";
 export { SCHEMA_SQL, SCHEMA_VERSION } from "./schema-sql";
 export { applySchema, closeHarness, createHarness, type Harness, type Db } from "./db";
@@ -32,15 +40,19 @@ export {
   decideGate,
   dispatchAssignment,
   fillAssignment,
+  getAdminFreeze,
   getAssignment,
   getGoal,
   getRun,
   health,
+  listAudit,
   listGateInstances,
   listPools,
   policyCheck,
   publishOutbox,
   recordGithubSnapshot,
+  setAdminFreeze,
   setGoalDial,
+  assertAdminNotFrozen,
   assertNoClientStatusWrite,
 } from "./services";

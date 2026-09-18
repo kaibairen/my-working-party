@@ -14,7 +14,7 @@
 |----|------|------|
 | id | text | PK |
 | kind | text | `cursor_account\|bot_group\|noop` |
-| secret_ref | text | 非空；API 永不回显明文 |
+| secret_ref | text | 非空；仅 `file:` / `env:`；API 永不回显解析明文 |
 | created_at | timestamptz | not null |
 
 ### goals
@@ -136,8 +136,11 @@
 
 ### policy_events / audit_log / outbox
 - policy_events：dial block/redirect/escalate；含 `track`、fail_count  
-- audit_log：只追加  
+- audit_log（只追加，九列）：`id` · `at` · `actor_sub` · `actor_role` · `action` · `resource_type` · `resource_id` · `request_id` · `payload_json`（脱敏）。禁止 UPDATE/DELETE。  
 - outbox：`type,payload,created_at,published_at`（gate.ready 等 at-least-once）
+
+### admin_freeze
+单行 `id=default`：`enabled` · `reason` · `updated_by` · `updated_at`。`enabled=true` 时新 dispatch（含 MCP）→ **423** `freeze_active`。已跑 Run 不杀。
 
 ## BriefV1（Zod 同源）
 ```

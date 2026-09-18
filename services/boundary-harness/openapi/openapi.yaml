@@ -4,12 +4,15 @@ info:
   version: "0.0.1"
   description: |
     M0 Domain API. DB is system of record.
-    Security: Authorization Bearer role or role:actor
-    (JWT claims not frozen). Roles: decision_maker|coordinator|executor|viewer|service.
-    Insufficient role → 403. Pool.secret_ref never echoed as plaintext.
+    Security: Authorization Bearer JWT claims sub,role,pool_ids,iat,exp (optional tid).
+    Compatibility alias: role or role:actor, plus X-Harness-Role / X-Harness-Actor.
+    Roles: decision_maker|coordinator|executor|viewer|service.
+    Insufficient role → 403. Cross pool_ids → 403 pool_forbidden.
+    Pool.secret_ref is file: or env: only; API never echoes resolved plaintext.
     policy/check returns decision, track, reason_code, redirect.
-    Freeze rejects new dispatch (403 dial_frozen, M0 provisional).
-    audit/policy_events/gate_decisions are append-only (no PATCH/DELETE).
+    Admin freeze POST/GET /v1/admin/freeze; new dispatch → 423 freeze_active.
+    Goal dial freeze remains 403 dial_frozen and is distinct from admin freeze.
+    audit_log is append-only (nine columns; no PATCH/DELETE).
 servers:
   - url: http://127.0.0.1:8080
 security:
@@ -25,28 +28,107 @@ paths:
   /hooks/github:
     post:
       security: []
-      summary: Inbound GitHub hook (HMAC required; algorithm/header not frozen)
+      summary: Inbound GitHub hook (HMAC-SHA256 required)
       description: |
-        Fail-closed. Missing WEBHOOK_SIGNING_SECRET or signature → 401 hmac_unverified.
-        Signature header provisional: X-Harness-Signature or X-Hub-Signature-256.
+        Fail-closed HMAC-SHA256. Headers:
+        X-Harness-Signature: sha256=<hex>
+        X-Harness-Timestamp: <unix_seconds>
+        Payload `{timestamp}.{raw_body}`. Skew ±300s → 401 webhook_skew.
+        Bad/missing signature or secret → 401 webhook_bad_signature.
+        Secret is WEBHOOK_SIGNING_SECRET (never logged).
         Ready snapshots are M2; accepted events must go through outbox.
+      parameters:
+        - $ref: "#/components/parameters/HarnessSignature"
+        - $ref: "#/components/parameters/HarnessTimestamp"
       responses:
         "200":
           description: Accepted for outbox (M0 may no-op body)
         "401":
-          description: hmac_unverified
+          description: webhook_skew or webhook_bad_signature
   /hooks/cursor:
     post:
       security: []
-      summary: Inbound Cursor hook (HMAC required; algorithm/header not frozen)
+      summary: Inbound Cursor hook (HMAC-SHA256 required)
+      parameters:
+        - $ref: "#/components/parameters/HarnessSignature"
+        - $ref: "#/components/parameters/HarnessTimestamp"
       responses:
         "200":
           description: OK
         "401":
-          description: hmac_unverified
+          description: webhook_skew or webhook_bad_signature
+  /v1/admin/freeze:
+    get:
+      summary: Read admin freeze (decision_maker or service)
+      responses:
+        "200":
+          description: Freeze state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFreeze"
+        "401":
+          description: unauthorized
+        "403":
+          description: forbidden
+    post:
+      summary: Set admin freeze (decision_maker or service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              additionalProperties: false
+              properties:
+                enabled:
+                  type: boolean
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Updated freeze state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFreeze"
+        "401":
+          description: unauthorized
+        "403":
+          description: forbidden
+        "422":
+          description: freeze_invalid
+  /v1/audit:
+    get:
+      summary: List audit_log (append-only nine columns)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audit:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLog"
+        "403":
+          description: forbidden
+    patch:
+      summary: Forbidden — audit_log is append-only
+      responses:
+        "405":
+          description: Method not allowed
+    delete:
+      summary: Forbidden — audit_log is append-only
+      responses:
+        "405":
+          description: Method not allowed
   /v1/pools:
     get:
-      summary: List execution pools (responses sanitized; secret_ref never echoed)
+      summary: List execution pools (secret_ref URI returned; plaintext never echoed)
       responses:
         "200":
           description: OK
@@ -152,7 +234,7 @@ paths:
           description: OK
   /v1/assignments/{id}/dispatch:
     post:
-      summary: Dispatch. Coordinator or service. Freeze rejects new dispatch.
+      summary: Dispatch. Coordinator or service. Admin freeze rejects new dispatch (incl. MCP).
       parameters:
         - $ref: "#/components/parameters/Id"
       requestBody:
@@ -173,7 +255,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/Run"
         "403":
-          description: executor forbidden or dial_frozen
+          description: executor forbidden, dial_frozen, or pool_forbidden
+        "423":
+          description: freeze_active — admin freeze rejects new dispatch
   /v1/runs/{id}:
     get:
       summary: Get Run (advisory; MUST NOT be used as Gate ready)
@@ -256,17 +340,6 @@ paths:
           description: only decision_maker
         "409":
           description: gate_version_conflict
-  /v1/audit:
-    patch:
-      summary: Forbidden — audit_log is append-only
-      responses:
-        "405":
-          description: Method not allowed
-    delete:
-      summary: Forbidden — audit_log is append-only
-      responses:
-        "405":
-          description: Method not allowed
   /v1/policy-events:
     patch:
       summary: Forbidden — policy_events are append-only
@@ -295,10 +368,11 @@ components:
       type: http
       scheme: bearer
       description: |
-        M0 token is `role` or `role:actor` where role ∈
-        decision_maker|coordinator|executor|viewer|service.
-        JWT claim names are not frozen. Insufficient role → 403.
-        Compatibility alias (non-authoritative): X-Harness-Role / X-Harness-Actor.
+        JWT HS256 with frozen claims: sub, role, pool_ids, iat, exp (optional tid).
+        role ∈ decision_maker|coordinator|executor|viewer|service.
+        Cross pool_ids → 403 pool_forbidden. Insufficient role → 403.
+        Compatibility alias (non-authoritative): `role` or `role:actor`,
+        plus X-Harness-Role / X-Harness-Actor.
   parameters:
     Id:
       name: id
@@ -306,6 +380,21 @@ components:
       required: true
       schema:
         type: string
+    HarnessSignature:
+      name: X-Harness-Signature
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: "^sha256=[0-9a-fA-F]+$"
+      description: HMAC-SHA256 hex of `{timestamp}.{raw_body}`
+    HarnessTimestamp:
+      name: X-Harness-Timestamp
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Unix seconds. Skew ±300s → 401 webhook_skew.
   schemas:
     Dial:
       type: string
@@ -325,20 +414,73 @@ components:
           enum: [cursor_account, bot_group, noop]
         secret_ref:
           type: string
-          writeOnly: true
-          description: Required secret reference. Never echo plaintext credentials.
+          description: file:/abs/or/mounted/path or env:VAR_NAME. Never echo resolved plaintext.
+          pattern: "^(file:/\\S+|env:[A-Z_][A-Z0-9_]*)$"
     PoolPublic:
       type: object
       additionalProperties: false
-      required: [id, kind, created_at]
+      required: [id, kind, secret_ref, created_at]
       properties:
         id:
           type: string
         kind:
           type: string
+        secret_ref:
+          type: string
+          description: URI only (file: or env:). Resolved secret is never returned.
         created_at:
           type: string
-      description: Sanitized pool. secret_ref and plaintext credentials are omitted.
+      description: Pool listing may include secret_ref URI; never resolved plaintext.
+    AdminFreeze:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          nullable: true
+    AuditLog:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - at
+        - actor_sub
+        - actor_role
+        - action
+        - resource_type
+        - resource_id
+        - request_id
+        - payload_json
+      properties:
+        id:
+          type: string
+        at:
+          type: string
+        actor_sub:
+          type: string
+        actor_role:
+          $ref: "#/components/schemas/Role"
+        action:
+          type: string
+        resource_type:
+          type: string
+          nullable: true
+        resource_id:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        payload_json:
+          nullable: true
     CreateGoal:
       type: object
       additionalProperties: false
@@ -514,7 +656,12 @@ components:
                 - gate_version_conflict
                 - predicate_evidence_mismatch
                 - dial_frozen
-                - hmac_unverified
+                - freeze_active
+                - freeze_invalid
+                - webhook_skew
+                - webhook_bad_signature
+                - pool_forbidden
+                - secret_ref_invalid
                 - plaintext_credential_forbidden
             message:
               type: string

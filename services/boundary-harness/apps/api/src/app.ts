@@ -13,12 +13,14 @@ import {
   decideGate,
   dispatchAssignment,
   fillAssignment,
+  getAdminFreeze,
   getAssignment,
   getGoal,
   getRun,
   HarnessError,
   health,
   isHarnessError,
+  listAudit,
   listGateInstances,
   listPools,
   parseBearer,
@@ -26,7 +28,9 @@ import {
   policyCheck,
   recordGithubSnapshot,
   requireRole,
+  setAdminFreeze,
   setGoalDial,
+  verifyHarnessWebhook,
   type Actor,
   type Harness,
   type Role,
@@ -47,26 +51,24 @@ const openapiPath = join(here, "../../../openapi/openapi.yaml");
 function readActor(c: {
   req: { header: (name: string) => string | undefined; query: (name: string) => string | undefined };
 }): Actor {
+  const requestId = c.req.header("x-request-id") ?? crypto.randomUUID();
   const bearer = parseBearer(c.req.header("authorization"));
+  if (bearer.jwt) {
+    return {
+      id: bearer.jwt.sub,
+      role: bearer.jwt.role,
+      pool_ids: bearer.jwt.pool_ids,
+      tid: bearer.jwt.tid,
+      request_id: requestId,
+    };
+  }
   const role = parseRole(bearer.role ?? c.req.header("x-harness-role") ?? c.req.query("role"));
   const id =
     bearer.actor ??
     c.req.header("x-harness-actor") ??
     c.req.query("actor") ??
     `anon:${role}`;
-  return { id, role: role as Role };
-}
-
-function verifyInboundHmac(c: { req: { header: (name: string) => string | undefined } }): void {
-  const secret = process.env.WEBHOOK_SIGNING_SECRET;
-  const sig = c.req.header("x-harness-signature") ?? c.req.header("x-hub-signature-256");
-  if (!secret || !sig) {
-    throw new HarnessError(
-      "hmac_unverified",
-      "inbound hook rejected: signature not verified (HMAC algorithm/header not frozen)",
-      401,
-    );
-  }
+  return { id, role: role as Role, request_id: requestId };
 }
 
 export function createApp(harness: Harness) {
@@ -81,7 +83,7 @@ export function createApp(harness: Harness) {
     if (isHarnessError(err)) {
       return c.json(
         { error: { code: err.code, message: err.message, details: err.details ?? null } },
-        err.status as 400 | 401 | 403 | 404 | 405 | 409 | 422 | 500,
+        err.status as 400 | 401 | 403 | 404 | 405 | 409 | 422 | 423 | 500,
       );
     }
     console.error(err);
@@ -127,6 +129,24 @@ export function createApp(harness: Harness) {
   });
 
   v1.get("/pools", (c) => c.json({ pools: listPools(c.get("harness")) }));
+
+  v1.get("/admin/freeze", (c) => {
+    requireRole(c.get("actor"), ["decision_maker", "service"]);
+    return c.json(getAdminFreeze(c.get("harness")));
+  });
+
+  v1.post("/admin/freeze", async (c) => {
+    const body = (await c.req.json()) as { enabled?: boolean; reason?: string };
+    return c.json(setAdminFreeze(c.get("harness"), c.get("actor"), {
+      enabled: body.enabled as boolean,
+      reason: body.reason,
+    }));
+  });
+
+  v1.get("/audit", (c) => {
+    requireRole(c.get("actor"), ["decision_maker", "coordinator", "service"]);
+    return c.json({ audit: listAudit(c.get("harness")) });
+  });
 
   v1.post("/goals", async (c) => {
     const body = await c.req.json();
@@ -208,12 +228,22 @@ export function createApp(harness: Harness) {
   });
 
   app.post("/hooks/github", async (c) => {
-    verifyInboundHmac(c);
+    const rawBody = await c.req.text();
+    verifyHarnessWebhook({
+      signature: c.req.header("x-harness-signature"),
+      timestamp: c.req.header("x-harness-timestamp"),
+      rawBody,
+    });
     return c.json({ ok: true, accepted: false, note: "GitHub Ready snapshots are M2; event must go through outbox" });
   });
   app.post("/hooks/cursor", async (c) => {
-    verifyInboundHmac(c);
-    return c.json({ ok: true, accepted: false, note: "Cursor hook HMAC header/algorithm not frozen" });
+    const rawBody = await c.req.text();
+    verifyHarnessWebhook({
+      signature: c.req.header("x-harness-signature"),
+      timestamp: c.req.header("x-harness-timestamp"),
+      rawBody,
+    });
+    return c.json({ ok: true, accepted: false, note: "Cursor hook HMAC-SHA256 verified; event must go through outbox" });
   });
 
   for (const path of ["/audit", "/policy-events", "/gate-decisions"]) {

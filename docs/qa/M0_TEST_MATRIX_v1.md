@@ -29,7 +29,7 @@ Security checklist: [HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](HARNESSSECURITY_M
 
 | ID | Case | Assert |
 |----|------|--------|
-| S1 | `secret_ref_never_echoed` | `GET /v1/pools` has no `secret_ref` / secret values |
+| S1 | `secret_ref_never_echoed` | `GET /v1/pools` returns `file:`/`env:` URI only; never resolved plaintext |
 | S2 | `missing_role_is_401` | no `X-Harness-Role` → 401 |
 | S3 | `executor_cannot_dispatch` | executor `POST .../dispatch` → 403 |
 | S4 | `viewer_cannot_attach_evidence` | viewer evidence POST → 403 |

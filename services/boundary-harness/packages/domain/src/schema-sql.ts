@@ -151,13 +151,22 @@ CREATE TABLE IF NOT EXISTS policy_events (
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id TEXT PRIMARY KEY,
-  actor TEXT NOT NULL,
-  role TEXT NOT NULL,
+  at TEXT NOT NULL,
+  actor_sub TEXT NOT NULL,
+  actor_role TEXT NOT NULL,
   action TEXT NOT NULL,
-  entity_type TEXT,
-  entity_id TEXT,
-  payload_json TEXT,
-  created_at TEXT NOT NULL
+  resource_type TEXT,
+  resource_id TEXT,
+  request_id TEXT,
+  payload_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS admin_freeze (
+  id TEXT PRIMARY KEY,
+  enabled INTEGER NOT NULL,
+  reason TEXT,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS outbox (

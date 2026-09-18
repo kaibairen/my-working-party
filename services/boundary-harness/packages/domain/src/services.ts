@@ -4,9 +4,10 @@ import { evaluateReady, requiredEvidenceKinds, type ReadyContext } from "@harnes
 import { parseBriefV1, parseBudget, EVIDENCE_KINDS, type EvidenceKind } from "./brief";
 import { HarnessError } from "./errors";
 import type { Actor, Dial, Role } from "./rbac";
-import { DIALS, requireRole } from "./rbac";
+import { DIALS, redactPayload, requirePoolAccess, requireRole } from "./rbac";
 import type { Harness } from "./db";
 import {
+  adminFreeze,
   assignments,
   auditLog,
   evidenceItems,
@@ -50,19 +51,21 @@ function audit(
   h: Harness,
   actor: Actor,
   action: string,
-  entityType?: string,
-  entityId?: string,
+  resourceType?: string,
+  resourceId?: string,
   payload?: unknown,
 ): void {
+  const redacted = payload === undefined ? undefined : redactPayload(payload);
   h.db.insert(auditLog).values({
     id: h.newId(),
-    actor: actor.id,
-    role: actor.role,
+    at: h.now(),
+    actorSub: actor.id,
+    actorRole: actor.role,
     action,
-    entityType: entityType ?? null,
-    entityId: entityId ?? null,
-    payloadJson: payload === undefined ? null : JSON.stringify(payload),
-    createdAt: h.now(),
+    resourceType: resourceType ?? null,
+    resourceId: resourceId ?? null,
+    requestId: actor.request_id ?? null,
+    payloadJson: redacted === undefined ? null : JSON.stringify(redacted),
   }).run();
 }
 
@@ -72,7 +75,7 @@ function parseJson<T>(raw: string | null): T | null {
 }
 
 function publicPool(row: typeof pools.$inferSelect) {
-  return { id: row.id, kind: row.kind, created_at: row.createdAt };
+  return { id: row.id, kind: row.kind, secret_ref: row.secretRef, created_at: row.createdAt };
 }
 
 function publicGoal(row: typeof goals.$inferSelect) {
@@ -303,6 +306,7 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
 
   const pool = h.db.select().from(pools).where(eq(pools.id, input.pool_id)).get();
   if (!pool) throw new HarnessError("not_found", `pool ${input.pool_id} not found`, 404);
+  requirePoolAccess(actor, input.pool_id);
 
   const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, goalId)).all();
   for (const def of defs) {
@@ -478,12 +482,16 @@ export async function dispatchAssignment(
     throw new HarnessError("coordinator_ref_required", "cannot dispatch without coordinator_ref", 422);
   }
 
+  requirePoolAccess(actor, assignment.poolId);
+
   const existing = h.db
     .select()
     .from(runs)
     .where(and(eq(runs.assignmentId, assignmentId), eq(runs.idempotencyKey, idempotencyKey)))
     .get();
   if (existing) return publicRun(existing);
+
+  assertAdminNotFrozen(h);
 
   const dial = ((goal as { dial?: string }).dial ?? "free") as Dial;
   if (dial === "freeze") {
@@ -565,6 +573,7 @@ export function attachEvidence(
   if (!run) throw new HarnessError("not_found", `run ${runId} not found`, 404);
   const assignment = h.db.select().from(assignments).where(eq(assignments.id, run.assignmentId)).get();
   if (!assignment) throw new HarnessError("not_found", "assignment not found", 404);
+  requirePoolAccess(actor, assignment.poolId);
 
   if (!Array.isArray(items) || items.length === 0) {
     throw new HarnessError("evidence_invalid", "items must be a non-empty array", 422);
@@ -816,6 +825,82 @@ export async function publishOutbox(h: Harness, limit = 50): Promise<number> {
     published += 1;
   }
   return published;
+}
+
+export function getAdminFreeze(h: Harness) {
+  const row = h.db.select().from(adminFreeze).where(eq(adminFreeze.id, "default")).get();
+  return {
+    enabled: row?.enabled === true,
+    reason: row?.reason ?? null,
+    updated_by: row?.updatedBy ?? null,
+    updated_at: row?.updatedAt ?? null,
+  };
+}
+
+export function setAdminFreeze(
+  h: Harness,
+  actor: Actor,
+  input: { enabled: boolean; reason?: string },
+) {
+  requireRole(actor, ["decision_maker", "service"]);
+  if (typeof input.enabled !== "boolean") {
+    throw new HarnessError("freeze_invalid", "enabled must be a boolean", 422);
+  }
+  const ts = h.now();
+  const existing = h.db.select().from(adminFreeze).where(eq(adminFreeze.id, "default")).get();
+  if (existing) {
+    h.db
+      .update(adminFreeze)
+      .set({
+        enabled: input.enabled,
+        reason: input.reason ?? null,
+        updatedBy: actor.id,
+        updatedAt: ts,
+      })
+      .where(eq(adminFreeze.id, "default"))
+      .run();
+  } else {
+    h.db.insert(adminFreeze).values({
+      id: "default",
+      enabled: input.enabled,
+      reason: input.reason ?? null,
+      updatedBy: actor.id,
+      updatedAt: ts,
+    }).run();
+  }
+  audit(h, actor, input.enabled ? "admin_freeze_enable" : "admin_freeze_disable", "admin_freeze", "default", {
+    enabled: input.enabled,
+    reason: input.reason ?? null,
+  });
+  return getAdminFreeze(h);
+}
+
+export function assertAdminNotFrozen(h: Harness): void {
+  const freeze = getAdminFreeze(h);
+  if (freeze.enabled) {
+    throw new HarnessError("freeze_active", "admin freeze rejects new dispatch", 423, {
+      reason: freeze.reason,
+    });
+  }
+}
+
+export function listAudit(h: Harness, limit = 200) {
+  return h.db
+    .select()
+    .from(auditLog)
+    .all()
+    .slice(-limit)
+    .map((row) => ({
+      id: row.id,
+      at: row.at,
+      actor_sub: row.actorSub,
+      actor_role: row.actorRole,
+      action: row.action,
+      resource_type: row.resourceType,
+      resource_id: row.resourceId,
+      request_id: row.requestId,
+      payload_json: parseJson(row.payloadJson),
+    }));
 }
 
 export function health(h: Harness) {

@@ -4,6 +4,7 @@ import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import { createCursorAdapter, type CursorAdapter } from "@harness/adapters-cursor";
 import { createNoopAdapter, type NoopAdapter } from "@harness/adapters-noop";
 import { DELIVER_READY_V1, SAFETY_ONLY_V1 } from "@harness/ready";
+import { assertSecretRef } from "./rbac";
 import { schema } from "./schema";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema-sql";
 
@@ -51,18 +52,62 @@ function seed(sqlite: Database.Database, now: string): void {
        VALUES (?, ?, ?, ?)`,
     )
     .run(DELIVER_READY_V1.id, DELIVER_READY_V1.version, JSON.stringify(DELIVER_READY_V1), now);
+  const noopRef = "file:/var/lib/harness/noop.secret";
+  const cursorRef = "env:CURSOR_API_KEY";
+  assertSecretRef(noopRef);
+  assertSecretRef(cursorRef);
   sqlite
     .prepare(
       `INSERT OR IGNORE INTO pools (id, kind, secret_ref, created_at)
        VALUES (?, ?, ?, ?)`,
     )
-    .run("pool_noop", "noop", "secret:noop-local", now);
+    .run("pool_noop", "noop", noopRef, now);
   sqlite
     .prepare(
       `INSERT OR IGNORE INTO pools (id, kind, secret_ref, created_at)
        VALUES (?, ?, ?, ?)`,
     )
-    .run("pool_cursor", "cursor_account", "secret:cursor-env", now);
+    .run("pool_cursor", "cursor_account", cursorRef, now);
+  sqlite
+    .prepare(
+      `UPDATE pools SET secret_ref = ? WHERE id = 'pool_noop' AND secret_ref NOT LIKE 'file:%' AND secret_ref NOT LIKE 'env:%'`,
+    )
+    .run(noopRef);
+  sqlite
+    .prepare(
+      `UPDATE pools SET secret_ref = ? WHERE id = 'pool_cursor' AND secret_ref NOT LIKE 'file:%' AND secret_ref NOT LIKE 'env:%'`,
+    )
+    .run(cursorRef);
+  sqlite
+    .prepare(
+      `INSERT OR IGNORE INTO admin_freeze (id, enabled, reason, updated_by, updated_at)
+       VALUES ('default', 0, NULL, NULL, ?)`,
+    )
+    .run(now);
+}
+
+function migrateAuditLog(sqlite: Database.Database): void {
+  const cols = sqlite.prepare("PRAGMA table_info(audit_log)").all() as { name: string }[];
+  const names = cols.map((c) => c.name);
+  if (names.includes("actor_sub")) return;
+  if (!names.includes("actor")) return;
+  sqlite.exec(`
+    CREATE TABLE audit_log_v2 (
+      id TEXT PRIMARY KEY,
+      at TEXT NOT NULL,
+      actor_sub TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      action TEXT NOT NULL,
+      resource_type TEXT,
+      resource_id TEXT,
+      request_id TEXT,
+      payload_json TEXT
+    );
+    INSERT INTO audit_log_v2 (id, at, actor_sub, actor_role, action, resource_type, resource_id, request_id, payload_json)
+    SELECT id, created_at, actor, role, action, entity_type, entity_id, NULL, payload_json FROM audit_log;
+    DROP TABLE audit_log;
+    ALTER TABLE audit_log_v2 RENAME TO audit_log;
+  `);
 }
 
 export function applySchema(sqlite: Database.Database): void {
@@ -71,6 +116,7 @@ export function applySchema(sqlite: Database.Database): void {
   if (!cols.some((c) => c.name === "dial")) {
     sqlite.exec("ALTER TABLE goals ADD COLUMN dial TEXT NOT NULL DEFAULT 'free'");
   }
+  migrateAuditLog(sqlite);
 }
 
 export function createHarness(opts?: {

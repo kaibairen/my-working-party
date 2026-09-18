@@ -143,13 +143,22 @@ export const policyEvents = sqliteTable("policy_events", {
 
 export const auditLog = sqliteTable("audit_log", {
   id: text("id").primaryKey(),
-  actor: text("actor").notNull(),
-  role: text("role").notNull(),
+  at: text("at").notNull(),
+  actorSub: text("actor_sub").notNull(),
+  actorRole: text("actor_role").notNull(),
   action: text("action").notNull(),
-  entityType: text("entity_type"),
-  entityId: text("entity_id"),
+  resourceType: text("resource_type"),
+  resourceId: text("resource_id"),
+  requestId: text("request_id"),
   payloadJson: text("payload_json"),
-  createdAt: text("created_at").notNull(),
+});
+
+export const adminFreeze = sqliteTable("admin_freeze", {
+  id: text("id").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  reason: text("reason"),
+  updatedBy: text("updated_by"),
+  updatedAt: text("updated_at").notNull(),
 });
 
 export const outbox = sqliteTable("outbox", {
@@ -175,5 +184,6 @@ export const schema = {
   exceptionGrants,
   policyEvents,
   auditLog,
+  adminFreeze,
   outbox,
 };

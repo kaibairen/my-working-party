@@ -33,5 +33,14 @@ api · worker · mcp-server（可同二进制多 mode）
 ## 决策人 UX
 仅 Gate Inbox；Roster/时间线/canvas = 投影。
 
+## M0 Security freeze（TechLead · 2026-09-19）
+权威稿：[`M0_SECURITY_FREEZE_v1.md`](M0_SECURITY_FREEZE_v1.md)。写入 OpenAPI / Tech Impl；口头约定无效。
+
+- Webhook **HMAC-SHA256**：`X-Harness-Signature: sha256=<hex>` + `X-Harness-Timestamp`；载荷 `{timestamp}.{raw_body}`；skew ±300s → 401 `webhook_skew`；验签失败 → 401 `webhook_bad_signature`；密钥 `WEBHOOK_SIGNING_SECRET` 不明文日志。
+- Admin freeze：`POST/GET /v1/admin/freeze`（仅 decision_maker|service）；`enabled=true` 拒新 dispatch（含 MCP）→ **423** `freeze_active`。Goal dial `freeze` 仍为 403 `dial_frozen`，与 admin freeze 分立。
+- `audit_log` 九列只追加：id, at, actor_sub, actor_role, action, resource_type, resource_id, request_id, payload_json。
+- JWT claims：`sub,role,pool_ids,iat,exp`（可选 `tid`）；跨 pool → 403 `pool_forbidden`。
+- `secret_ref` 仅 `file:` / `env:`；API 只回 URI，不回解析明文。
+
 ## 里程碑
 M0–M3 同权威 PRD §9。

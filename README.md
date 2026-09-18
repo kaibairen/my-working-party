@@ -16,6 +16,7 @@ Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product 
 - [docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md](docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md)
 - [docs/engineering/M0_SCHEMA_v1.md](docs/engineering/M0_SCHEMA_v1.md)
 - [docs/engineering/M0_MCP_STUB_v1.md](docs/engineering/M0_MCP_STUB_v1.md)
+- [docs/engineering/M0_SECURITY_FREEZE_v1.md](docs/engineering/M0_SECURITY_FREEZE_v1.md)
 - [docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md](docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md)（supporting — historical engineering plan）
 - [docs/product/research/control-plane-as-harness-brief.md](docs/product/research/control-plane-as-harness-brief.md)（supporting — research）
 
@@ -23,7 +24,7 @@ Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product 
 
 **Path freeze (TechLead / DevOps):** the M0 monorepo lives only at **`services/boundary-harness/`**. Do **not** use a top-level `harness/` (or repo-root `apps/` / `packages/`) alternative. Canonical CI is [`.github/workflows/harness-m0.yml`](.github/workflows/harness-m0.yml) (`working-directory: services/boundary-harness`).
 
-Implementation is in this repo (no separate `boundary-harness` GitHub project). Existing `docs/` stay. Spec: [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md). Test matrix: [docs/qa/M0_TEST_MATRIX_v1.md](docs/qa/M0_TEST_MATRIX_v1.md). Security checklist: [docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md).
+Implementation is in this repo (no separate `boundary-harness` GitHub project). Existing `docs/` stay. Spec: [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md). Test matrix: [docs/qa/M0_TEST_MATRIX_v1.md](docs/qa/M0_TEST_MATRIX_v1.md). Security freeze: [docs/engineering/M0_SECURITY_FREEZE_v1.md](docs/engineering/M0_SECURITY_FREEZE_v1.md). Security checklist: [docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](docs/qa/HARNESSSECURITY_M0_SECURITY_CHECKLIST.md).
 
 Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`); GateDef/GateInstance; dual external ids; `advisory_hint` never blocks. M0 runtime is **Noop**. M1 Cursor adapter is fixture-mode unless `CURSOR_API_KEY` is set (MCP still MUST NOT expose `cursor_raw_*`).
 
@@ -85,7 +86,7 @@ curl -sS 'http://127.0.0.1:8080/v1/gates?status=ready' \
   -H 'X-Harness-Role: decision_maker' -H 'X-Harness-Actor: dm-1'
 ```
 
-Auth headers: `X-Harness-Role` (`decision_maker|coordinator|executor|viewer|service`) and `X-Harness-Actor`.
+Auth: Bearer JWT claims `sub,role,pool_ids,iat,exp` (optional `tid`). Compatibility headers: `X-Harness-Role` (`decision_maker|coordinator|executor|viewer|service`) and `X-Harness-Actor`. Admin freeze: `POST/GET /v1/admin/freeze` (decision_maker|service); new dispatch returns **423** `freeze_active`. Inbound hooks require HMAC-SHA256 (`X-Harness-Signature` / `X-Harness-Timestamp`, skew ±300s). `secret_ref` is `file:` or `env:` only.
 
 ```bash
 pnpm lint
