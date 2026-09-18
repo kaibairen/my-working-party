@@ -1,17 +1,17 @@
-name: CI
+name: harness-m0
 
 on:
   push:
     branches: [main]
   pull_request:
 
-# Compatibility alias — canonical M0 workflow is harness-m0.yml
+defaults:
+  run:
+    working-directory: services/boundary-harness
+
 jobs:
   lint-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: services/boundary-harness
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -28,5 +28,11 @@ jobs:
         run: pnpm rebuild better-sqlite3
       - name: Lint
         run: pnpm lint
-      - name: Test
+      - name: Unit + anti-pattern tests
         run: pnpm test
+      - name: Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+      - name: E2E (API + Inbox)
+        run: pnpm test:e2e
+        env:
+          CI: "true"

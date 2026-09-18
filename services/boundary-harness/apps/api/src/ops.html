@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Harness health / OpenAPI</title>
+  <style>
+    body { font: 15px/1.45 ui-sans-serif, system-ui; background: #0f1419; color: #e8eef4; margin: 24px; }
+    pre { background: #1a222c; padding: 16px; border-radius: 10px; overflow: auto; }
+    a { color: #8cb4ff; }
+  </style>
+</head>
+<body>
+  <h1>Health / OpenAPI</h1>
+  <p><a href="/inbox">Gate Inbox</a> · <a href="/health">/health</a> · <a href="/openapi.yaml">/openapi.yaml</a></p>
+  <h2>GET /health</h2>
+  <pre id="health">loading…</pre>
+  <h2>OpenAPI (prefix)</h2>
+  <pre id="oa">loading…</pre>
+  <script>
+    fetch("/health").then((r) => r.json()).then((j) => {
+      document.getElementById("health").textContent = JSON.stringify(j, null, 2);
+    });
+    fetch("/openapi.yaml").then((r) => r.text()).then((t) => {
+      document.getElementById("oa").textContent = t.slice(0, 1200);
+    });
+  </script>
+</body>
+</html>

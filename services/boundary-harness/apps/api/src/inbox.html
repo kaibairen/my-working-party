@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gate Inbox (M2-preview)</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0f1419; --card:#1a222c; --line:#2b3643; --ok:#3dd68c; --warn:#f5c26b; --bad:#ff6b6b; --ink:#e8eef4; --muted:#93a1b1; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.45 ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+    header { padding: 20px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    h1 { margin: 0; font-size: 20px; }
+    .sub { color: var(--muted); font-size: 13px; }
+    main { padding: 24px; max-width: 980px; margin: 0 auto; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    input, select, button, textarea { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: #111820; color: var(--ink); padding: 8px 10px; }
+    button { cursor: pointer; background: #243044; }
+    button.ok { background: #163526; border-color: #245c3d; color: var(--ok); }
+    button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .missing { color: var(--warn); font-family: ui-monospace, monospace; font-size: 13px; }
+    .status { text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
+    .ready { color: var(--ok); }
+    .decided { color: var(--muted); }
+    .flash { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #163526; color: var(--ok); display: none; }
+    .flash.show { display: block; }
+    a { color: #8cb4ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Gate Inbox <span class="sub">M2-preview · decision-maker path</span></h1>
+      <div class="sub">Roster/canvas are projections. This is the only human inbox.</div>
+    </div>
+    <div class="row">
+      <a href="/ops">Health / OpenAPI</a>
+      <select id="role">
+        <option value="decision_maker">decision_maker</option>
+        <option value="coordinator">coordinator</option>
+      </select>
+      <input id="actor" value="dm-1" />
+      <button id="reload">Reload ready</button>
+    </div>
+  </header>
+  <main>
+    <div id="flash" class="flash"></div>
+    <p class="sub" id="hint">Showing <code>status=ready</code> GateInstances. Cards include <code>missing[]</code>.</p>
+    <div id="list"></div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const headers = () => ({
+      "content-type": "application/json",
+      "x-harness-role": $("role").value,
+      "x-harness-actor": $("actor").value,
+    });
+    function flash(msg) {
+      $("flash").textContent = msg;
+      $("flash").classList.add("show");
+    }
+    async function load() {
+      const res = await fetch("/v1/gates?status=ready", { headers: headers() });
+      const body = await res.json();
+      const gates = body.gates || [];
+      $("list").innerHTML = gates.length ? gates.map((g) => {
+        const missing = (g.ready_result && g.ready_result.missing) || [];
+        return `<article class="card" data-id="${g.id}" data-version="${g.version}">
+          <div class="row">
+            <strong>${g.id}</strong>
+            <span class="status ready">${g.status}</span>
+            <span class="sub">v${g.version}</span>
+          </div>
+          <p class="sub">goal ${g.goal_id}</p>
+          <p class="missing">missing[]: ${missing.length ? missing.join(", ") : "(empty — ready)"}</p>
+          <div class="row">
+            <button class="ok" data-act="pass">Pass</button>
+            <button class="warn" data-act="revise">Revise</button>
+          </div>
+        </article>`;
+      }).join("") : `<p class="sub">No ready gates.</p>`;
+    }
+    $("list").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn) return;
+      const card = btn.closest(".card");
+      const id = card.dataset.id;
+      const version = Number(card.dataset.version);
+      const res = await fetch(`/v1/gates/${id}/decide`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ decision: btn.dataset.act, version, structural_change: false }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        flash(`Decide failed: ${(body.error && body.error.code) || res.status}`);
+        return;
+      }
+      flash(`Decide ${btn.dataset.act} succeeded for ${id}`);
+      await load();
+    });
+    $("reload").onclick = load;
+    load();
+    try {
+      const es = new EventSource("/v1/events?role=" + encodeURIComponent($("role").value) + "&actor=" + encodeURIComponent($("actor").value));
+      es.addEventListener("gate.ready", load);
+    } catch (_) { /* SSE optional */ }
+  </script>
+</body>
+</html>

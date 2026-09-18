@@ -21,23 +21,25 @@ Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product 
 
 ## Harness M0
 
-M0 lives **in this repo** (`apps/`, `packages/`). Existing `docs/` are unchanged; implementation follows the **AUTHORITATIVE** PRD, not older drafts.
+Implementation lives in **`services/boundary-harness/`** (same repo; no separate `boundary-harness` GitHub project). Existing `docs/` stay. Spec: [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md). Test matrix: [docs/qa/M0_TEST_MATRIX_v1.md](docs/qa/M0_TEST_MATRIX_v1.md).
 
-**Authoritative spec:** [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md)
-
-Frozen MUST for this slice: DB is SoT; BriefV1 has no steps/script/must_path (HTTP and MCP share one validator → `422 brief_forbidden_field`); GateDef / GateInstance are separate; runs persist `external_agent_id` + `external_run_id`; `advisory_hint` never blocks dispatch / Run / Ready; **Noop adapter only** (no Cursor).
+Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`); GateDef/GateInstance; dual external ids; `advisory_hint` never blocks. M0 runtime is **Noop**. M1 Cursor adapter is fixture-mode unless `CURSOR_API_KEY` is set (MCP still MUST NOT expose `cursor_raw_*`).
 
 | Path | Role |
 |------|------|
-| `apps/api` | Domain HTTP (`HARNESS_MODE=api\|all`) |
-| `apps/worker` | Outbox publisher (`gate.ready`) |
-| `apps/mcp-server` | 8-tool MCP stub → `/v1` |
-| `packages/domain` | Drizzle/SQLite schema + services |
-| `packages/policy` | `track`: `authority_gate` \| `advisory_hint` |
-| `packages/ready` | `safety_only_v1` + `deliver_ready_v1` |
-| `packages/adapters-noop` | M0 runtime |
-| `openapi/openapi.yaml` | `/v1` contract |
-| `deploy/docker-compose.yml` | local compose |
+| `services/boundary-harness/apps/api` | Domain HTTP + Gate Inbox `/inbox` + `/ops` |
+| `services/boundary-harness/apps/worker` | Outbox → webhook (`WEBHOOK_URL`) |
+| `services/boundary-harness/apps/mcp-server` | 8-tool MCP stub |
+| `services/boundary-harness/packages/*` | domain, policy, ready, adapters-noop, adapters-cursor |
+| `services/boundary-harness/docker-compose.yml` | `docker compose up api` |
+
+**Inbox URL:** http://127.0.0.1:8080/inbox (M2-preview). Health/OpenAPI: http://127.0.0.1:8080/ops
+
+```bash
+cd services/boundary-harness
+docker compose up api
+# or: pnpm install && pnpm dev:api
+```
 
 ### Quickstart (goal → assignment → noop → evidence → gate)
 
