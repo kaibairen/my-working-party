@@ -23,4 +23,8 @@ type GateDecideProbe = {
 
 interface Window {
   __lastGateDecide?: GateDecideProbe;
+  __gateInboxTest?: {
+    emitChatDone: () => void;
+    emitRunSucceeded: (runId?: string) => void;
+  };
 }

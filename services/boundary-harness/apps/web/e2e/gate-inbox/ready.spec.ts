@@ -1,10 +1,14 @@
 import { expect, test } from "@playwright/test";
+import { cloneDomainStore, openInboxApi } from "./domain-stub";
 import { openInbox } from "./helpers";
 
+/** E2E-01 */
 test("inbox_lists_only_ready", async ({ page }) => {
-  await openInbox(page);
-  const cards = page.getByTestId("gate-card");
-  await expect(cards).toHaveCount(2);
+  const store = cloneDomainStore();
+  const captured = await openInboxApi(page, store);
+
+  expect(captured.listQueries).toContain("ready");
+  await expect(page.getByTestId("gate-card")).toHaveCount(2);
   await expect(page.getByTestId("gate-status")).toHaveCount(2);
   for (const status of await page.getByTestId("gate-status").all()) {
     await expect(status).toHaveText("ready");
@@ -13,6 +17,7 @@ test("inbox_lists_only_ready", async ({ page }) => {
   await expect(page.getByText("Should never appear in Inbox")).toHaveCount(0);
 });
 
+/** E2E-02 */
 test("inbox_empty_state_quiet", async ({ page }) => {
   await openInbox(page);
   const initial = await page.getByTestId("gate-card").count();
@@ -25,9 +30,10 @@ test("inbox_empty_state_quiet", async ({ page }) => {
   await expect(page.getByTestId("empty-inbox")).toContainText("All quiet");
   await expect(page.getByTestId("empty-inbox")).toContainText("No ready gates");
   const empty = (await page.getByTestId("empty-inbox").innerText()).toLowerCase();
-  expect(empty).not.toMatch(/canvas|roster|timeline|progress|open the board/);
+  expect(empty).not.toMatch(/canvas|roster|timeline|progress|去画布|看进度/);
 });
 
+/** E2E-03 */
 test("inbox_card_shows_predicate_meta", async ({ page }) => {
   await openInbox(page);
   const first = page.getByTestId("gate-card").first();

@@ -75,6 +75,28 @@ export function App() {
     }
   }, [source]);
 
+  useEffect(() => {
+    window.__gateInboxTest = {
+      emitChatDone() {
+        /* Chat "done" is not SoT — must not upsert a Gate card. */
+      },
+      emitRunSucceeded(runId = "run_fixture") {
+        setExceptions((prev) => [
+          {
+            id: `run.succeeded:${runId}`,
+            type: "run.succeeded",
+            at: new Date().toISOString(),
+            text: `Run ${runId} succeeded. Evidence + Ready still required — this is not a decide.`,
+          },
+          ...prev,
+        ]);
+      },
+    };
+    return () => {
+      delete window.__gateInboxTest;
+    };
+  }, []);
+
   const upsertGate = useCallback(
     async (id: string, missing?: string[]) => {
       setGates((prev) => {

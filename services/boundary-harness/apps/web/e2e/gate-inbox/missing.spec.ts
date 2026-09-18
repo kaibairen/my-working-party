@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { openInbox } from "./helpers";
 
+/** E2E-20 */
 test("card_renders_missing_array", async ({ page }) => {
   await openInbox(page);
   const card = page.locator('[data-gate-id="gin_01k8q2m0deliver"]');
@@ -10,6 +11,7 @@ test("card_renders_missing_array", async ({ page }) => {
   await expect(items.nth(1)).toHaveText("screenshot:mobile");
 });
 
+/** E2E-21 */
 test("missing_empty_still_shows_ready_ok", async ({ page }) => {
   await openInbox(page);
   const card = page.locator('[data-gate-id="gin_01k8q3safety"]');

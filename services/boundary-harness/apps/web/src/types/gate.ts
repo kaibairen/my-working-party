@@ -62,7 +62,7 @@ export type SsePayload = {
 
 export type InboxException = {
   id: string;
-  type: Exclude<SseEventType, "gate.ready">;
+  type: Exclude<SseEventType, "gate.ready"> | "run.succeeded";
   at: string;
   text: string;
 };
