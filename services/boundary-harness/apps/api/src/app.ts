@@ -78,6 +78,43 @@ export function createApp(db: Db, config: AppConfig): Hono<Env> {
     await next();
   });
 
+  app.get("/v1/admin/audit", (c) => {
+    const actor = c.get("actor");
+    requireRoles(actor, ["decision_maker", "service"]);
+    const rows = db
+      .prepare(
+        `SELECT id, at, actor_sub, actor_role, action, resource_type, resource_id, request_id, payload_json
+         FROM audit_log ORDER BY at DESC LIMIT 50`,
+      )
+      .all()
+      .map((row) => {
+        const r = row as Record<string, unknown>;
+        let payload = r.payload_json;
+        if (typeof payload === "string") {
+          try {
+            payload = JSON.parse(payload);
+          } catch {
+            /* keep raw */
+          }
+        }
+        return { ...r, payload_json: payload };
+      });
+    return c.json({ items: rows });
+  });
+
+  app.on(["PATCH", "DELETE", "POST"], "/v1/admin/audit", () => {
+    throw new HttpError(405, "audit_append_only", "audit_log is append-only");
+  });
+  app.on(["PATCH", "DELETE", "POST"], "/v1/admin/audit/:id", () => {
+    throw new HttpError(405, "audit_append_only", "audit_log is append-only");
+  });
+  app.on(["PATCH", "DELETE", "POST"], "/v1/audit_log", () => {
+    throw new HttpError(405, "audit_append_only", "audit_log is append-only");
+  });
+  app.on(["PATCH", "DELETE"], "/v1/audit_log/:id", () => {
+    throw new HttpError(405, "audit_append_only", "audit_log is append-only");
+  });
+
   app.get("/v1/admin/freeze", (c) => {
     c.get("actor");
     return c.json(getFreeze(db));

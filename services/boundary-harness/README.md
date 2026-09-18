@@ -17,7 +17,7 @@ qa/a5/fourteen/           14 named ready-anti cases
 ```bash
 cd services/boundary-harness
 npm install
-npm test                  # unit + ready-anti (14 named cases)
+npm test                  # unit + ready-anti (14) + security-anti (9)
 npm start                 # API on :8080, applies 0001+0002 on boot
 npx tsx apps/api/src/issue-token.ts --role coordinator --sub coord-1 --pools pool_noop
 # or: npm run token -- --role coordinator --sub coord-1 --pools pool_noop
