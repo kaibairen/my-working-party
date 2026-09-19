@@ -1,0 +1,14 @@
+{
+  "name": "@harness/worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@harness/domain": "workspace:*",
+    "tsx": "^4.20.5"
+  }
+}

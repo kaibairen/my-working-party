@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>待我拍板</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0c1014; --card:#161d26; --line:#243040; --ok:#3dd68c; --warn:#f5c26b; --ink:#e8eef4; --muted:#8b98a8; --bad:#e85d4c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--ink); }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 8px; max-width: 720px; margin: 0 auto; }
+    header a { color: inherit; text-decoration: none; }
+    h1 { margin: 0; font-size: 22px; font-weight: 650; }
+    .count { color: var(--muted); font-weight: 600; }
+    main { padding: 8px 24px 48px; max-width: 720px; margin: 0 auto; }
+    .lead { color: var(--muted); font-size: 14px; }
+    .filters { display: flex; gap: 8px; margin: 12px 0; }
+    .filters button { border-radius: 999px; padding: 6px 12px; }
+    .filters button.on { background: #163526; border-color: #245c3d; color: var(--ok); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 16px 0; }
+    .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+    .kind { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+    .meta { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+    .badge { display: inline-block; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: #1d3a2c; color: var(--ok); }
+    .chips { margin: 10px 0 14px; }
+    .chip { display: inline-block; background: #3a2e14; color: var(--warn); border-radius: 999px; padding: 4px 10px; font-size: 13px; margin: 0 6px 6px 0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: #243044; color: var(--ink); padding: 9px 14px; cursor: pointer; }
+    button.ok { background: #163526; border-color: #245c3d; color: var(--ok); }
+    button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
+    button.muted { background: #1a222c; color: var(--muted); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .flash { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: #163526; color: var(--ok); display: none; }
+    .flash.show { display: block; }
+    .flash.conflict { background: #3a2e14; color: var(--warn); }
+    .empty h2 { margin: 28px 0 8px; font-size: 22px; }
+    .empty p { color: var(--muted); }
+    details { margin-top: 12px; color: var(--muted); font-size: 13px; }
+    .sr-only, [hidden] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+    #reload { display: none; }
+    dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); padding: 20px; max-width: 420px; }
+    dialog::backdrop { background: rgba(0,0,0,.45); }
+    dialog h3 { margin: 0 0 8px; }
+    dialog p, dialog label { color: var(--muted); font-size: 14px; }
+    dialog textarea { width: 100%; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">AI 办公室</a>
+    <h1 id="heading" data-testid="inbox-heading">待办</h1>
+  </header>
+  <main data-testid="gate-inbox">
+    <p class="count" id="count-link" data-testid="inbox-count">待办</p>
+    <div class="filters">
+      <button type="button" class="on" data-filter="ready" data-testid="filter-ready">要你决定</button>
+      <button type="button" data-filter="decided" data-testid="filter-decided">已决定</button>
+    </div>
+    <p class="lead" id="lead">下面每张卡都过了硬门禁检查，可以拍板。</p>
+    <div id="flash" class="flash" data-testid="inbox-flash"></div>
+    <button id="reload" data-testid="reload-ready" tabindex="-1">刷新</button>
+    <div id="list" data-testid="gate-list"></div>
+  </main>
+  <dialog id="pass-dialog">
+    <h3>确认通过？</h3>
+    <p>通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
+    <div class="row">
+      <button class="ok" id="pass-confirm" data-testid="decide-pass-confirm">确认通过</button>
+      <button class="muted" id="pass-cancel">取消</button>
+    </div>
+  </dialog>
+  <dialog id="revise-dialog">
+    <h3>打回重做</h3>
+    <label><input type="radio" name="rev-mode" value="false" checked /> 让同一工位再跑一版</label><br />
+    <details>
+      <summary>这是结构问题，要换任务边界</summary>
+      <label><input type="radio" name="rev-mode" value="true" /> 这是结构问题，要换任务边界</label>
+    </details>
+    <textarea id="revise-note" rows="2" placeholder="想改的方向（可选）"></textarea>
+    <div class="row">
+      <button class="warn" id="revise-confirm" data-testid="decide-revise-confirm">确认打回</button>
+      <button class="muted" id="revise-cancel">取消</button>
+    </div>
+  </dialog>
+  <script>
+    const ROLE = "decision_maker";
+    const ACTOR = "you";
+    const KIND = { deliver_ready_v1: "交付验收", safety_only_v1: "安全审批" };
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    function isHumanTitle(name) {
+      const raw = String(name ?? "").trim();
+      if (!raw || UUID_RE.test(raw) || /e2e/i.test(raw) || /\bg-[a-z0-9-]+/i.test(raw)) return false;
+      return true;
+    }
+    function sanitizeCardTitle(goalTitle, summary) {
+      for (const cand of [goalTitle, summary]) {
+        if (isHumanTitle(cand)) return String(cand).trim();
+      }
+      return "未命名目标";
+    }
+    function missingLabel(code) {
+      const raw = String(code ?? "");
+      if (/summary_md|summary$/.test(raw)) return "还差：结论摘要";
+      if (/artifact_uri|artifact$/.test(raw)) return "还差：可打开的产物";
+      if (/github_pr|is_draft/.test(raw)) return "还差：合并请求仍是草稿";
+      if (/checks|conclusion/.test(raw)) return "还差：检查未全部通过";
+      return "还差：" + raw;
+    }
+    function relativeTime(iso) {
+      if (!iso) return "";
+      const then = Date.parse(iso);
+      if (!Number.isFinite(then)) return iso;
+      const min = Math.floor(Math.max(0, Date.now() - then) / 60000);
+      if (min < 1) return "刚刚";
+      if (min < 60) return min + " 分钟前";
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return hr + " 小时前";
+      return Math.floor(hr / 24) + " 天前";
+    }
+    const headers = () => ({
+      "content-type": "application/json",
+      authorization: `Bearer ${ROLE}:${ACTOR}`,
+      "x-harness-role": ROLE,
+      "x-harness-actor": ACTOR,
+    });
+    const $ = (id) => document.getElementById(id);
+    let filter = "ready";
+    let pending = null;
+    function flash(msg, kind) {
+      $("flash").textContent = msg;
+      $("flash").classList.add("show");
+      $("flash").classList.toggle("conflict", kind === "conflict");
+    }
+    function emptyHtml() {
+      return `<section class="empty" data-testid="inbox-empty">此刻没有待办。安静是正常的。</section>`;
+    }
+    function missingHtml(missing) {
+      if (!missing.length) {
+        return `<p class="meta" data-testid="why-ready">证据已齐，等你拍板</p>
+          <span class="sr-only" data-testid="missing-empty" hidden>missing[] empty</span>`;
+      }
+      return `<div class="chips" data-testid="missing-list">
+        <p class="meta">还差</p>
+        <p class="meta">还不能过，先看缺什么</p>
+        ${missing.map((m) => `<span class="chip" data-testid="missing-item">${missingLabel(m)}<span class="sr-only"> ${m}</span></span>`).join("")}
+      </div>`;
+    }
+    function isAdvisory(g) {
+      const rr = g.ready_result || {};
+      return rr.advisory === true || rr.track === "advisory_hint" || g.track === "advisory_hint";
+    }
+    async function load() {
+      const status = filter === "decided" ? "decided" : "ready";
+      const res = await fetch(status === "ready" ? "/v1/gates?status=ready" : "/v1/gates?status=decided", { headers: headers() });
+      const body = await res.json();
+      const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
+      if (filter === "ready") {
+        const label = gates.length ? "待办 · " + gates.length : "待办";
+        $("count-link").textContent = label;
+        $("heading").textContent = label;
+      }
+      $("lead").hidden = filter !== "ready" || !gates.length;
+      $("list").innerHTML = gates.length ? gates.map((g) => {
+        const missing = (g.ready_result && g.ready_result.missing) || [];
+        const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
+        const pver = g.predicate_version ?? (g.ready_result && g.ready_result.predicate_version) ?? "";
+        const title = sanitizeCardTitle(g.goal_title, g.goal_summary);
+        const rel = relativeTime(g.ready_at);
+        const canPass = filter === "ready" && missing.length === 0;
+        const actions = filter === "ready" ? `<div class="row">
+            <button class="ok" data-act="pass-open" data-testid="decide-pass" ${canPass ? "" : "disabled"}>通过</button>
+            <button class="warn" data-act="revise-open" data-testid="decide-revise">打回重做</button>
+            <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
+          </div>` : "";
+        return `<article class="card" data-testid="gate-card" data-id="${g.id}" data-version="${g.version}">
+          <h2 class="title" data-testid="gate-title">${title}</h2>
+          <p class="meta"><span class="badge" data-testid="gate-status" data-status="${g.status}">待你决定</span></p>
+          <p class="kind">规则：交付验收</p>
+          <p class="meta">${rel ? "就绪 · " + rel : ""}</p>
+          ${filter === "ready" ? missingHtml(missing) : ""}
+          ${filter === "ready" && !missing.length ? `<p class="meta">同事已交：摘要 / 产物链接</p>` : ""}
+          ${actions}
+          <details>
+            <summary>工程详情</summary>
+            <p>编号 <span data-testid="gate-id">${g.id}</span></p>
+            <p>目标 ID ${g.goal_id || ""}</p>
+            <p data-testid="predicate-id">predicate_id ${pred}</p>
+            <p data-testid="predicate-version">predicate_version ${pver}</p>
+            <p data-testid="ready-at">ready_at ${g.ready_at || ""}</p>
+          </details>
+        </article>`;
+      }).join("") : emptyHtml();
+    }
+    async function decide(id, version, decision, extra) {
+      const res = await fetch(`/v1/gates/${id}/decide`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ decision, version, structural_change: false, ...extra }),
+      });
+      const body = await res.json();
+      const code = (body && body.code) || (body.error && body.error.code);
+      if (!res.ok) {
+        if (res.status === 409 || code === "optimistic_lock") {
+          flash("别人刚处理过这张，已帮你刷新。", "conflict");
+          await load();
+          return;
+        }
+        flash("处理失败，请再试一次");
+        return;
+      }
+      if (decision === "pass") flash("已通过。");
+      else if (decision === "revise") flash("已打回，同事会再交一版。");
+      else flash("已搁下，需要时还会出现。");
+      await load();
+    }
+    $("list").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn || btn.disabled) return;
+      const card = btn.closest(".card");
+      const id = card.dataset.id;
+      const version = Number(card.dataset.version);
+      const act = btn.dataset.act;
+      if (act === "pass-open") {
+        pending = { id, version };
+        $("pass-dialog").showModal();
+        return;
+      }
+      if (act === "revise-open") {
+        pending = { id, version };
+        $("revise-dialog").showModal();
+        return;
+      }
+      if (act === "defer") await decide(id, version, "defer");
+    });
+    $("pass-confirm").onclick = async () => {
+      $("pass-dialog").close();
+      if (pending) await decide(pending.id, pending.version, "pass");
+      pending = null;
+    };
+    $("pass-cancel").onclick = () => { $("pass-dialog").close(); pending = null; };
+    $("revise-confirm").onclick = async () => {
+      const structural = document.querySelector('input[name="rev-mode"]:checked')?.value === "true";
+      $("revise-dialog").close();
+      if (pending) await decide(pending.id, pending.version, "revise", { structural_change: structural, note: $("revise-note").value || undefined });
+      pending = null;
+    };
+    $("revise-cancel").onclick = () => { $("revise-dialog").close(); pending = null; };
+    document.querySelectorAll("[data-filter]").forEach((el) => {
+      el.onclick = () => {
+        filter = el.dataset.filter;
+        document.querySelectorAll("[data-filter]").forEach((b) => b.classList.toggle("on", b === el));
+        load();
+      };
+    });
+    $("reload").onclick = load;
+    load();
+    try {
+      const es = new EventSource("/v1/events?role=" + encodeURIComponent(ROLE) + "&actor=" + encodeURIComponent(ACTOR));
+      es.addEventListener("gate.ready", load);
+    } catch (_) { /* SSE optional */ }
+  </script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Harness health / OpenAPI</title>
+  <style>
+    body { font: 15px/1.45 ui-sans-serif, system-ui; background: #0f1419; color: #e8eef4; margin: 24px; }
+    pre { background: #1a222c; padding: 16px; border-radius: 10px; overflow: auto; }
+    a { color: #8cb4ff; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #2b3643; padding: 8px 10px; text-align: left; font-size: 13px; }
+    th { color: #93a1b1; }
+    .pending { color: #f5c26b; }
+    .published { color: #3dd68c; }
+  </style>
+</head>
+<body>
+  <h1>Health / OpenAPI / Outbox</h1>
+  <p>Engineer ops (not the decision-maker shell). <a href="/inbox">待我拍板</a> · <a href="/health">/health</a> · <a href="/v1/outbox">/v1/outbox</a> · <a href="/openapi.yaml">/openapi.yaml</a></p>
+  <h2>GET /health</h2>
+  <pre id="health">loading…</pre>
+  <h2>Outbox / delivery</h2>
+  <p class="sub" id="outbox-summary">loading…</p>
+  <table data-testid="outbox-table">
+    <thead><tr><th>id</th><th>type</th><th>status</th><th>attempts</th><th>last_error</th><th>published_at</th></tr></thead>
+    <tbody id="outbox-body"></tbody>
+  </table>
+  <h2>GitHub snapshots (Ready store)</h2>
+  <pre id="snaps">loading…</pre>
+  <h2>OpenAPI (prefix)</h2>
+  <pre id="oa">loading…</pre>
+  <script>
+    const headers = { "x-harness-role": "coordinator", "x-harness-actor": "ops" };
+    fetch("/health").then((r) => r.json()).then((j) => {
+      document.getElementById("health").textContent = JSON.stringify(j, null, 2);
+    });
+    fetch("/v1/outbox", { headers }).then((r) => r.json()).then((j) => {
+      const rows = j.outbox || [];
+      const pending = rows.filter((x) => x.status === "pending").length;
+      const published = rows.filter((x) => x.status === "published").length;
+      document.getElementById("outbox-summary").textContent = `pending ${pending} · published ${published}`;
+      document.getElementById("outbox-body").innerHTML = rows.length
+        ? rows.map((x) => `<tr>
+            <td>${x.id}</td><td>${x.type}</td>
+            <td class="${x.status}">${x.status}</td>
+            <td>${x.attempts ?? 0}</td>
+            <td>${x.last_error || ""}</td>
+            <td>${x.published_at || ""}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="6">No outbox rows.</td></tr>`;
+    });
+    fetch("/v1/github-snapshots", { headers }).then((r) => r.json()).then((j) => {
+      document.getElementById("snaps").textContent = JSON.stringify(j, null, 2);
+    });
+    fetch("/openapi.yaml").then((r) => r.text()).then((t) => {
+      document.getElementById("oa").textContent = t.slice(0, 1200);
+    });
+  </script>
+</body>
+</html>

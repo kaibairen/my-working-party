@@ -1,0 +1,18 @@
+{
+    "id": "6944276c-521c-4596-a883-02d17fb4a6c8",
+    "assignment_id": "f86cbc7c-de02-42ff-ae31-48e48cdad051",
+    "adapter": "noop",
+    "external_agent_id": "noop-agent:f86cbc7c-de02-42ff-ae31-48e48cdad051",
+    "external_run_id": "noop-run:6944276c-521c-4596-a883-02d17fb4a6c8",
+    "idempotency_key": "e2e-script",
+    "dial_at_dispatch": "free",
+    "status": "succeeded",
+    "usage": {
+        "noop_or_offline_contract": true,
+        "adapter": "noop"
+    },
+    "error": null,
+    "created_at": "2026-09-18T17:06:21.753Z",
+    "updated_at": "2026-09-18T17:06:21.753Z",
+    "advisory": true
+}

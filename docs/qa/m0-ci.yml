@@ -1,0 +1,137 @@
+# Boundary Harness — M0 CI 草图
+# 落地仓：kaibairen/my-working-party（不分仓）
+# 落地路径：.github/workflows/ci.yml（或 harness-m0.yml）
+# Compose：services/boundary-harness/deploy/docker-compose.m0.yml
+# 包管理：pnpm；单测：vitest
+# 分支：main（保护）+ feat/*；migration 与 OpenAPI 同源 PR
+#
+# vitest include（暂定，只在本文件 + M0_CI_CHECKLIST 一处改，勿分叉）：
+#   services/boundary-harness/{packages/domain,packages/policy,packages/ready,apps/api,apps/mcp-server}/**/*.{test,spec}.ts
+
+name: harness-m0-ci
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/boundary-harness/**"
+      - ".github/workflows/harness-m0.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/boundary-harness/**"
+      - ".github/workflows/harness-m0.yml"
+
+concurrency:
+  group: harness-m0-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 9
+  NODE_VERSION: 22
+  HARNESS_ROOT: services/boundary-harness
+
+defaults:
+  run:
+    working-directory: services/boundary-harness
+
+jobs:
+  lint-typecheck:
+    name: lint + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: services/boundary-harness/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+  openapi-contract:
+    name: OpenAPI / 契约
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: services/boundary-harness/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run openapi:lint
+      - name: migration ↔ openapi pairing hint
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if git diff --name-only origin/main...HEAD | grep -E 'services/boundary-harness/(migrations?/|openapi/)' >/dev/null; then
+            echo "schema touch detected — ensure OpenAPI + migration in same PR"
+          fi
+
+  unit-vitest:
+    name: vitest（Brief / Ready / RBAC / policy）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: services/boundary-harness/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # include 冻结面（Backend 微调只改 checklist + 本 job 这一处）
+      - name: vitest M0 required
+        run: |
+          pnpm exec vitest run \
+            packages/domain \
+            packages/policy \
+            packages/ready \
+            apps/api \
+            apps/mcp-server \
+            --passWithNoTests=false
+      # ready-anti 14 例（QA M0_READY_ANTI_FINAL_v1）；缺任一 merge 红
+      # 缺 BriefV1/Ready/Policy 单测 = M0 未 Done
+      - run: pnpm exec vitest run --reporter=verbose tests/ready-anti
+      # security-anti 8 例（QA M0_SECURITY_ANTI_FINAL_v1）；与 ready-anti 并列；缺任一 merge 红
+      # 路径：apps/api/tests/security-anti/**/*.{test,spec}.{ts,mjs}
+      - name: vitest security-anti
+        run: pnpm exec vitest run --reporter=verbose apps/api/tests/security-anti
+
+  compose-smoke:
+    name: compose smoke（main）
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/boundary-harness/deploy
+    steps:
+      - uses: actions/checkout@v4
+      - name: prepare dummy secrets
+        run: |
+          mkdir -p secrets
+          openssl rand -hex 32 > secrets/auth_jwt_secret
+          openssl rand -hex 32 > secrets/webhook_signing_secret
+          echo "ci-noop-key" > secrets/cursor_pool_key
+      - name: up api
+        run: docker compose -f docker-compose.m0.yml up -d --build api
+      - name: healthz
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/healthz && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: down
+        if: always()
+        run: docker compose -f docker-compose.m0.yml down -v

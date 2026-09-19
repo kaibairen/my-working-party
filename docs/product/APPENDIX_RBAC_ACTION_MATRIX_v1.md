@@ -15,3 +15,9 @@
 | 读投影/canvas | 默认可关 | 可 | 可 | 可 | 可 |
 
 人扇出：仅 `dispatch_policy=human_allowed`（默认关，须一次性 Gate+TTL）或 `exception_grant`。
+
+## JWT claims（M0 Security freeze · 与 RBAC 同源）
+
+必含：`sub` · `role`（上表五角色 enum）· `pool_ids`（string[]）· `iat` · `exp`  
+可选 M0：`tid`（租户，单租可省略）  
+跨 `pool_ids` 操作 → **403** `pool_forbidden`（禁止别名 `pool_scope_denied`）。

@@ -1,0 +1,12 @@
+{
+  "name": "my-working-party",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "lint": "pnpm --dir services/boundary-harness lint",
+    "test": "pnpm --dir services/boundary-harness test",
+    "test:e2e": "pnpm --dir services/boundary-harness test:e2e",
+    "dev:api": "pnpm --dir services/boundary-harness dev:api",
+    "e2e": "pnpm --dir services/boundary-harness e2e"
+  }
+}

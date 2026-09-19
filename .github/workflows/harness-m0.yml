@@ -1,0 +1,93 @@
+# Boundary Harness M0 CI — DevOps confirmed
+# Workflow path is frozen: .github/workflows/harness-m0.yml
+# working-directory: services/boundary-harness
+# security-anti command is frozen (do not rename):
+#   pnpm exec vitest run apps/api/tests/security-anti
+# Hard-fail: no continue-on-error
+name: harness-m0
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/boundary-harness/**"
+      - ".github/workflows/harness-m0.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/boundary-harness/**"
+      - ".github/workflows/harness-m0.yml"
+
+concurrency:
+  group: harness-m0-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: services/boundary-harness
+
+jobs:
+  unit-vitest:
+    name: vitest (ready-anti + security-anti S1–S8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/boundary-harness/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Rebuild native modules
+        run: pnpm rebuild better-sqlite3
+      - name: Lint
+        run: pnpm lint
+      - name: vitest M0 packages
+        run: |
+          pnpm exec vitest run \
+            packages/domain \
+            packages/policy \
+            packages/ready \
+            packages/adapters-cursor \
+            apps/api \
+            apps/mcp-server \
+            apps/web \
+            --passWithNoTests=false
+      - name: vitest ready-anti
+        run: pnpm exec vitest run apps/api/tests/ready-anti
+      - name: vitest security-anti
+        run: pnpm exec vitest run apps/api/tests/security-anti
+      - name: Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+      - name: E2E (API + Inbox)
+        run: pnpm test:e2e
+        env:
+          CI: "true"
+
+  e2e-gate-inbox:
+    name: e2e-gate-inbox
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/boundary-harness/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Rebuild native modules
+        run: pnpm rebuild better-sqlite3
+      - name: Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Gate Inbox Playwright CDP
+        run: pnpm test:e2e:inbox
+        env:
+          CI: "true"
