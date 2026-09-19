@@ -32,7 +32,7 @@ test.describe("E2E decision-maker shell", () => {
       els.map((el) => (el as HTMLAnchorElement).getAttribute("href") || ""),
     );
     expect(hrefs.some((h) => /\/ops|\/health|openapi/i.test(h))).toBe(false);
-    assertNoOpsChrome(await page.locator("header, main").innerText());
+    assertNoOpsChrome(await page.locator("body").innerText());
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
     await page.screenshot({ path: join(shotDir, "dm_inbox_only.png"), fullPage: true });
     await page.screenshot({ path: join(shotDir, "inbox_one_card_human.png"), fullPage: true });
@@ -70,7 +70,7 @@ test.describe("E2E decision-maker shell", () => {
     await page.getByTestId("decide-pass").click();
     await expect(page.getByTestId("inbox-flash")).toHaveText("已通过。");
     await expect(page.getByTestId("inbox-empty")).toHaveText("现在没有需要你拍板的事。");
-    assertNoOpsChrome(await page.locator("header, main").innerText());
+    assertNoOpsChrome(await page.locator("body").innerText());
     await page.screenshot({ path: join(shotDir, "inbox_after_pass_quiet.png"), fullPage: true });
   });
 });
