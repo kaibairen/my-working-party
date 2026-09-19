@@ -86,7 +86,7 @@ export async function seedDeliverPending(baseURL: string, title?: string) {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: title ?? "本周交付包",
+        title: title ?? "交付季度报告",
         mode: "deliver",
         coordinator_ref: "coord-1",
       }),
@@ -157,14 +157,14 @@ export async function seedDeliverReady(baseURL: string, title?: string) {
   return { ...seeded, gate };
 }
 
-export async function seedAuthorityReady(baseURL: string, action = "destructive_delete") {
+export async function seedAuthorityReady(baseURL: string, action = "destructive_delete", title = "发版检查") {
   const goal = await requireOk(
     "create explore safety goal",
     await api<{ id: string }>(baseURL, "/v1/goals", {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: "安全确认",
+        title,
         mode: "explore",
         coordinator_ref: "coord-1",
         gate_template_id: "safety_only_v1",
@@ -242,6 +242,8 @@ export async function clickRevise(page: Page) {
 export async function clickDefer(page: Page) {
   await page.getByTestId("decide-defer").click();
 }
+
+export const DIRTY_TITLE_RE = /e2e|\bg-[a-z0-9-]+/i;
 
 export const VERBAL_DONE_RE =
   /标记完成|mark done|mark as done|i(?:'|’)m done|我确认好了|我确认了|口头完成/i;

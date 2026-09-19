@@ -27,6 +27,8 @@ export const zhDM = {
     github_checks: "还差：检查未全部通过",
   } as Record<string, string>,
   untitledGoal: "未命名目标",
+  demoDeliverTitle: "交付季度报告",
+  demoAuthorityTitle: "发版检查",
   pass: "通过",
   revise: "打回重做",
   defer: "稍后处理",

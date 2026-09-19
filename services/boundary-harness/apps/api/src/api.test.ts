@@ -331,8 +331,8 @@ describe("domain API", () => {
     expect(html).toContain("待办");
     expect(html).toContain("n > 0 ? `待办 · ${n}`");
     expect(html).toContain("还差：一项材料");
-    expect(html).toContain("/^e2e\\b/i");
-    expect(html).toContain("pending g-");
+    expect(html).toContain("/e2e/i");
+    expect(html).toContain("g-[a-z0-9-]+");
     expect(html).not.toContain("M2-preview");
     expect(html).not.toContain('href="/ops">Health');
     expect(html).not.toContain("href=\"/openapi.yaml\"");

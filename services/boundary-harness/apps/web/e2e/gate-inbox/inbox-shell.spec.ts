@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { api, clickPass, drainReadyGates, expect, headers, seedAuthorityReady, seedDeliverReady, shotDir, test } from "./helpers";
+import { api, clickPass, DIRTY_TITLE_RE, drainReadyGates, expect, headers, seedAuthorityReady, seedDeliverReady, shotDir, test } from "./helpers";
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const evidenceDir = join(dirname(fileURLToPath(import.meta.url)), "../../evidence");
@@ -36,8 +36,8 @@ test.describe("Decision-maker shell", () => {
     const title = page.getByTestId("gate-title");
     await expect(title).toBeVisible();
     await expect(title).not.toHaveText(UUID_RE);
-    await expect(title).not.toHaveText(/e2e pending|pending g-/i);
-    await expect(title).toHaveText("本周交付包");
+    await expect(title).not.toHaveText(DIRTY_TITLE_RE);
+    await expect(title).toHaveText("交付季度报告");
     await expect(title).not.toHaveText(ready.gate!.id);
     const titleText = (await title.innerText()).trim();
     expect(titleText.length).toBeGreaterThan(0);
@@ -61,9 +61,10 @@ test.describe("Decision-maker shell", () => {
     expect(top).not.toMatch(/Health|OpenAPI|Reload ready|decision_maker/i);
     await expect(page.getByRole("button", { name: "刷新" })).toBeVisible();
 
-    const ready = await seedDeliverReady(baseURL!, "本周交付包");
+    const ready = await seedDeliverReady(baseURL!, "交付季度报告");
     await page.goto("/inbox");
-    await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
+    await expect(page.getByTestId("gate-title")).toHaveText("交付季度报告");
+    await expect(page.getByTestId("gate-title")).not.toHaveText(DIRTY_TITLE_RE);
     await expect(page.getByTestId("working-who")).toContainText(/工位/);
     await expect(page.getByTestId("working-who")).not.toHaveText(UUID_RE);
     await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
@@ -124,11 +125,12 @@ test.describe("Decision-maker shell", () => {
     await expect(page.getByTestId("gate-inbox")).toHaveCount(1);
     await expect(page.getByTestId("inbox-empty")).toHaveText("此刻没有待办。安静是正常的。");
 
-    const ready = await seedDeliverReady(baseURL!, "本周交付包");
+    const ready = await seedDeliverReady(baseURL!, "交付季度报告");
     await page.reload();
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
     await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
-    await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
+    await expect(page.getByTestId("gate-title")).toHaveText("交付季度报告");
+    await expect(page.getByTestId("gate-title")).not.toHaveText(DIRTY_TITLE_RE);
     await expect(page.getByTestId("working-who")).toHaveText("交付工位 · 协调人");
     await expect(page.getByTestId("working-who")).not.toHaveText(UUID_RE);
     await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");
@@ -175,10 +177,10 @@ test.describe("Decision-maker shell", () => {
     await page.screenshot({ path: join(evidenceDir, "office_empty_quiet.png"), fullPage: true });
     await page.screenshot({ path: join(shotDir, "office_empty_quiet.png"), fullPage: true });
 
-    await seedDeliverReady(baseURL!, "本周交付包");
+    await seedDeliverReady(baseURL!, "交付季度报告");
     await page.goto("/inbox");
-    await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
-    await expect(page.getByTestId("gate-title")).not.toHaveText(/e2e pending|pending g-/i);
+    await expect(page.getByTestId("gate-title")).toHaveText("交付季度报告");
+    await expect(page.getByTestId("gate-title")).not.toHaveText(DIRTY_TITLE_RE);
     await expect(page.getByTestId("gate-title")).not.toHaveText(UUID_RE);
     await expect(page.getByTestId("working-who")).toHaveText("交付工位 · 协调人");
     await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");
@@ -192,5 +194,31 @@ test.describe("Decision-maker shell", () => {
     await expect(page.getByTestId("inbox-empty")).toBeVisible();
     await page.screenshot({ path: join(evidenceDir, "inbox_after_pass_quiet.png"), fullPage: true });
     await page.screenshot({ path: join(shotDir, "inbox_after_pass_quiet.png"), fullPage: true });
+
+    const gap = await seedAuthorityReady(baseURL!, "destructive_delete", "发版检查");
+    const missing = gap.gate?.ready_result?.missing ?? [];
+    expect(missing.length).toBeGreaterThan(0);
+    await page.goto("/inbox");
+    await expect(page.getByTestId("gate-card")).toHaveCount(1);
+    await expect(page.getByTestId("gate-title")).toHaveText("发版检查");
+    await expect(page.getByTestId("gate-title")).not.toHaveText(DIRTY_TITLE_RE);
+    await expect(page.getByTestId("missing-title")).toHaveText("还差");
+    await expect(page.getByTestId("missing-item").first()).toBeVisible();
+    for (const entry of missing) {
+      await expect(page.getByTestId("card-face")).not.toContainText(entry);
+    }
+    await expect(page.getByTestId("decide-pass")).toBeDisabled();
+    await page.screenshot({ path: join(evidenceDir, "inbox_one_card_with_gap.png"), fullPage: true });
+    await page.screenshot({ path: join(shotDir, "inbox_one_card_with_gap.png"), fullPage: true });
+  });
+
+  test("inbox_card_title_rejects_seed_ids", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedDeliverReady(baseURL!, "e2e pending g-1789786901848-a5tcbi");
+    await page.goto("/inbox");
+    const title = page.getByTestId("gate-title");
+    await expect(title).not.toHaveText(DIRTY_TITLE_RE);
+    await expect(title).not.toHaveText(UUID_RE);
+    await expect(title).toHaveText(/交付验收|未命名目标/);
   });
 });

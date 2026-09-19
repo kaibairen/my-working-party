@@ -166,8 +166,8 @@
     function isHumanTitle(name) {
       const raw = String(name || "").trim();
       if (!raw || UUID_RE.test(raw)) return false;
-      if (/^e2e\b/i.test(raw)) return false;
-      if (/pending g-/i.test(raw)) return false;
+      if (/e2e/i.test(raw)) return false;
+      if (/\bg-[a-z0-9-]+/i.test(raw)) return false;
       return true;
     }
     function cardTitle(g, goal) {
