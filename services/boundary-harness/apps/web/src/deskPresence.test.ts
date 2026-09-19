@@ -76,6 +76,31 @@ describe("desk presence TTL paint", () => {
     expect(painted.presence).toBe("idle");
   });
 
+  it("reads last_heartbeat_at and source=heartbeat as #15 aliases", () => {
+    const painted = paintDeskPresence({
+      presence: "idle",
+      last_heartbeat_at: "2026-09-19T12:59:30.000Z",
+      source: "heartbeat",
+      heartbeat_ttl_seconds: 90,
+      nowMs: now,
+    });
+    expect(painted.last_seen_at).toBe("2026-09-19T12:59:30.000Z");
+    expect(painted.heartbeat_fresh).toBe(true);
+    expect(painted.ttl_seconds).toBe(90);
+  });
+
+  it("treats source=pool_seed as not-fresh when a timestamp is present", () => {
+    const painted = paintDeskPresence({
+      presence: "busy",
+      last_seen_at: "2026-09-19T12:59:30.000Z",
+      source: "pool_seed",
+      ttl_seconds: 90,
+      nowMs: now,
+    });
+    expect(painted.presence).toBe("idle");
+    expect(painted.stale).toBe(true);
+  });
+
   it("polls no slower than ttl", () => {
     expect(pollIntervalMs(90)).toBe(90_000);
     expect(pollIntervalMs(30)).toBe(30_000);

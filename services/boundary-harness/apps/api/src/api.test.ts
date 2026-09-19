@@ -428,6 +428,7 @@ describe("domain API", () => {
         expect.objectContaining({
           presence: expect.stringMatching(/^(busy|waiting_evidence|idle)$/),
           last_seen_at: null,
+          last_heartbeat_at: null,
           heartbeat_fresh: false,
           ttl_seconds: 90,
         }),

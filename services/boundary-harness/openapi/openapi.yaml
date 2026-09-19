@@ -214,10 +214,15 @@ paths:
                         presence: { type: string, enum: [busy, waiting_evidence, idle] }
                         status: { type: string }
                         last_heartbeat: { type: string, nullable: true }
+                        last_seen_at: { type: string, nullable: true }
+                        last_heartbeat_at: { type: string, nullable: true }
+                        heartbeat_fresh: { type: boolean }
                         source: { type: string, enum: [pool_seed, heartbeat] }
+                        ttl_seconds: { type: integer }
                   readonly: { type: boolean }
                   stub: { type: boolean }
                   heartbeat_ttl_seconds: { type: integer }
+                  ttl_seconds: { type: integer }
         "403":
           description: forbidden
   /v1/agents/heartbeat:

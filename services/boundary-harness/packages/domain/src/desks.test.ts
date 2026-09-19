@@ -42,6 +42,7 @@ describe("listDesks presence projection", () => {
     expect(noop?.source).toBe("heartbeat");
     expect(noop?.last_heartbeat).toBe("2026-09-19T05:00:00.000Z");
     expect(noop?.last_seen_at).toBe("2026-09-19T05:00:00.000Z");
+    expect(noop?.last_heartbeat_at).toBe("2026-09-19T05:00:00.000Z");
     expect(noop?.heartbeat_fresh).toBe(true);
     nowMs += 91_000;
     const expired = listDesks(harness, dm);

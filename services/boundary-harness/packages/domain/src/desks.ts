@@ -129,6 +129,7 @@ function deskRow(input: {
     status: DESK_STATUS[input.presence],
     last_heartbeat: input.last_heartbeat,
     last_seen_at: input.last_heartbeat,
+    last_heartbeat_at: input.last_heartbeat,
     heartbeat_fresh: input.source === "heartbeat" && Boolean(input.last_heartbeat),
     source: input.source,
     ttl_seconds: input.ttl_seconds ?? HEARTBEAT_TTL_SECONDS,

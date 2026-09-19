@@ -229,25 +229,30 @@
     let deskPollTimer = 0;
     let pendingHumanFill = null;
     function lastSeenAt(d) {
-      const raw = d && (d.last_seen_at || d.last_heartbeat);
+      const raw = d && (d.last_seen_at || d.last_heartbeat || d.last_heartbeat_at);
       if (!raw) return null;
       return Number.isFinite(Date.parse(raw)) ? raw : null;
+    }
+    function deskTtlSeconds(d, envelopeTtl) {
+      const ttl = Number(d && (d.ttl_seconds || d.heartbeat_ttl_seconds || envelopeTtl));
+      return Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL;
     }
     function isHeartbeatStale(d, nowMs) {
       const seen = lastSeenAt(d);
       if (!seen) return false;
-      const ttl = Number(d && d.ttl_seconds);
-      const window = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL;
+      const window = deskTtlSeconds(d);
       const age = ((nowMs || Date.now()) - Date.parse(seen)) / 1000;
-      return d.heartbeat_fresh === false || !Number.isFinite(age) || age > window;
+      const freshFlag = (d && typeof d.heartbeat_fresh === "boolean")
+        ? d.heartbeat_fresh
+        : (d && d.source != null ? d.source === "heartbeat" : undefined);
+      return freshFlag === false || !Number.isFinite(age) || age > window;
     }
     function paintDeskPresence(d) {
       const api = (d && (d.presence === "busy" || d.presence === "waiting_evidence" || d.presence === "idle"))
         ? d.presence
         : "idle";
       const stale = isHeartbeatStale(d);
-      const ttl = Number(d && d.ttl_seconds);
-      const ttlSeconds = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL;
+      const ttlSeconds = deskTtlSeconds(d);
       if (api === "busy" && stale) {
         return { presence: "idle", status: "空闲", stale: true, fresh: false, last_seen_at: lastSeenAt(d), ttl_seconds: ttlSeconds };
       }
@@ -290,7 +295,7 @@
     function renderRoster(desks, envelopeTtl) {
       const root = $("roster");
       const rows = (desks || []).map((d) => {
-        const painted = paintDeskPresence({ ...d, ttl_seconds: d.ttl_seconds || envelopeTtl || DEFAULT_TTL });
+        const painted = paintDeskPresence({ ...d, ttl_seconds: deskTtlSeconds(d, envelopeTtl) });
         const name = String(d.name || "同事");
         const avatar = String(d.avatar || name.slice(0, 1));
         return `<li class="desk-row" data-testid="desk-row" data-presence="${esc(painted.presence)}" data-fresh="${painted.fresh ? "true" : "false"}" data-ttl="${painted.ttl_seconds}" data-last-seen="${esc(painted.last_seen_at || "")}" draggable="false">

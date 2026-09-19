@@ -19,16 +19,45 @@ GET /v1/office/desks/presence
 GET /v1/desks
 ```
 
-The shell prefers `/v1/office/desks/presence` and falls back to `/v1/desks` (#15 SoT). Paint:
+The shell prefers `/v1/office/desks/presence` and falls back to `/v1/desks` (#15 SoT for mcp entry + overlapping desk/heartbeat shapes; #16 closed/deferred). Adapter is thin: read aliases, do not invent assign/dispatch.
 
-| Field | UI |
-|-------|----|
-| `presence` | Domain value `busy` \| `waiting_evidence` \| `idle` → 在忙 / 等证据 / 空闲 |
-| `last_seen_at` / `last_heartbeat` | Chinese relative time |
-| `ttl_seconds` / envelope `heartbeat_ttl_seconds` | Poll interval ≤ this window (default 90s) |
-| `heartbeat_fresh` | 心跳新鲜 / 心跳过期 / 尚无心跳 (`source=heartbeat` ⇒ fresh) |
+**Expected JSON** (merged #15 + polish aliases). Clients must accept any of the timestamp / TTL names:
 
-**TTL choice:** if `heartbeat_fresh === false` **or** `last_seen_at` is older than `ttl_seconds`, **never** paint `busy`. Prefer the API presence after TTL (`waiting_evidence` \| `idle`). Missing heartbeat keeps the work projection.
+```json
+{
+  "desks": [
+    {
+      "id": "pool_noop",
+      "name": "交付同事",
+      "avatar": "交",
+      "presence": "idle",
+      "status": "空闲",
+      "last_heartbeat": null,
+      "last_seen_at": null,
+      "last_heartbeat_at": null,
+      "heartbeat_fresh": false,
+      "source": "pool_seed",
+      "ttl_seconds": 90
+    }
+  ],
+  "readonly": true,
+  "hitl": "待我拍板",
+  "stub": true,
+  "heartbeat_ttl_seconds": 90,
+  "ttl_seconds": 90
+}
+```
+
+Live overlay after `POST /v1/agents/heartbeat` (TTL 90s default): `source=heartbeat`, timestamps set, `heartbeat_fresh=true`. Expired beats fall back to `source=pool_seed` and timestamps `null` — the work `presence` stays.
+
+| Field | Aliases the adapter accepts | UI |
+|-------|-----------------------------|----|
+| `presence` | — | `busy` \| `waiting_evidence` \| `idle` → 在忙 / 等证据 / 空闲 |
+| `last_seen_at` | `last_heartbeat`, `last_heartbeat_at` | Chinese relative time |
+| `ttl_seconds` | envelope / row `heartbeat_ttl_seconds` | Poll interval ≤ this window (default 90s) |
+| `heartbeat_fresh` | `source=heartbeat` when the boolean is omitted | 心跳新鲜 / 心跳过期 / 尚无心跳 |
+
+**TTL choice:** if `heartbeat_fresh === false` **or** last_seen is older than `ttl_seconds`, **never** paint `busy`. Prefer the API presence after TTL (`waiting_evidence` \| `idle`). Missing heartbeat keeps the work projection.
 
 Roster stays read-only: no owner write, no dispatch.
 

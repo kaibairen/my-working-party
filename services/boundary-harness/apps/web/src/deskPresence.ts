@@ -14,16 +14,25 @@ export type DeskPresenceInput = {
   presence?: string | null;
   last_seen_at?: string | null;
   last_heartbeat?: string | null;
+  last_heartbeat_at?: string | null;
   heartbeat_fresh?: boolean | null;
+  source?: string | null;
   ttl_seconds?: number | null;
+  heartbeat_ttl_seconds?: number | null;
   nowMs?: number;
 };
 
+/** Thin alias: #15 last_heartbeat / last_seen_at; also last_heartbeat_at if a later rebase ships it. */
 export function lastSeenAt(desk: DeskPresenceInput): string | null {
-  const raw = desk.last_seen_at ?? desk.last_heartbeat ?? null;
+  const raw = desk.last_seen_at ?? desk.last_heartbeat ?? desk.last_heartbeat_at ?? null;
   if (!raw) return null;
   const ts = Date.parse(raw);
   return Number.isFinite(ts) ? raw : null;
+}
+
+export function deskTtlSeconds(desk: DeskPresenceInput): number {
+  const ttl = Number(desk.ttl_seconds ?? desk.heartbeat_ttl_seconds);
+  return Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_DESK_TTL_SECONDS;
 }
 
 /**
@@ -34,12 +43,17 @@ export function lastSeenAt(desk: DeskPresenceInput): string | null {
 export function isHeartbeatStale(desk: DeskPresenceInput): boolean {
   const seen = lastSeenAt(desk);
   if (!seen) return false;
-  const ttl = Number(desk.ttl_seconds);
-  const window = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_DESK_TTL_SECONDS;
+  const window = deskTtlSeconds(desk);
   const now = desk.nowMs ?? Date.now();
   const ageSec = (now - Date.parse(seen)) / 1000;
   const olderThanTtl = !Number.isFinite(ageSec) || ageSec > window;
-  return desk.heartbeat_fresh === false || olderThanTtl;
+  const freshFlag =
+    typeof desk.heartbeat_fresh === "boolean"
+      ? desk.heartbeat_fresh
+      : desk.source == null
+        ? undefined
+        : desk.source === "heartbeat";
+  return freshFlag === false || olderThanTtl;
 }
 
 export function normalizePresence(raw: string | null | undefined): DeskPresence {
@@ -61,8 +75,7 @@ export function paintDeskPresence(desk: DeskPresenceInput): {
 } {
   const api = normalizePresence(desk.presence);
   const stale = isHeartbeatStale(desk);
-  const ttl = Number(desk.ttl_seconds);
-  const ttl_seconds = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_DESK_TTL_SECONDS;
+  const ttl_seconds = deskTtlSeconds(desk);
   const seen = lastSeenAt(desk);
   if (api === "busy" && stale) {
     const fallback: DeskPresence = "idle";

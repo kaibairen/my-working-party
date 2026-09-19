@@ -14,7 +14,7 @@ Playwright: `apps/web/e2e/gate-inbox/office-home.spec.ts` (`office_home_p0_30s`,
 
 Frozen names: `office_home_not_inbox_wall` · `office_no_assign_desk` · `office_no_drag_dispatch` · `office_no_start_run_button` · `fill_board_not_dispatch_console` · `inbox_is_drawer_not_home`.
 
-P0 linkage (#15): empty slot **我来填**. Roster shows `presence` / `last_heartbeat` (`last_seen_at`) / `ttl_seconds` / `heartbeat_fresh` when a bot posted `/v1/agents/heartbeat` within TTL (90s). Stale heartbeat is never painted 在忙. Still not dispatch.
+P0 linkage (#15): empty slot **我来填**. This Frontend PR is polish only (form + TTL paint). Roster shows `presence` / `last_heartbeat` (`last_seen_at` / `last_heartbeat_at`) / `ttl_seconds` / `heartbeat_fresh` when a bot posted `/v1/agents/heartbeat` within TTL (90s). Stale heartbeat is never painted 在忙. Still not dispatch. Expected JSON: [FRONTEND_OFFICE_P0_SMOKE.md](../FRONTEND_OFFICE_P0_SMOKE.md).
 
 Frozen Playwright names stay in `office-p0-anti.spec.ts`. Smoke: [FRONTEND_OFFICE_P0_SMOKE.md](../FRONTEND_OFFICE_P0_SMOKE.md) (`127.0.0.1:8080`).
 
