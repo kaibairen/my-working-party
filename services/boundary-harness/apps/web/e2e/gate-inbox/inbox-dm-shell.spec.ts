@@ -90,7 +90,7 @@ test.describe("E2E decision-maker shell", () => {
     const rows = page.getByTestId("desk-row");
     await expect(rows).toHaveCount(2);
     await expect(page.getByTestId("desk-name")).toHaveText(["交付同事", "Cursor 同事"]);
-    await expect(page.getByTestId("desk-status")).toContainText(/在忙|等证据|空闲/);
+    await expect(page.getByTestId("desk-status")).toHaveText([/在忙|等证据|空闲/, /在忙|等证据|空闲/]);
     await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "在忙" }) })).toHaveCount(1);
     await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "等证据" }) })).toHaveCount(1);
     await expect(roster.getByRole("button")).toHaveCount(0);
