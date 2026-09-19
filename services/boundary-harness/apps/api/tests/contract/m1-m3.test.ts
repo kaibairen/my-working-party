@@ -60,6 +60,56 @@ describe("M1 Cursor + Dial + Brief + MCP", () => {
     expect(run.body.usage.cursor_lifecycle).toBe("FINISHED");
   });
 
+  it("live_launch_prompt_includes_brief_v1 — dispatched agent receives outcome/constraints/evidence_shape", async () => {
+    let posted: { prompt?: { text?: string } } = {};
+    harness = createHarness({
+      databasePath: ":memory:",
+      adapters: {
+        cursor: createCursorAdapter({
+          apiKey: "live-key",
+          baseUrl: "https://cursor.example",
+          fetchImpl: (async (_url, init) => {
+            posted = JSON.parse(String(init?.body ?? "{}")) as typeof posted;
+            return new Response(JSON.stringify({ id: "ag_live", run_id: "run_live" }), { status: 200 });
+          }) as typeof fetch,
+        }),
+      },
+    });
+    const app = createApp(harness);
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ title: "M0 path", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        brief: {
+          outcome: "working M0",
+          constraints: ["no Cursor raw launch"],
+          evidence_shape: ["summary_md", "artifact_uri"],
+        },
+      }),
+    });
+    const run = await json(app, `/v1/assignments/${asg.body.id}/dispatch`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ idempotency_key: "brief-in-prompt" }),
+    });
+    expect(run.res.status).toBe(201);
+    expect(run.body.external_agent_id).toBe("ag_live");
+    expect(posted.prompt?.text).toContain(`Boundary Harness assignment ${asg.body.id}`);
+    expect(posted.prompt?.text).toContain(`Run: ${run.body.id}`);
+    expect(posted.prompt?.text).toContain("Outcome: working M0");
+    expect(posted.prompt?.text).toContain("no Cursor raw launch");
+    expect(posted.prompt?.text).toContain("Evidence shape: summary_md, artifact_uri");
+    expect(posted.prompt?.text).toContain("Goal: M0 path (deliver)");
+    expect(posted.prompt?.text).not.toMatch(/^(steps|script|must_path|plan|playbook):/m);
+    expect(run.body.usage.launch.prompt).toContain("Outcome: working M0");
+  });
+
   it("idle_neq_ready — IDLE + evidence does not make Gate ready", async () => {
     harness = createHarness({
       databasePath: ":memory:",

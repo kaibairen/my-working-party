@@ -574,7 +574,28 @@ export async function dispatchAssignment(
     updatedAt: ts,
   }).run();
 
-  const result = await adapter.dispatch({ runId, assignmentId, idempotencyKey });
+  const storedBrief = parseJson<{
+    outcome?: string;
+    constraints?: string[];
+    evidence_shape?: string[];
+  }>(assignment.briefJson);
+  const result = await adapter.dispatch({
+    runId,
+    assignmentId,
+    idempotencyKey,
+    ...(adapterName === "cursor"
+      ? {
+          brief: {
+            outcome: storedBrief?.outcome ?? "",
+            constraints: Array.isArray(storedBrief?.constraints) ? storedBrief.constraints : [],
+            evidence_shape: Array.isArray(storedBrief?.evidence_shape)
+              ? storedBrief.evidence_shape
+              : [],
+          },
+          goal: { id: goal.id, title: goal.title, mode: goal.mode },
+        }
+      : {}),
+  });
   const doneAt = h.now();
   h.db
     .update(runs)
@@ -584,7 +605,7 @@ export async function dispatchAssignment(
       externalRunId: result.external_run_id,
       status: result.status,
       usageJson: JSON.stringify(result.usage_json),
-      error: result.error ?? null,
+      error: "error" in result ? result.error ?? null : null,
       updatedAt: doneAt,
     })
     .where(eq(runs.id, runId))

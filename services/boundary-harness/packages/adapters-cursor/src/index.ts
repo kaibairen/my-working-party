@@ -1,10 +1,25 @@
 export type CursorLifecycle = "FINISHED" | "IDLE";
 
+/** BriefV1 subset only — never steps/script/must_path. */
+export type CursorBrief = {
+  outcome: string;
+  constraints: string[];
+  evidence_shape: string[];
+};
+
+export type CursorGoalRef = {
+  id: string;
+  title: string;
+  mode: string;
+};
+
 export type CursorDispatchInput = {
   runId: string;
   assignmentId: string;
   idempotencyKey?: string;
   lifecycle?: CursorLifecycle;
+  brief?: CursorBrief;
+  goal?: CursorGoalRef;
 };
 
 export type CursorLaunchRecord = {
@@ -15,6 +30,8 @@ export type CursorLaunchRecord = {
   lifecycle: CursorLifecycle;
   mode: "fixture" | "stub" | "live";
   recorded_at: string;
+  prompt: string;
+  source?: { repository: string; ref?: string };
 };
 
 export type CursorDispatchResult = {
@@ -34,7 +51,64 @@ export type CursorAdapterOpts = {
   stub?: boolean;
   /** Default lifecycle for fixture/stub (FINISHED ≠ IDLE). */
   lifecycle?: CursorLifecycle;
+  /** Optional live source.repository (CURSOR_REPOSITORY). */
+  repository?: string;
+  /** Optional live source.ref (CURSOR_REF). */
+  ref?: string;
 };
+
+const FORBIDDEN_PROMPT_KEYS = [
+  "steps",
+  "script",
+  "must_path",
+  "plan",
+  "playbook",
+  "workflow",
+  "procedure",
+  "ordered_steps",
+  "runbook",
+  "howto",
+  "must_files",
+] as const;
+
+/**
+ * Launch text for a dispatched Cloud Agent. BriefV1 fields only so the
+ * executor can act without a second hop to the parent harness DB.
+ */
+export function buildCursorLaunchPrompt(input: CursorDispatchInput): string {
+  const lines = [`Boundary Harness assignment ${input.assignmentId}`, `Run: ${input.runId}`];
+  if (input.goal) {
+    lines.push(`Goal: ${input.goal.title} (${input.goal.mode})`);
+    lines.push(`Goal id: ${input.goal.id}`);
+  }
+  if (input.brief) {
+    lines.push(`Outcome: ${input.brief.outcome}`);
+    if (input.brief.constraints.length > 0) {
+      lines.push("Constraints:");
+      for (const c of input.brief.constraints) lines.push(`- ${c}`);
+    }
+    if (input.brief.evidence_shape.length > 0) {
+      lines.push(`Evidence shape: ${input.brief.evidence_shape.join(", ")}`);
+    }
+  }
+  lines.push(
+    "Complete the outcome. Chat is not source of truth. Attach evidence matching evidence_shape.",
+  );
+  const text = lines.join("\n");
+  for (const key of FORBIDDEN_PROMPT_KEYS) {
+    if (new RegExp(`(?:^|\\n)${key}\\s*:`, "i").test(text)) {
+      throw new Error(`cursor_launch_prompt_forbidden_field:${key}`);
+    }
+  }
+  return text;
+}
+
+function liveSource(opts: CursorAdapterOpts): { repository: string; ref?: string } | undefined {
+  const repository = (opts.repository ?? process.env.CURSOR_REPOSITORY ?? "").trim();
+  if (!repository) return undefined;
+  const ref = (opts.ref ?? process.env.CURSOR_REF ?? "").trim();
+  return ref ? { repository, ref } : { repository };
+}
 
 /**
  * M1 Cursor adapter. Real HTTP client is behind this interface.
@@ -59,6 +133,8 @@ export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
     async dispatch(input: CursorDispatchInput): Promise<CursorDispatchResult> {
       const lifecycle: CursorLifecycle = input.lifecycle ?? defaultLifecycle;
       const recorded_at = new Date().toISOString();
+      const prompt = buildCursorLaunchPrompt(input);
+      const source = liveSource(opts);
       const launch: CursorLaunchRecord = {
         url: `${baseUrl}/v0/agents`,
         assignmentId: input.assignmentId,
@@ -67,6 +143,8 @@ export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
         lifecycle,
         mode,
         recorded_at,
+        prompt,
+        ...(source ? { source } : {}),
       };
       launches.push(launch);
 
@@ -88,6 +166,11 @@ export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
         };
       }
 
+      const payload: Record<string, unknown> = {
+        prompt: { text: prompt },
+      };
+      if (source) payload.source = source;
+
       const res = await fetchImpl(`${baseUrl}/v0/agents`, {
         method: "POST",
         headers: {
@@ -95,9 +178,7 @@ export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
           "content-type": "application/json",
           "idempotency-key": input.idempotencyKey ?? input.runId,
         },
-        body: JSON.stringify({
-          prompt: { text: `Boundary Harness assignment ${input.assignmentId}` },
-        }),
+        body: JSON.stringify(payload),
       });
       const text = await res.text();
       let body: Record<string, unknown> = {};
