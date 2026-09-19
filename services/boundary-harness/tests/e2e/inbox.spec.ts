@@ -25,6 +25,7 @@ async function seedReadyGate(baseURL: string) {
     "content-type": "application/json",
     "x-harness-role": "coordinator",
     "x-harness-actor": "coord-1",
+    "x-harness-entry": "mcp",
   };
   const goal = await (await fetch(`${baseURL}/v1/goals`, {
     method: "POST",

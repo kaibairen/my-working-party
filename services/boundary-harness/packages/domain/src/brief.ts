@@ -72,6 +72,31 @@ export function parseBriefV1(input: unknown): BriefV1 {
   return parsed.data;
 }
 
+/** Walk a request body and reject BriefV1 forbidden keys anywhere (office create, nested brief). */
+export function assertNoBriefForbiddenKeys(input: unknown): void {
+  const found = new Set<string>();
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+      return;
+    }
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if ((BRIEF_FORBIDDEN_KEYS as readonly string[]).includes(key)) found.add(key);
+      walk(child);
+    }
+  };
+  walk(input);
+  if (found.size > 0) {
+    throw new HarnessError(
+      "brief_forbidden_field",
+      "BriefV1 contains forbidden fields",
+      422,
+      { keys: [...found] },
+    );
+  }
+}
+
 /** Backend canonical name — same validator as parseBriefV1 (HTTP + MCP). */
 export function parseBriefOrThrow(raw: unknown): BriefV1 {
   return parseBriefV1(raw);

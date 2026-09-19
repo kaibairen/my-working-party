@@ -26,6 +26,7 @@ import {
 
 export type CreateGoalInput = {
   title: string;
+  intent?: string | null;
   mode: "explore" | "deliver";
   coordinator_ref?: string | null;
   dispatch_policy?: "coordinator_only" | "human_allowed";
@@ -83,6 +84,7 @@ function publicGoal(row: typeof goals.$inferSelect) {
   return {
     id: row.id,
     title: row.title,
+    intent: row.intent ?? null,
     mode: row.mode,
     dispatch_policy: row.dispatchPolicy,
     coordinator_ref: row.coordinatorRef,
@@ -241,6 +243,7 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
   h.db.insert(goals).values({
     id,
     title: input.title,
+    intent: input.intent?.trim() ? input.intent.trim() : null,
     mode: input.mode,
     dispatchPolicy: input.dispatch_policy ?? "coordinator_only",
     coordinatorRef: input.coordinator_ref,

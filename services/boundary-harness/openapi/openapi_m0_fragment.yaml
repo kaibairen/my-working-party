@@ -56,7 +56,7 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorBody" }
   /v1/assignments/{id}/dispatch:
     post:
-      summary: Create Run; Idempotency-Key; blocked when freeze_active
+      summary: Create Run; Idempotency-Key; blocked when freeze_active. Bot completion write requires x-harness-entry: mcp.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -73,7 +73,7 @@ paths:
               example: { code: freeze_active, message: "Freeze enabled; new dispatch rejected" }
   /v1/runs/{id}/evidence:
     post:
-      summary: Attach evidence (only completion path)
+      summary: Attach evidence (only completion path). Requires x-harness-entry: mcp. attach_evidence ≠ Gate ready.
   /v1/gates:
     get:
       summary: Gate Inbox — GateInstance status=ready
