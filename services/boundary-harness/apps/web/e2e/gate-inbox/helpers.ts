@@ -4,7 +4,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const shotDir = join(dirname(fileURLToPath(import.meta.url)), "../../../../artifacts/screenshots");
+export const evidenceDir = join(dirname(fileURLToPath(import.meta.url)), "../../evidence");
 mkdirSync(shotDir, { recursive: true });
+mkdirSync(evidenceDir, { recursive: true });
 
 export const test = base.extend<{ page: Page }>({
   page: async ({ page: defaultPage }, use) => {

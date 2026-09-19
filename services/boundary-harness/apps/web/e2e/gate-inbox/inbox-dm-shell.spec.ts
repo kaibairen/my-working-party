@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { confirmPass, drainReadyGates, expect, HUMAN_GOAL, JUNK_TITLE_RE, seedDeliverReady, shotDir, test } from "./helpers";
+import { confirmPass, drainReadyGates, evidenceDir, expect, HUMAN_GOAL, JUNK_TITLE_RE, seedDeliverReady, shotDir, test } from "./helpers";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPS_CHROME_RE = /OpenAPI|Health|Outbox|decision_maker|GateInstances|status=ready|M2-preview/i;
@@ -24,6 +24,9 @@ test.describe("E2E decision-maker shell", () => {
     expect(officeHrefs.some((h) => /\/ops|\/health|openapi/i.test(h))).toBe(false);
     assertNoOpsChrome(await page.locator("body").innerText());
     await page.screenshot({ path: join(shotDir, "office_empty_quiet.png"), fullPage: true });
+    await page.screenshot({ path: join(shotDir, "human_office_empty.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "office_empty_quiet.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "human_office_empty.png"), fullPage: true });
 
     await seedDeliverReady(baseURL!);
     await page.goto("/inbox");
@@ -39,6 +42,9 @@ test.describe("E2E decision-maker shell", () => {
     await expect(page.getByTestId("gate-title")).not.toHaveText(JUNK_TITLE_RE);
     await page.screenshot({ path: join(shotDir, "dm_inbox_only.png"), fullPage: true });
     await page.screenshot({ path: join(shotDir, "inbox_one_card_human.png"), fullPage: true });
+    await page.screenshot({ path: join(shotDir, "human_inbox_one_card.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "inbox_one_card_human.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "human_inbox_one_card.png"), fullPage: true });
   });
 
   test("inbox_card_title_not_uuid", async ({ page, baseURL }) => {
@@ -77,5 +83,8 @@ test.describe("E2E decision-maker shell", () => {
     await expect(page.getByTestId("inbox-empty")).toContainText("此刻没有待办。安静是正常的。");
     assertNoOpsChrome(await page.locator("body").innerText());
     await page.screenshot({ path: join(shotDir, "inbox_after_pass_quiet.png"), fullPage: true });
+    await page.screenshot({ path: join(shotDir, "human_inbox_after_pass.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "inbox_after_pass_quiet.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "human_inbox_after_pass.png"), fullPage: true });
   });
 });
