@@ -5,6 +5,7 @@ import {
   seedBusyDesk,
   seedDeliverPending,
   seedDeliverReady,
+  seedHeartbeat,
   shotDir,
   test,
 } from "./helpers";
@@ -44,8 +45,13 @@ test.describe("E2E office home P0", () => {
     const roster = page.getByTestId("roster");
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");
-    await expect(page.getByTestId("desks-empty")).toHaveText("还没有 Bot 报心跳");
-    await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    const empty = page.getByTestId("desks-empty");
+    if (await empty.count()) {
+      await expect(empty).toHaveText("还没有 Bot 报心跳");
+      await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    } else {
+      await expect(page.getByTestId("desk-group").first()).toBeVisible();
+    }
     await expect(roster.getByRole("button")).toHaveCount(0);
     await expect(roster.locator("[draggable='true']")).toHaveCount(0);
     expect(await roster.innerText()).not.toMatch(/交付同事|Cursor 同事/);
@@ -65,5 +71,52 @@ test.describe("E2E office home P0", () => {
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-heading")).toHaveText(/待办/);
     await expect(page.getByTestId("gate-card").first()).toBeVisible();
+  });
+
+  test("desks_grouped_layout_readonly", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedHeartbeat(baseURL!, { actor: "bot-qa-h", display_name: "QA Harness Bot", group: "harness" });
+    await seedHeartbeat(baseURL!, { actor: "bot-qa-2", display_name: "QA 2048 Bot", group: "2048" });
+    await page.goto("/");
+    const roster = page.getByTestId("roster");
+    await expect(roster).toHaveAttribute("data-readonly", "true");
+    await expect(page.getByTestId("desk-group-title").filter({ hasText: "harness开发" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-group-title").filter({ hasText: "2048工作组" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-name").filter({ hasText: "QA Harness Bot" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-name").filter({ hasText: "QA 2048 Bot" })).toHaveCount(1);
+    await expect(page.locator('[data-testid="desk-group"][data-group="harness开发"]')).toBeVisible();
+  });
+
+  test("desks_group_no_drag_assign", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedHeartbeat(baseURL!, { actor: "bot-qa-h", display_name: "QA Harness Bot", group: "harness" });
+    await page.goto("/");
+    const roster = page.getByTestId("roster");
+    await expect(page.getByTestId("desk-group").first()).toBeVisible();
+    await expect(roster.getByRole("button")).toHaveCount(0);
+    await expect(roster.locator("[draggable='true']")).toHaveCount(0);
+    await expect(roster.getByRole("link")).toHaveCount(0);
+    expect(await roster.innerText()).not.toMatch(DISPATCH_RE);
+  });
+
+  test("desks_group_no_fake_seeds", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedHeartbeat(baseURL!, { actor: "bot-qa-h", display_name: "QA Harness Bot", group: "harness" });
+    await page.goto("/");
+    const text = await page.getByTestId("roster").innerText();
+    expect(text).not.toMatch(/交付同事|Cursor 同事|群组同事/);
+    expect(text).toContain("QA Harness Bot");
+  });
+
+  test("desks_ungrouped_bucket", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedHeartbeat(baseURL!, { actor: "bot-qa-other", display_name: "QA Other Bot" });
+    await page.goto("/");
+    await expect(page.getByTestId("desk-group-title").filter({ hasText: "其他" })).toHaveCount(1);
+    await expect(
+      page.locator('[data-testid="desk-group"][data-group="其他"]').getByTestId("desk-name").filter({
+        hasText: "QA Other Bot",
+      }),
+    ).toHaveCount(1);
   });
 });

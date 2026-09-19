@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -63,6 +63,19 @@ describe("Security acceptance case registry", () => {
       "game_2048_score_updates",
       "game_2048_new_game_resets",
     ]);
+  });
+
+  it("registers QA freeze names as Playwright test() titles", () => {
+    const e2eDir = join(here, "../../../web/e2e/gate-inbox");
+    const e2eSrc = readdirSync(e2eDir)
+      .filter((f) => f.endsWith(".spec.ts"))
+      .map((f) => readFileSync(join(e2eDir, f), "utf8"))
+      .join("\n");
+    const frozen = [...DESKS_GROUP_MERGE_GATES, ...GAME_2048_MERGE_GATES];
+    expect(frozen).toHaveLength(8);
+    for (const name of frozen) {
+      expect(e2eSrc, `missing test("${name}") in apps/web/e2e/gate-inbox`).toContain(`test("${name}"`);
+    }
   });
 
   it("does not use forbidden error-code aliases", () => {
