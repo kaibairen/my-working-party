@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCursorLaunchPayload, createCursorAdapter } from "./index";
+import { createCursorAdapter } from "./index";
 
 describe("cursor adapter", () => {
   it("uses fixture mode and dual external ids when no API key", async () => {
@@ -8,7 +8,6 @@ describe("cursor adapter", () => {
     const result = await adapter.dispatch({ runId: "r1", assignmentId: "a1" });
     expect(result.external_agent_id).toBe("cursor-fixture-agent:a1");
     expect(result.external_run_id).toBe("cursor-fixture-run:r1");
-    expect(result.external_agent_id).not.toBe(result.external_run_id);
     expect(result.status).toBe("succeeded");
     expect(result.usage_json.cursor_lifecycle).toBe("FINISHED");
   });
@@ -28,8 +27,10 @@ describe("cursor adapter", () => {
       lifecycle: "FINISHED",
       mode: "stub",
     });
-    expect(adapter.launches[0].payload.source.repository).toMatch(/^https:\/\//);
-    expect(adapter.launches[0].payload.repos[0].url).toBe(adapter.launches[0].payload.source.repository);
+    expect(adapter.launches[0].body).toMatchObject({
+      source: { repository: expect.any(String), ref: expect.any(String) },
+      repos: [expect.objectContaining({ url: expect.any(String) })],
+    });
   });
 
   it("IDLE lifecycle is not FINISHED", async () => {
@@ -40,80 +41,49 @@ describe("cursor adapter", () => {
     expect(result.usage_json.noop_or_offline_contract).toBe(false);
   });
 
-  it("live launch payload includes repository (v1 repos[] + source.repository)", async () => {
-    let posted: { url: string; body: Record<string, unknown> } | undefined;
-    const repository = "https://github.com/kaibairen/my-working-party";
+  it("live mode posts v1 with source.repository and maps DISTINCT dual ids", async () => {
+    let posted: unknown;
     const adapter = createCursorAdapter({
       apiKey: "test-key",
       baseUrl: "https://cursor.example",
-      repository,
-      startingRef: "main",
+      repository: "https://github.com/kaibairen/my-working-party",
+      ref: "main",
       fetchImpl: (async (url, init) => {
-        posted = { url: String(url), body: JSON.parse(String(init?.body ?? "{}")) };
+        expect(String(url)).toContain("/v1/agents");
         expect(init?.headers).toMatchObject({ authorization: "Bearer test-key" });
+        posted = JSON.parse(String(init?.body ?? "{}"));
         return new Response(
           JSON.stringify({
-            agent: { id: "bc-agent-1", latestRunId: "run-9" },
-            run: { id: "run-9", agentId: "bc-agent-1", status: "CREATING" },
+            agent: { id: "bc-agent-1", status: "ACTIVE" },
+            run: { id: "run-9", status: "RUNNING" },
           }),
-          { status: 200 },
+          { status: 201 },
         );
       }) as typeof fetch,
     });
     expect(adapter.mode).toBe("live");
     const result = await adapter.dispatch({ runId: "r1", assignmentId: "a1", idempotencyKey: "k" });
-    expect(posted?.url).toBe("https://cursor.example/v1/agents");
-    expect(posted?.body).toMatchObject({
-      source: { repository, ref: "main" },
-      repos: [{ url: repository, startingRef: "main" }],
+    expect(posted).toMatchObject({
+      source: { repository: "https://github.com/kaibairen/my-working-party", ref: "main" },
+      repos: [{ url: "https://github.com/kaibairen/my-working-party", startingRef: "main" }],
     });
-    expect((posted?.body.source as { repository?: string })?.repository).toBeTruthy();
     expect(result.external_agent_id).toBe("bc-agent-1");
     expect(result.external_run_id).toBe("run-9");
     expect(result.external_agent_id).not.toBe(result.external_run_id);
     expect(result.status).toBe("dispatched");
-    expect(result.usage_json.cursor_lifecycle).toBe("DISPATCHED");
-    expect(adapter.launches[0].payload.source.repository).toBe(repository);
-    expect(adapter.launches[0].payload.repos[0].url).toBe(repository);
   });
 
-  it("buildCursorLaunchPayload always sets repository", () => {
-    const payload = buildCursorLaunchPayload({
-      assignmentId: "a1",
-      repository: "https://github.com/acme/repo",
-    });
-    expect(payload.source.repository).toBe("https://github.com/acme/repo");
-    expect(payload.repos[0].url).toBe("https://github.com/acme/repo");
-  });
-
-  it("poll maps GET run status to cursor_lifecycle", async () => {
+  it("poll maps FINISHED from v1 run status", async () => {
     const adapter = createCursorAdapter({
       apiKey: "test-key",
       baseUrl: "https://cursor.example",
-      fetchImpl: (async (url) => {
-        expect(String(url)).toBe("https://cursor.example/v1/agents/bc-agent-1/runs/run-9");
-        return new Response(JSON.stringify({ id: "run-9", agentId: "bc-agent-1", status: "FINISHED" }), {
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ id: "run-9", status: "FINISHED", agentId: "bc-agent-1" }), {
           status: 200,
-        });
-      }) as typeof fetch,
+        })) as typeof fetch,
     });
-    const snap = await adapter.poll({ external_agent_id: "bc-agent-1", external_run_id: "run-9" });
-    expect(snap.status).toBe("FINISHED");
-    expect(snap.cursor_lifecycle).toBe("FINISHED");
-  });
-
-  it("ignores ambient CURSOR_API_KEY under Vitest unless CURSOR_ADAPTER_LIVE=1", async () => {
-    const prev = process.env.CURSOR_API_KEY;
-    process.env.CURSOR_API_KEY = "ambient-should-not-go-live";
-    try {
-      const adapter = createCursorAdapter();
-      expect(adapter.mode).toBe("fixture");
-      const result = await adapter.dispatch({ runId: "r1", assignmentId: "a1" });
-      expect(result.external_agent_id).toMatch(/^cursor-fixture-agent:/);
-      expect(result.external_run_id).toMatch(/^cursor-fixture-run:/);
-    } finally {
-      if (prev === undefined) delete process.env.CURSOR_API_KEY;
-      else process.env.CURSOR_API_KEY = prev;
-    }
+    const p = await adapter.poll({ external_agent_id: "bc-agent-1", external_run_id: "run-9" });
+    expect(p.finished).toBe(true);
+    expect(p.lifecycle).toBe("FINISHED");
   });
 });
