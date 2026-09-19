@@ -7,7 +7,9 @@ import { callTool, listTools } from "../../../mcp-server/src/index";
 import { createMcpHttpApp } from "../../../mcp-server/src/http-proxy";
 import { createApp } from "../../src/app";
 
-const sopPath = join(dirname(fileURLToPath(import.meta.url)), "../../../../docs/DOGFOOD_GROKBOT_MCP_SOP.md");
+const here = dirname(fileURLToPath(import.meta.url));
+const sopPath = join(here, "../../../../docs/DOGFOOD_GROKBOT_MCP_SOP.md");
+const officeHtml = readFileSync(join(here, "../../src/office.html"), "utf8");
 
 const mcpHeaders = (role: string, actor = role) => ({
   "content-type": "application/json",
@@ -197,6 +199,164 @@ describe("P0 linkage contracts", () => {
     expect(live.body.desks[0].id).toBe("agent:bot-deliver");
     expect(live.body.desks[0].source).toBe("heartbeat");
     expect(JSON.stringify(live.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
+    expect(live.body.desks[0].group).toBe("其他");
+    expect(live.body.groups).toEqual([
+      expect.objectContaining({ name: "其他", desks: [expect.objectContaining({ name: "周报 Bot" })] }),
+    ]);
+  });
+
+  it("desks_grouped_layout_readonly", async () => {
+    const { app } = setup();
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-harness"),
+      body: JSON.stringify({ display_name: "Harness Bot", group: "harness开发" }),
+    });
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-2048"),
+      body: JSON.stringify({ display_name: "2048 Bot", section: "2048" }),
+    });
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(live.body.readonly).toBe(true);
+    expect(live.body.groups.map((g: { name: string }) => g.name)).toEqual(["harness开发", "2048工作组"]);
+    expect(live.body.groups.every((g: { desks: unknown[] }) => g.desks.length > 0)).toBe(true);
+    expect(live.body.groups.some((g: { name: string }) => g.name === "其他")).toBe(false);
+    expect(officeHtml).toContain("desk-group");
+    expect(officeHtml).toContain("desk-group-title");
+    expect(officeHtml).toContain('data-readonly="true"');
+  });
+
+  it("desks_group_no_drag_assign", async () => {
+    const { app } = setup();
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-harness"),
+      body: JSON.stringify({ display_name: "Harness Bot", group: "harness" }),
+    });
+    const write = await app.request("/v1/desks", {
+      method: "POST",
+      headers: mcpHeaders("decision_maker", "you"),
+      body: JSON.stringify({ owner: "you", group: "harness开发" }),
+    });
+    expect(write.status).toBe(404);
+    const assign = await app.request("/v1/desks/agent:bot-harness/assign", {
+      method: "POST",
+      headers: mcpHeaders("decision_maker", "you"),
+      body: "{}",
+    });
+    expect(assign.status).toBe(404);
+    const listed = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(listed.body.readonly).toBe(true);
+    expect(officeHtml).not.toContain('draggable="true"');
+    expect(officeHtml).not.toMatch(/指派给|拖到工位|开始跑/);
+    expect(officeHtml).toContain("desk-group");
+  });
+
+  it("desks_group_no_fake_seeds", async () => {
+    const { app } = setup();
+    const empty = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(empty.body.desks).toEqual([]);
+    expect(JSON.stringify(empty.body)).not.toMatch(/交付同事|Cursor 同事/);
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-harness"),
+      body: JSON.stringify({ display_name: "Harness Bot", group: "harness开发" }),
+    });
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(live.body.desks.map((d: { name: string }) => d.name)).toEqual(["Harness Bot"]);
+    expect(live.body.desks.every((d: { source: string }) => d.source === "heartbeat")).toBe(true);
+    expect(JSON.stringify(live.body)).not.toMatch(/交付同事|Cursor 同事|群组同事/);
+    const dmFlag = await json(app, "/v1/desks?include_pools=1", { headers: mcpHeaders("decision_maker", "you") });
+    expect(dmFlag.body.include_pools).toBe(false);
+    expect(dmFlag.body.desks.some((d: { source: string }) => d.source === "pool_seed")).toBe(false);
+    expect(JSON.stringify(dmFlag.body)).not.toMatch(/交付同事|Cursor 同事/);
+  });
+
+  it("desks_ungrouped_bucket", async () => {
+    const { app } = setup();
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-loose"),
+      body: JSON.stringify({ display_name: "闲逛 Bot" }),
+    });
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-harness"),
+      body: JSON.stringify({ display_name: "Harness Bot", group: "harness" }),
+    });
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(live.body.desks.find((d: { id: string }) => d.id === "agent:bot-loose").group).toBe("其他");
+    expect(live.body.groups.map((g: { name: string }) => g.name)).toEqual(["harness开发", "其他"]);
+    expect(live.body.groups.find((g: { name: string }) => g.name === "其他")?.desks.map((d: { name: string }) => d.name)).toEqual([
+      "闲逛 Bot",
+    ]);
+    const onlyGrouped = await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-loose"),
+      body: JSON.stringify({ display_name: "闲逛 Bot", group: "2048" }),
+    });
+    expect(onlyGrouped.body.group).toBe("2048工作组");
+    const after = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(after.body.groups.map((g: { name: string }) => g.name)).toEqual(["harness开发", "2048工作组"]);
+    expect(after.body.groups.some((g: { name: string }) => g.name === "其他")).toBe(false);
+  });
+
+  it("fill_slots_pool_labels_not_colleague", async () => {
+    const { app } = setup();
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        title: "2048 可玩页",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        intent: "做一个能玩的 2048",
+      }),
+    });
+    await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "做一个能玩的 2048", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    const noop = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    expect(noop.body.slots[0].filler).toBe("执行池 · noop");
+    expect(noop.body.slots[0].filler).not.toMatch(/同事|Bot 填 ·/);
+    expect(JSON.stringify(noop.body.slots.map((s: { filler: string }) => s.filler))).not.toMatch(
+      /交付同事|Cursor 同事|Bot 填 ·/,
+    );
+
+    const cursorGoal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        title: "Cursor 池标签",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        intent: "池名不能像同事",
+      }),
+    });
+    await json(app, `/v1/goals/${cursorGoal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        brief: { outcome: "池名不能像同事", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    const cursor = await json(app, `/v1/goals/${cursorGoal.body.id}/assignments`, {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    expect(cursor.body.slots[0].filler).toBe("执行池 · Cursor");
+    expect(cursor.body.slots[0].filler).not.toMatch(/同事|Bot 填 ·/);
+    expect(JSON.stringify(cursor.body.slots.map((s: { filler: string }) => s.filler))).not.toMatch(
+      /交付同事|Cursor 同事|Bot 填 ·/,
+    );
   });
 
   it("heartbeat_ttl_expiry_clears_row", async () => {

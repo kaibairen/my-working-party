@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2048 · Boundary Harness</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b0f12; --card:#141b22; --line:#243040; --ink:#e8eef4; --muted:#8b98a8; --ok:#3dd68c; --tile:#1d2a36; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font: 16px/1.5 ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif; background: radial-gradient(1200px 600px at 50% -10%, #1a2733 0%, var(--bg) 55%); color: var(--ink); }
+    main { max-width: 480px; margin: 0 auto; padding: 28px 20px 64px; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    .lede { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+    .bar { display: flex; gap: 10px; align-items: stretch; margin-bottom: 16px; }
+    .score { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .score span { display: block; color: var(--muted); font-size: 12px; }
+    .score strong { font-size: 22px; }
+    button { font: inherit; font-weight: 650; border-radius: 12px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 10px 14px; cursor: pointer; }
+    .board { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #0c1218; border: 1px solid var(--line); border-radius: 16px; padding: 10px; aspect-ratio: 1; }
+    .cell { border-radius: 10px; background: var(--tile); display: grid; place-items: center; font-weight: 750; font-size: clamp(18px, 6vw, 32px); color: var(--ink); }
+    .cell[data-v="0"] { color: transparent; }
+    .cell[data-v="2"] { background: #2a3542; }
+    .cell[data-v="4"] { background: #314155; }
+    .cell[data-v="8"] { background: #8a5a2b; }
+    .cell[data-v="16"] { background: #b45a24; }
+    .cell[data-v="32"] { background: #c4472c; }
+    .cell[data-v="64"] { background: #d1322a; }
+    .cell[data-v="128"] { background: #c9a227; font-size: clamp(16px, 5vw, 26px); }
+    .cell[data-v="256"] { background: #d4ae18; color: #1a1404; font-size: clamp(16px, 5vw, 26px); }
+    .cell[data-v="512"] { background: #e0c04a; color: #1a1404; font-size: clamp(16px, 5vw, 24px); }
+    .cell[data-v="1024"], .cell[data-v="2048"] { background: #f5c26b; color: #1a1404; font-size: clamp(14px, 4.4vw, 20px); }
+    .overlay { position: absolute; inset: 0; border-radius: 16px; background: rgba(8,12,16,.72); display: none; place-items: center; text-align: center; padding: 20px; }
+    .overlay.show { display: grid; }
+    .overlay h2 { margin: 0 0 8px; }
+    .hint { color: var(--muted); font-size: 13px; margin: 14px 0 0; }
+    a { color: #8cb4ff; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>2048</h1>
+    <p class="lede">方向键或 WASD。合并相同数字。这是 Harness dogfood 产物，不是办公室派工台。</p>
+    <div class="bar">
+      <div class="score">分数 <strong id="score" data-testid="score">0</strong></div>
+      <div class="score">最高 <strong id="best" data-testid="best">0</strong></div>
+      <button type="button" id="new-game" data-testid="new-game">新游戏</button>
+    </div>
+    <div class="board" id="board" data-testid="board" tabindex="0">
+      <div class="overlay" id="overlay" data-testid="overlay">
+        <div>
+          <h2 id="overlay-title">结束</h2>
+          <p id="overlay-body"></p>
+          <button type="button" id="again">再来一局</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint">本地打开：用 Harness API <code>/examples/2048/</code>，或在本目录起静态服务。映射见 <a href="./README.md">README</a>。</p>
+  </main>
+  <script type="module">
+    import { addRandomTile, canMove, hasWon, moveBoard, startBoard } from "./board.js";
+
+    const KEY = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", a: "left", d: "right", w: "up", s: "down" };
+    const BEST_KEY = "harness-2048-best";
+    const boardEl = document.getElementById("board");
+    const overlay = document.getElementById("overlay");
+    let board = startBoard();
+    let score = 0;
+    let won = false;
+    let over = false;
+
+    function best() {
+      return Number(localStorage.getItem(BEST_KEY) || 0) || 0;
+    }
+    function setBest(n) {
+      if (n > best()) localStorage.setItem(BEST_KEY, String(n));
+    }
+    function render() {
+      [...boardEl.querySelectorAll(".cell")].forEach((el) => el.remove());
+      for (const row of board) {
+        for (const n of row) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.dataset.v = String(n);
+          cell.dataset.testid = "tile";
+          cell.textContent = n ? String(n) : "";
+          boardEl.appendChild(cell);
+        }
+      }
+      document.getElementById("score").textContent = String(score);
+      document.getElementById("best").textContent = String(best());
+    }
+    function showOverlay(title, body) {
+      document.getElementById("overlay-title").textContent = title;
+      document.getElementById("overlay-body").textContent = body;
+      overlay.classList.add("show");
+    }
+    function reset() {
+      board = startBoard();
+      score = 0;
+      won = false;
+      over = false;
+      overlay.classList.remove("show");
+      render();
+      boardEl.focus();
+    }
+    function play(dir) {
+      if (!dir || over) return;
+      const result = moveBoard(board, dir);
+      if (!result.moved) return;
+      board = addRandomTile(result.board).board;
+      score += result.score;
+      setBest(score);
+      render();
+      if (!won && hasWon(board)) {
+        won = true;
+        showOverlay("到 2048 了", "可以继续玩，或开新游戏。");
+        return;
+      }
+      if (!canMove(board)) {
+        over = true;
+        showOverlay("没有可合并的格子", "开一局新的。");
+      }
+    }
+    document.addEventListener("keydown", (e) => {
+      const dir = KEY[e.key] || KEY[e.key.toLowerCase()];
+      if (!dir) return;
+      e.preventDefault();
+      if (overlay.classList.contains("show") && won && !over) overlay.classList.remove("show");
+      play(dir);
+    });
+    document.getElementById("new-game").onclick = reset;
+    document.getElementById("again").onclick = reset;
+    let touchX = 0, touchY = 0;
+    boardEl.addEventListener("touchstart", (e) => {
+      touchX = e.changedTouches[0].clientX;
+      touchY = e.changedTouches[0].clientY;
+    }, { passive: true });
+    boardEl.addEventListener("touchend", (e) => {
+      const dx = e.changedTouches[0].clientX - touchX;
+      const dy = e.changedTouches[0].clientY - touchY;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+      play(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+    });
+    for (let i = 0; i < 16; i += 1) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      boardEl.appendChild(cell);
+    }
+    render();
+    boardEl.focus();
+  </script>
+</body>
+</html>

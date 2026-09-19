@@ -59,10 +59,30 @@ describe("office home goals + fill slots", () => {
     });
     const { slots } = listFillSlots(harness, dm, goal.id);
     expect(slots[0].empty).toBe(false);
-    expect(slots[0].filler).toBe("交付同事");
+    expect(slots[0].filler).toBe("执行池 · noop");
     expect(slots[0].filler_kind).toBe("bot");
+    expect(slots[0].filler).not.toMatch(/同事/);
+    expect(JSON.stringify(slots)).not.toMatch(/交付同事|Cursor 同事|Bot 填/);
     expect(slots[0].progress).toBe("在填");
     expect(listGoals(harness, dm)[0].status_line).toBe("同事在填");
+  });
+
+  it("fill_slots_pool_labels_not_colleague", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, coord, {
+      title: "2048 可玩页",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+      intent: "做一个能玩的 2048",
+    });
+    fillAssignment(harness, coord, goal.id, {
+      pool_id: "pool_cursor",
+      brief: { outcome: "做一个能玩的 2048", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    });
+    const { slots } = listFillSlots(harness, dm, goal.id);
+    expect(slots[0].filler).toBe("执行池 · Cursor");
+    expect(slots.map((s) => s.filler).join(" ")).not.toMatch(/同事/);
+    expect(JSON.stringify(slots)).not.toMatch(/Bot 填 ·|交付同事|Cursor 同事|群组同事/);
   });
 
   it("marks a decision_maker fill as 人填 after human_allowed or grant", () => {

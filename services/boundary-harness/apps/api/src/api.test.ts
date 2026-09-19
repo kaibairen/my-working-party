@@ -314,6 +314,9 @@ describe("domain API", () => {
     expect(officeHtml).toContain("工位心跳");
     expect(officeHtml).toContain("工位是 Bot 自报心跳，不是侧栏同步");
     expect(officeHtml).toContain("还没有 Bot 报心跳");
+    expect(officeHtml).toContain("desk-group");
+    expect(officeHtml).not.toContain("Bot 填 ·");
+    expect(officeHtml).not.toContain("交付同事");
     expect(officeHtml).toContain("只读投影");
     expect(officeHtml).toContain('data-testid="roster"');
     expect(officeHtml).toContain('data-readonly="true"');
@@ -369,6 +372,7 @@ describe("domain API", () => {
     expect(listed.body.heartbeat_ttl_seconds).toBe(90);
     expect(listed.body.include_pools).toBe(false);
     expect(listed.body.desks).toEqual([]);
+    expect(listed.body.groups).toEqual([]);
     expect(JSON.stringify(listed.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
     const dmFlag = await json(app, "/v1/desks?include_pools=1", { headers: headers("decision_maker", "you") });
     expect(dmFlag.body.include_pools).toBe(false);
@@ -382,6 +386,12 @@ describe("domain API", () => {
       ]),
     );
     expect(JSON.stringify(ops.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
+    expect(ops.body.groups.map((g: { name: string }) => g.name)).toEqual(["执行池"]);
+    const game = await app.request("/examples/2048/");
+    expect(game.status).toBe(200);
+    const gameHtml = await game.text();
+    expect(gameHtml).toContain("新游戏");
+    expect(gameHtml).toContain("./board.js");
     const write = await app.request("/v1/desks", {
       method: "POST",
       headers: headers("decision_maker", "you"),
@@ -425,5 +435,21 @@ describe("domain API", () => {
     expect(slots.body.readonly).toBe(true);
     expect(slots.body.slots[0].progress).toBe("等同事填");
     expect(JSON.stringify(slots.body)).not.toMatch(/指派给|开始跑|dispatch/);
+
+    const filled = await json(app, `/v1/goals/${created.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "coord-1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        brief: { outcome: "写一份能读的周报", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    expect(filled.res.status).toBe(201);
+    const filledSlots = await json(app, `/v1/goals/${created.body.id}/assignments`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(filledSlots.body.slots[0].filler).toBe("执行池 · Cursor");
+    expect(filledSlots.body.slots[0].filler).not.toMatch(/同事/);
+    expect(JSON.stringify(filledSlots.body.slots)).not.toMatch(/Bot 填 ·|交付同事|Cursor 同事/);
   });
 });

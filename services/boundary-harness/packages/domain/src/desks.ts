@@ -20,23 +20,61 @@ export const HEARTBEAT_TTL_MAX = 3600;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Fill-slot labels only. Office roster MUST NOT use these as Bot colleagues. */
-const FILLER_NAMES: Record<string, string> = {
-  pool_noop: "交付同事",
-  pool_cursor: "Cursor 同事",
+export const DESK_GROUP_HARNESS = "harness开发";
+export const DESK_GROUP_2048 = "2048工作组";
+export const DESK_GROUP_OTHER = "其他";
+export const DESK_GROUP_POOLS = "执行池";
+
+const GROUP_ALIASES: Record<string, string> = {
+  harness: DESK_GROUP_HARNESS,
+  "harness-dev": DESK_GROUP_HARNESS,
+  "harness开发": DESK_GROUP_HARNESS,
+  "2048": DESK_GROUP_2048,
+  "2048工作组": DESK_GROUP_2048,
+  other: DESK_GROUP_OTHER,
+  "其他": DESK_GROUP_OTHER,
+  pool: DESK_GROUP_POOLS,
+  pools: DESK_GROUP_POOLS,
+  "执行池": DESK_GROUP_POOLS,
 };
 
-export function humanDeskName(poolId: string, kind: string): string {
-  if (FILLER_NAMES[poolId]) return FILLER_NAMES[poolId];
-  if (kind === "bot_group") return "群组同事";
-  if (kind === "cursor_account") return "Cursor 同事";
-  if (kind === "noop") return "交付同事";
-  const stripped = poolId.replace(/^pool_/, "").trim();
-  if (!stripped || UUID_RE.test(stripped)) return "同事";
-  return stripped;
+/** Bots self-report `group` (or `section`). Empty / unknown → 其他. */
+export function normalizeDeskGroup(raw?: string | null): string {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) return DESK_GROUP_OTHER;
+  const clipped = trimmed.slice(0, 32);
+  return GROUP_ALIASES[clipped] ?? GROUP_ALIASES[clipped.toLowerCase()] ?? clipped;
 }
 
-/** Ops-only pool row. Never humanize execution pools as 同事. */
+function groupRank(name: string): number {
+  if (name === DESK_GROUP_HARNESS) return 0;
+  if (name === DESK_GROUP_2048) return 1;
+  if (name === DESK_GROUP_OTHER) return 1000;
+  if (name === DESK_GROUP_POOLS) return 1001;
+  return 50;
+}
+
+export function compareDeskGroups(a: string, b: string): number {
+  const diff = groupRank(a) - groupRank(b);
+  if (diff !== 0) return diff;
+  return a.localeCompare(b, "zh");
+}
+
+export function groupDesks<T extends { group?: string | null }>(desks: T[]) {
+  const buckets = new Map<string, T[]>();
+  for (const desk of desks) {
+    const name = normalizeDeskGroup(desk.group);
+    const list = buckets.get(name) ?? [];
+    list.push(desk);
+    buckets.set(name, list);
+  }
+  return [...buckets.keys()]
+    .filter((name) => (buckets.get(name)?.length ?? 0) > 0)
+    .sort(compareDeskGroups)
+    .map((name) => ({ name, desks: buckets.get(name)! }));
+}
+
+/** Fill-slot labels. Never humanize execution pools as 同事 / Grok Bot names. */
 export function executionPoolName(poolId: string, kind: string): string {
   if (poolId === "pool_noop" || kind === "noop") return "执行池 · noop";
   if (poolId === "pool_cursor" || kind === "cursor_account") return "执行池 · Cursor";
@@ -44,6 +82,11 @@ export function executionPoolName(poolId: string, kind: string): string {
   const stripped = poolId.replace(/^pool_/, "").trim();
   if (!stripped || UUID_RE.test(stripped)) return "执行池";
   return `执行池 · ${stripped}`;
+}
+
+/** @deprecated Use executionPoolName — pools are not colleagues. */
+export function humanDeskName(poolId: string, kind: string): string {
+  return executionPoolName(poolId, kind);
 }
 
 function presenceFor(input: {
@@ -74,6 +117,8 @@ export type HeartbeatInput = {
   name?: string;
   pool_id?: string | null;
   ttl_seconds?: number;
+  group?: string | null;
+  section?: string | null;
 };
 
 export type ListDesksOptions = {
@@ -99,6 +144,7 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
   }
   const rawName = input.display_name ?? input.name;
   const displayName = typeof rawName === "string" && rawName.trim() ? rawName.trim() : actor.id;
+  const group = normalizeDeskGroup(input.group ?? input.section);
   const ts = h.now();
   const existing = h.db.select().from(agentHeartbeats).where(eq(agentHeartbeats.actorId, actor.id)).get();
   if (existing) {
@@ -107,6 +153,7 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
       .set({
         displayName,
         poolId,
+        groupName: group,
         lastSeenAt: ts,
         ttlSeconds: ttl,
       })
@@ -117,6 +164,7 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
       actorId: actor.id,
       displayName,
       poolId,
+      groupName: group,
       lastSeenAt: ts,
       ttlSeconds: ttl,
     }).run();
@@ -125,6 +173,7 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
     actor_id: actor.id,
     display_name: displayName,
     pool_id: poolId,
+    group,
     last_heartbeat: ts,
     ttl_seconds: ttl,
     expires_at: new Date(Date.parse(ts) + ttl * 1000).toISOString(),
@@ -138,6 +187,7 @@ function deskRow(input: {
   last_heartbeat: string | null;
   source: "pool_seed" | "heartbeat";
   ttl_seconds: number | null;
+  group: string;
 }) {
   return {
     id: input.id,
@@ -148,6 +198,7 @@ function deskRow(input: {
     last_heartbeat: input.last_heartbeat,
     source: input.source,
     ttl_seconds: input.ttl_seconds,
+    group: input.group,
   };
 }
 
@@ -170,11 +221,13 @@ function presenceForPool(
  * Read-only office roster. Never a dispatch / assign surface.
  *
  * Default: live `agent_heartbeats` within TTL only, named from heartbeat
- * `display_name`. Seed execution pools are not Bot colleagues.
+ * `display_name`, grouped by self-reported `group` / `section`.
+ * Seed execution pools are not Bot colleagues.
  * `include_pools` is a non-DM ops overlay labeled 「执行池 · …」.
  * Decision-maker always gets heartbeat agents only — seed 同事 never occupy
  * the primary roster, even if the query flag is set.
  * Expired heartbeats are omitted (no pool_seed fallback on the office roster).
+ * Empty groups are omitted.
  */
 export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {}) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
@@ -198,6 +251,7 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
           last_heartbeat: null,
           source: "pool_seed",
           ttl_seconds: null,
+          group: DESK_GROUP_POOLS,
         }),
       );
     }
@@ -213,12 +267,16 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
         last_heartbeat: beat.lastSeenAt,
         source: "heartbeat",
         ttl_seconds: beat.ttlSeconds,
+        group: normalizeDeskGroup(beat.groupName),
       }),
     );
   }
 
+  const groups = groupDesks(desks);
+
   return {
     desks,
+    groups,
     readonly: true as const,
     hitl: "待我拍板" as const,
     stub: live.length === 0,

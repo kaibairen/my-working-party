@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS agent_heartbeats (
   actor_id TEXT PRIMARY KEY,
   display_name TEXT,
   pool_id TEXT,
+  group_name TEXT,
   last_seen_at TEXT NOT NULL,
   ttl_seconds INTEGER NOT NULL
 );

@@ -194,7 +194,8 @@ paths:
       description: |
         Default office roster is live `POST /v1/agents/heartbeat` rows within TTL
         only (default 90s, advertised as `heartbeat_ttl_seconds`), named from
-        heartbeat `display_name`. Seed execution pools are not Bot colleagues.
+        heartbeat `display_name` and grouped by self-reported `group` / `section`
+        (empty groups omitted). Seed execution pools are not Bot colleagues.
         Pass `include_pools=1` for a **non-DM** ops overlay labeled 「执行池 · …」.
         Decision-maker requests ignore the flag — seed pools never occupy the
         primary roster. Expired heartbeats are omitted. Clients MUST NOT POST this path.
@@ -223,6 +224,14 @@ paths:
                         status: { type: string }
                         last_heartbeat: { type: string, nullable: true }
                         source: { type: string, enum: [pool_seed, heartbeat] }
+                        group: { type: string }
+                  groups:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        desks: { type: array }
                   readonly: { type: boolean }
                   stub: { type: boolean }
                   heartbeat_ttl_seconds: { type: integer }
@@ -244,6 +253,8 @@ paths:
                 display_name: { type: string }
                 name: { type: string, description: "Alias for display_name (sidebar bot real name)" }
                 pool_id: { type: string }
+                group: { type: string, description: "Self-reported roster group (harness开发 / 2048工作组 / 其他)" }
+                section: { type: string, description: "Alias for group" }
                 ttl_seconds: { type: integer, minimum: 15, maximum: 3600 }
       responses:
         "200":

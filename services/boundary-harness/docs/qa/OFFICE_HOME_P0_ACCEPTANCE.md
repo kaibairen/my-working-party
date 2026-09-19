@@ -8,17 +8,45 @@ Playwright: `apps/web/e2e/gate-inbox/office-home.spec.ts` (`office_home_p0_30s`)
 |---|--------|-----|
 | 1 | Home ≠ Inbox wall | `/` shows 目标 + 新建目标 + 工位心跳; no gate cards on the office canvas |
 | 2 | Create goal + fill slot | 名称 + 一句话要什么 → goal row + 填充槽（谁在填 / 填到哪 / 产物） |
-| 3 | Roster | 工位心跳 在忙 \| 等证据 \| 空闲; no 指派/开跑/drag |
+| 3 | Roster | 工位心跳按组（空组隐藏） 在忙 \| 等证据 \| 空闲; no 指派/开跑/drag |
 | 4 | Inbox is drawer | 顶栏 `待办 · n` opens 待我拍板; G1 copy lock; `/inbox` still loadable |
 
 P0 linkage add-on: empty slot **我来填** (human_allowed or exception_grant). Roster is heartbeat-only: empty until a bot posted `/v1/agents/heartbeat` / `harness_heartbeat` within TTL (90s); seed pools are not 同事. Still not dispatch.
 
-## TechLead merge gates (2026-09-19 lock)
+## TechLead merge gates (freeze names **are** `it("…")` titles)
 
-| Gate | Named case | Must |
-|------|------------|------|
-| No fake-name wall | `office_no_fake_name_wall` | DM `GET /v1/desks` (and `?include_pools=1`) never shows seed 「交付同事」「Cursor 同事」; only live heartbeat `display_name` / actor |
-| TTL expiry clears the row | `heartbeat_ttl_expiry_clears_row` | After TTL the heartbeat desk disappears — no `pool_seed` fallback on the office roster |
-| Readonly presence | `office_no_assign_desk` / `office_no_drag_dispatch` / `office_no_start_run_button` | 3-state 在忙 \| 等证据 \| 空闲; no assign / drag / 开跑 |
+Registries in `apps/api/tests/contract/required-cases.ts`. CI red if a freeze name is missing.
+
+### #18 office roster (do not loosen)
+
+| Gate | `it("…")` | File |
+|------|-----------|------|
+| No fake-name wall | `office_no_fake_name_wall` | `p0-linkage.test.ts` |
+| TTL expiry clears the row | `heartbeat_ttl_expiry_clears_row` | `p0-linkage.test.ts` |
+| No assign desk | `office_no_assign_desk` | `office-anti.test.ts` |
+| No drag dispatch | `office_no_drag_dispatch` | `office-anti.test.ts` |
+| No 开跑 button | `office_no_start_run_button` | `office-anti.test.ts` |
+
+### QA #21 grouped desks (`DESKS_GROUP_MERGE_GATES`)
+
+| Gate | `it("…")` | File |
+|------|-----------|------|
+| Grouped layout, readonly | `desks_grouped_layout_readonly` | `p0-linkage.test.ts` · `desks.test.ts` |
+| No drag / assign on groups | `desks_group_no_drag_assign` | `p0-linkage.test.ts` · `desks.test.ts` |
+| No fake seed names | `desks_group_no_fake_seeds` | `p0-linkage.test.ts` · `desks.test.ts` |
+| Ungrouped bucket = 其他 | `desks_ungrouped_bucket` | `p0-linkage.test.ts` · `desks.test.ts` |
+
+### QA #21 2048 (`GAME_2048_MERGE_GATES`)
+
+| Gate | `it("…")` | File |
+|------|-----------|------|
+| Loads playable | `game_2048_loads_playable` | `examples/2048/board.test.ts` |
+| Arrow / swipe moves | `game_2048_arrow_or_swipe_moves` | `examples/2048/board.test.ts` |
+| Score updates | `game_2048_score_updates` | `examples/2048/board.test.ts` |
+| New game resets | `game_2048_new_game_resets` | `examples/2048/board.test.ts` |
+
+Extra (not this freeze): `fill_slots_pool_labels_not_colleague`. English 2048 merge smokes stay as non-gate cases.
 
 M4 MCP glove dogfood: [DOGFOOD_GROKBOT_MCP_SOP.md](../DOGFOOD_GROKBOT_MCP_SOP.md).
+
+2048 dogfood artifact: [examples/2048/README.md](../../examples/2048/README.md) — decision-maker opens `/examples/2048/` after `pnpm --filter @harness/api dev`. Friction log: [FRICTION_2048_HARNESS.md](../dogfood/FRICTION_2048_HARNESS.md).
