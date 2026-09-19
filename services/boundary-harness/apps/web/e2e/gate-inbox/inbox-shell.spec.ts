@@ -13,8 +13,9 @@ test.describe("Decision-maker shell", () => {
     await page.goto("/");
     await expect(page.locator("h1")).toHaveText("AI 办公室");
     await expect(page.getByTestId("board-title")).toContainText("待我拍板");
-    await expect(page.getByTestId("board-cta")).toHaveText(/查看待我拍板|待我拍板 · \d+/);
+    await expect(page.getByTestId("todo-chip")).toHaveText(/^待办/);
     await expect(page.getByTestId("office-sub")).toContainText("同事在工位上干活");
+    await expect(page.getByTestId("board-cta")).toHaveCount(0);
     await expect(page.getByTestId("dm-topbar")).toBeVisible();
     await expect(page.getByRole("link", { name: /openapi|health/i })).toHaveCount(0);
     await expect(page.locator("a[href*='openapi']")).toHaveCount(0);
@@ -39,7 +40,7 @@ test.describe("Decision-maker shell", () => {
     const titleText = (await title.innerText()).trim();
     expect(titleText.length).toBeGreaterThan(0);
     expect(titleText).not.toMatch(UUID_RE);
-    await expect(page.getByTestId("gate-id")).toHaveText(ready.gate!.id);
+    await expect(page.getByTestId("gate-id")).toContainText(ready.gate!.id);
     await page.screenshot({ path: join(shotDir, "inbox_card_title_not_uuid.png"), fullPage: true });
   });
 
@@ -78,7 +79,7 @@ test.describe("Decision-maker shell", () => {
     await page.screenshot({ path: join(shotDir, "inbox_one_card_human.png"), fullPage: true });
 
     await clickPass(page);
-    await expect(page.getByTestId("inbox-flash")).toContainText("已通过 · 办公室少了一张待办");
+    await expect(page.getByTestId("inbox-flash")).toHaveText("已通过。");
     await expect(page.getByTestId("inbox-flash")).not.toHaveText(UUID_RE);
     await expect(page.getByTestId("inbox-empty")).toBeVisible();
     await page.screenshot({ path: join(evidenceDir, "inbox_after_pass_quiet.png"), fullPage: true });

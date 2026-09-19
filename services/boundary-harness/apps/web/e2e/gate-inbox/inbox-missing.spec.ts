@@ -20,8 +20,8 @@ test.describe("E2E missing[]", () => {
     await page.goto("/inbox");
     const items = page.getByTestId("missing-item");
     await expect(items).toHaveCount(missing.length);
-    await expect(page.getByTestId("missing-block")).toContainText("还不能过，缺这些");
     await expect(page.getByTestId("missing-block")).toContainText("还差");
+    await expect(page.getByTestId("decide-pass")).toBeDisabled();
     for (const entry of missing) {
       await expect(page.getByTestId("missing-code").filter({ hasText: entry })).toHaveCount(1);
       await expect(page.getByTestId("missing-item").filter({ hasText: entry })).toHaveCount(0);

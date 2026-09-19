@@ -45,7 +45,7 @@
   </style>
 </head>
 <body>
-  <!-- Copy SoT: apps/web/copy/zh-DM.ts · CLICK_FLOW §1/§4. Ops only via /ops or ?dev=1. -->
+  <!-- Inbox chrome: DM_INBOX_COPY_FIELD_MAP_v1. Office landing: CLICK_FLOW §4. Ops: /ops or ?dev=1. -->
   <header data-testid="dm-topbar">
     <div>
       <h1>AI 办公室</h1>
@@ -53,7 +53,6 @@
     </div>
     <div class="row">
       <a class="chip" href="#board" id="todo-chip" data-testid="todo-chip">待办</a>
-      <a class="chip" href="#board" id="board-cta" data-testid="board-cta">查看待我拍板</a>
       <span class="weak" data-testid="roster-weak">工位一览</span>
       <div id="dev-controls" class="row" data-testid="dev-controls">
         <a href="/ops" data-testid="ops-link">运维</a>
@@ -71,11 +70,6 @@
         <h2 id="panel-title" data-testid="board-title">待我拍板</h2>
         <button id="reload" class="muted" data-testid="reload-ready">刷新</button>
       </div>
-      <div class="row" data-testid="filter-row">
-        <button type="button" class="chip active" data-filter="ready" data-testid="filter-ready">要你决定</button>
-        <button type="button" class="chip" data-filter="decided" data-testid="filter-decided">已决定</button>
-      </div>
-      <p class="sub" id="list-hint" data-testid="list-hint">下面每张卡都过了硬门禁检查，可以拍板。</p>
       <div id="flash" class="flash" data-testid="inbox-flash"></div>
       <div id="list" data-testid="gate-list"></div>
     </section>
@@ -87,19 +81,19 @@
     const goalCache = new Map();
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const MISSING_ZH = {
-      "evidence:summary_md": "还缺一份结论摘要",
-      summary_md: "还缺一份结论摘要",
-      "evidence:artifact_uri": "还缺可打开的产物",
-      artifact_uri: "还缺可打开的产物",
-      "evidence:pr": "相关合并请求还是草稿",
-      "github_pr:is_draft=true": "相关合并请求还是草稿",
-      "noop_or_offline_contract": "还缺可打开的产物",
-      "run_lifecycle:FINISHED": "运行还没结束",
-      "policy_clearance:no_open_authority_escalation": "还不能过：仍有未关闭的权限升级",
+      "evidence:summary_md": "还差：结论摘要",
+      summary_md: "还差：结论摘要",
+      summary: "还差：结论摘要",
+      "evidence:artifact_uri": "还差：可打开的产物",
+      artifact_uri: "还差：可打开的产物",
+      artifact: "还差：可打开的产物",
+      "evidence:pr": "还差：合并请求仍是草稿",
+      "github_pr:is_draft=true": "还差：合并请求仍是草稿",
+      github_pr_draft: "还差：合并请求仍是草稿",
+      github_checks: "还差：检查未全部通过",
     };
     const ACTION_ZH = { destructive_delete: "破坏性删除" };
     const RULE_ZH = { deliver_ready_v1: "交付验收", safety_only_v1: "安全门禁" };
-    let filter = "ready";
     function currentRole() { return ($("role") && $("role").value) || "decision_maker"; }
     function currentActor() { return ($("actor") && $("actor").value) || "dm-1"; }
     const headers = () => ({
@@ -135,12 +129,11 @@
       const raw = String(code ?? "");
       if (MISSING_ZH[raw]) return MISSING_ZH[raw];
       const auth = raw.match(/^authority_escalation:(.+)$/);
-      if (auth) return `还不能过：需要批准${ACTION_ZH[auth[1]] || auth[1]}`;
-      if (/github_pr:is_draft/.test(raw)) return "相关合并请求还是草稿";
-      if (/github_checks:conclusion/.test(raw) && !/=success$/.test(raw)) return "检查还没全部通过";
-      if (raw.startsWith("github_checks:")) return "检查还没全部通过";
-      if (raw.startsWith("evidence:")) return `还缺：${raw.slice("evidence:".length)}`;
-      return `还缺：${raw}`;
+      if (auth) return `还差：需要批准${ACTION_ZH[auth[1]] || auth[1]}`;
+      if (/github_pr:is_draft/.test(raw)) return "还差：合并请求仍是草稿";
+      if (raw.startsWith("github_checks:")) return "还差：检查未全部通过";
+      if (raw.startsWith("evidence:")) return `还差：${raw.slice("evidence:".length)}`;
+      return `还差：${raw}`;
     }
     function isAdvisory(g) {
       const track = g.track || (g.ready_result && g.ready_result.track) || "";
@@ -169,21 +162,16 @@
       const name = String((goal && goal.title) || "").trim();
       if (name && !UUID_RE.test(name)) return name;
       const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
-      return RULE_ZH[pred] || "待我拍板";
+      return RULE_ZH[pred] || "未命名目标";
     }
     function missingHtml(missing) {
       if (!missing.length) return "";
-      return `<div class="missing" data-testid="missing-block"><span class="sr-only">还差</span>还不能过，缺这些
+      return `<div class="missing" data-testid="missing-block">还差：
         <ul class="missing-list">${missing.map((m) => `<li data-testid="missing-item">${esc(missingLabel(m))}</li>`).join("")}</ul>
       </div>`;
     }
     function emptyHtml() {
-      return `<div class="empty" data-testid="inbox-empty-wrap">
-        <h3 data-testid="empty-title">此刻没有需要你拍板的事</h3>
-        <p data-testid="inbox-empty">此刻没有待办。安静是正常的。</p>
-        <p class="sub">安静是正常的。同事填满工位后，卡片会自己出现在这里。</p>
-        <p class="fine">不用去盯进度。完成以证据为准，不认口头说「好了」。</p>
-      </div>`;
+      return `<p class="sub" data-testid="inbox-empty">此刻没有待办。安静是正常的。</p>`;
     }
     async function loadGoal(id) {
       if (!id) return {};
@@ -199,12 +187,8 @@
         return {};
       }
     }
-    function setCounts(shown, authorityN) {
+    function setCounts(authorityN) {
       $("todo-chip").textContent = authorityN > 0 ? `待办 · ${authorityN}` : "待办";
-      const cta = $("board-cta");
-      cta.innerHTML = shown > 0 ? `<span class="dot"></span>待我拍板 · ${shown}` : "查看待我拍板";
-      $("panel-title").textContent = shown > 0 ? `待我拍板 · ${shown}` : "待我拍板";
-      $("list-hint").hidden = shown === 0 || filter === "decided";
     }
     async function decide(card, act, structural, note) {
       const id = card.dataset.id;
@@ -220,7 +204,7 @@
       const code = (body && body.code) || (body.error && body.error.code);
       if (!res.ok) {
         if (res.status === 409 || code === "optimistic_lock") {
-          flash("别人刚拍过，已为你刷新", "conflict");
+          flash("别人刚处理过这张，已帮你刷新。", "conflict");
           await load();
           return;
         }
@@ -228,7 +212,7 @@
         return;
       }
       const toasts = {
-        pass: "已通过 · 办公室少了一张待办",
+        pass: "已通过。",
         revise: "已打回，同事会再交一版。",
         defer: "已搁下，需要时还会出现。",
       };
@@ -236,22 +220,12 @@
       await load();
     }
     async function load() {
-      const status = filter === "decided" ? "decided" : "ready";
-      const res = await fetch(`/v1/gates?status=${status}`, { headers: headers() });
+      const res = await fetch("/v1/gates?status=ready", { headers: headers() });
       const body = await res.json();
-      const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
+      const gates = (body.gates || []).filter((g) => g.status === "ready" && !isAdvisory(g));
       await Promise.all(gates.map((g) => loadGoal(g.goal_id)));
       const authorityN = gates.filter((g) => isAuthority(g, (g.ready_result && g.ready_result.missing) || [])).length;
-      setCounts(filter === "ready" ? gates.length : 0, filter === "ready" ? authorityN : 0);
-      if (filter === "decided") {
-        $("list").innerHTML = gates.length
-          ? gates.map((g) => {
-            const goal = goalCache.get(g.goal_id) || {};
-            return `<article class="card" data-testid="gate-card-readonly"><strong>${esc(cardTitle(g, goal))}</strong><p class="sub">已决定 · 只读</p></article>`;
-          }).join("")
-          : `<p class="sub">还没有已决定的卡片。</p>`;
-        return;
-      }
+      setCounts(authorityN);
       $("list").innerHTML = gates.length ? gates.map((g) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
@@ -262,9 +236,11 @@
         const who = humanColleague(goal.coordinator_ref);
         const station = goal.mode === "explore" ? "探索工位" : "交付工位";
         const hard = isAuthority(g, missing);
-        const passDisabled = evidenceGap(missing);
+        const passDisabled = missing.length > 0;
         const rule = RULE_ZH[pred] || "";
-        const why = missing.length ? "" : `<p class="sub" data-testid="why-line">证据已齐，等你过这一关</p>`;
+        const why = missing.length
+          ? `<p class="sub" data-testid="why-line">还不能过，先看缺什么</p>`
+          : `<p class="sub" data-testid="why-line">证据已齐，等你拍板</p>`;
         return `<article class="card" data-testid="gate-card" data-id="${esc(g.id)}" data-version="${esc(g.version)}">
           <div class="row">
             <strong class="title" data-testid="gate-title">${esc(title)}</strong>
@@ -275,12 +251,12 @@
           <p class="sub" data-testid="working-who">${esc(station)} · ${esc(who)}</p>
           <p class="sub" data-testid="output-summary">目标：${esc(title)} · 同事已交：摘要 / 产物链接</p>
           ${why}
-          <p class="sub" data-testid="ready-at"><span class="sr-only">ready_at</span> 就绪时间：<time datetime="${esc(g.ready_at || "")}">${esc(rel)}</time></p>
+          <p class="sub" data-testid="ready-at"><span class="sr-only">ready_at</span> 就绪 · <time datetime="${esc(g.ready_at || "")}">${esc(rel)}</time></p>
           ${missingHtml(missing)}
           <div class="row">
             <button class="ok" data-act="pass" data-testid="decide-pass"${passDisabled ? " disabled" : ""}>通过</button>
             <button class="warn" data-act="revise" data-testid="decide-revise">打回重做</button>
-            <button class="muted" data-act="defer" data-testid="decide-defer">以后再说</button>
+            <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
           </div>
           <div class="confirm" data-testid="pass-confirm-strip" hidden>
             <strong>确认通过？</strong>
@@ -303,21 +279,16 @@
           </div>
           <details class="meta-box">
             <summary>工程详情</summary>
-            <p data-testid="gate-id">${esc(g.id)}</p>
+            <p data-testid="gate-id">编号 ${esc(g.id)}</p>
+            <p>目标 ID ${esc(g.goal_id || "")}</p>
             <p data-testid="predicate-id">predicate_id ${esc(pred)}</p>
             <p data-testid="predicate-version">predicate_version ${esc(pver)}</p>
+            <p>version ${esc(g.version)}</p>
             ${missing.map((m) => `<p data-testid="missing-code">${esc(m)}</p>`).join("")}
           </details>
         </article>`;
       }).join("") : emptyHtml();
     }
-    document.querySelector("[data-testid='filter-row']").addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-filter]");
-      if (!btn) return;
-      filter = btn.dataset.filter;
-      document.querySelectorAll("[data-filter]").forEach((el) => el.classList.toggle("active", el === btn));
-      load();
-    });
     $("list").addEventListener("click", async (e) => {
       const card = e.target.closest(".card");
       if (!card) return;

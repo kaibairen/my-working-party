@@ -310,8 +310,9 @@ describe("domain API", () => {
     const html = await inbox.text();
     expect(html).toContain("AI 办公室");
     expect(html).toContain("待我拍板");
-    expect(html).toContain("查看待我拍板");
-    expect(html).toContain("以后再说");
+    expect(html).toContain("稍后处理");
+    expect(html).not.toContain("查看待我拍板");
+    expect(html).toContain("/v1/gates?status=ready");
     expect(html).toContain("待办");
     expect(html).not.toContain("M2-preview");
     expect(html).not.toContain('href="/ops">Health');
@@ -321,8 +322,7 @@ describe("domain API", () => {
     expect(html).toContain('data-testid="decide-pass"');
     expect(html).toContain('data-testid="decide-revise"');
     expect(html).toContain('data-testid="decide-defer"');
-    expect(html).toContain("/v1/gates?status=");
-    expect(html).toContain('filter === "decided" ? "decided" : "ready"');
+    expect(html).toContain("/v1/gates?status=ready");
     expect(html).toContain("decision: act, version");
     expect(html).toContain("structural_change:");
     expect(html).not.toContain("标记完成");
