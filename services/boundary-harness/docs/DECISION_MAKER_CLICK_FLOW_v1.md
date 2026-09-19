@@ -135,6 +135,15 @@
 | R14 | 若把 advisory 画成同款 Pass 卡 | **禁止** | advisory → 非阻塞浅提示；**不进**待我拍板 |
 | R15 | 任何「先打开画布再 dispatch」暗示 | **禁止** | 保留 API 级 `canvas_not_required_for_dispatch` |
 | R16 | 任何「同事说 done / 聊天说好了」当完成 | **禁止** | 文案明示：只认证据 + 硬门禁 |
+| R17 | 卡标题 = GateInstance UUID | **禁止** | Goal 人读 `title` |
+| R18 | 卡标题 = `e2e-*` / `g-{digits}` 夹具 | **禁止** | 「周报交付验收」「清理临时分支」 |
+| R19 | 主面露出 `predicate_id` 原文 | **禁止** | `规则：交付验收`；原文仅详情 |
+| R20 | `missing[]` 裸数组或 `(empty)` | **禁止** | 非空才「还差：…」 |
+| R21 | 按钮 Pass / Revise / Defer | **禁止** | 通过 / 打回重做 / 稍后处理 |
+| R22 | 顶栏 Health / OpenAPI | **禁止** | 仅 `/ops` |
+| R23 | 角色下拉 / `dm-1` | **禁止** | 决策人主路径不露调试身份 |
+| R24 | Reload ready 主按钮 | **禁止** | SSE 静默刷新 |
+| R25 | 空态教去画布 / 口头 done | **禁止** | 「此刻没有待办。安静是正常的。」 |
 
 工程可留：API、Playwright、Ready 反例、SSE——**UI 皮肤与信息层级必须换**，否则决策人仍看不懂。
 

@@ -64,6 +64,16 @@ function uniq(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Visible Inbox titles — never e2e-* / g-{digits} fixture junk. */
+export const HUMAN_GOAL = {
+  deliver: "周报交付验收",
+  pending: "周报交付验收",
+  authority: "清理临时分支",
+  explore: "调研备忘",
+} as const;
+
+export const JUNK_TITLE_RE = /e2e|g-[0-9]/i;
+
 export async function drainReadyGates(baseURL: string) {
   const { body } = await api<{ gates: Array<{ id: string; version: number }> }>(
     baseURL,
@@ -86,7 +96,7 @@ export async function seedDeliverPending(baseURL: string) {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: `e2e pending ${uniq("g")}`,
+        title: HUMAN_GOAL.deliver,
         mode: "deliver",
         coordinator_ref: "coord-1",
       }),
@@ -164,7 +174,7 @@ export async function seedAuthorityReady(baseURL: string, action = "destructive_
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: `e2e authority ${uniq("g")}`,
+        title: HUMAN_GOAL.authority,
         mode: "explore",
         coordinator_ref: "coord-1",
         gate_template_id: "safety_only_v1",
@@ -201,7 +211,7 @@ export async function seedExploreNoGate(baseURL: string) {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: `e2e explore ${uniq("g")}`,
+        title: HUMAN_GOAL.explore,
         mode: "explore",
         coordinator_ref: "coord-1",
       }),

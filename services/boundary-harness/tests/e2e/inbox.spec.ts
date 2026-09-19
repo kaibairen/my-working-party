@@ -29,7 +29,7 @@ async function seedReadyGate(baseURL: string) {
   const goal = await (await fetch(`${baseURL}/v1/goals`, {
     method: "POST",
     headers: h,
-    body: JSON.stringify({ title: "Inbox demo", mode: "deliver", coordinator_ref: "coord-1" }),
+    body: JSON.stringify({ title: "周报交付验收", mode: "deliver", coordinator_ref: "coord-1" }),
   })).json();
   const asg = await (await fetch(`${baseURL}/v1/goals/${goal.id}/assignments`, {
     method: "POST",
@@ -67,7 +67,8 @@ test("Gate Inbox lists ready gate, shows missing[], decide pass", async ({ page,
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-heading")).toContainText("待办");
   await expect(page.locator(".card").first()).toBeVisible();
-  await expect(page.getByTestId("gate-title")).toHaveText(/Inbox demo/);
+  await expect(page.getByTestId("gate-title")).toHaveText("周报交付验收");
+  await expect(page.getByTestId("gate-title")).not.toHaveText(/e2e|g-[0-9]/i);
   await expect(page.getByTestId("decide-pass")).toHaveText("通过");
   await page.screenshot({ path: join(shotDir, "gate_inbox_ready.png"), fullPage: true });
 
