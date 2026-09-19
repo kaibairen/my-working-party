@@ -16,6 +16,9 @@ export const GATE_INBOX_E2E_CASE_NAMES = [
   "no_mark_done_button",
   "chat_done_text_never_creates_card",
   "run_succeeded_banner_not_decide",
+  "decision_maker_shell_has_no_openapi_link",
+  "inbox_card_title_not_uuid",
+  "ops_routes_forbidden_for_dm",
 ] as const;
 
 const specDir = join(dirname(fileURLToPath(import.meta.url)), "../../../web/e2e/gate-inbox");
@@ -29,6 +32,6 @@ describe("gate-inbox Playwright required case registry", () => {
     for (const name of GATE_INBOX_E2E_CASE_NAMES) {
       expect(src, `missing test("${name}") in apps/web/e2e/gate-inbox`).toContain(`test("${name}"`);
     }
-    expect(GATE_INBOX_E2E_CASE_NAMES).toHaveLength(11);
+    expect(GATE_INBOX_E2E_CASE_NAMES).toHaveLength(14);
   });
 });

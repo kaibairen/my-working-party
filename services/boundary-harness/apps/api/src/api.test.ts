@@ -302,19 +302,30 @@ describe("domain API", () => {
 
   it("serves inbox and ops pages", async () => {
     const { app } = setup();
+    const office = await app.request("/");
+    expect(office.status).toBe(200);
+    const officeHtml = await office.text();
+    expect(officeHtml).toContain("AI办公室");
+    expect(officeHtml).toContain("待我拍板");
+    expect(officeHtml).not.toContain("OpenAPI");
+    expect(officeHtml).not.toContain('href="/ops"');
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);
     const html = await inbox.text();
-    expect(html).toContain("Gate Inbox");
+    expect(html).toContain("待办");
     expect(html).toContain('data-testid="gate-card"');
     expect(html).toContain('data-testid="missing-item"');
     expect(html).toContain('data-testid="decide-pass"');
     expect(html).toContain('data-testid="decide-revise"');
     expect(html).toContain('data-testid="decide-defer"');
     expect(html).toContain("/v1/gates?status=ready");
+    expect(html).not.toContain('href="/ops"');
+    expect(html).not.toContain("OpenAPI");
     expect(html).not.toContain("标记完成");
     expect(html).not.toContain("mark done");
     expect(html).not.toContain("去画布看进度");
+    const opsDm = await app.request("/ops", { headers: { "x-harness-role": "decision_maker" } });
+    expect(opsDm.status).toBe(403);
     const ops = await app.request("/ops");
     expect(ops.status).toBe(200);
     const opsHtml = await ops.text();

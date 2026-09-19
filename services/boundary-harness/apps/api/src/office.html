@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI办公室</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b0f12; --card:#141b22; --line:#243040; --ok:#3dd68c; --ink:#e8eef4; --muted:#8b98a8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font: 16px/1.55 ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif; background: radial-gradient(1200px 600px at 50% -10%, #1a2733 0%, var(--bg) 55%); color: var(--ink); }
+    main { max-width: 560px; margin: 0 auto; padding: 18vh 24px 48px; text-align: center; }
+    h1 { margin: 0 0 10px; font-size: 32px; font-weight: 650; letter-spacing: -0.03em; }
+    .lede { color: var(--muted); margin: 0 0 28px; font-size: 16px; }
+    .cta { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 12px 20px; font-weight: 600; }
+    .cta:hover { border-color: #3a4d63; }
+    .count { min-width: 1.5em; padding: 2px 8px; border-radius: 999px; background: #163526; color: var(--ok); font-size: 13px; }
+    .count[data-count="0"] { background: #1a222c; color: var(--muted); }
+    .empty { color: var(--muted); margin: 28px 0 0; font-size: 16px; }
+    .empty[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <main data-testid="office-shell">
+    <h1>AI办公室</h1>
+    <p class="lede">工作在推进。需要你拍板时，会进待办。</p>
+    <a class="cta" href="/inbox" data-testid="open-inbox">待我拍板 <span id="count" class="count" data-testid="inbox-count" data-count="0">0</span></a>
+    <p id="empty" class="empty" data-testid="office-empty" hidden>现在没有需要你拍板的事。</p>
+  </main>
+  <script>
+    const ROLE = "decision_maker";
+    const ACTOR = "dm-1";
+    fetch("/v1/gates?status=ready", {
+      headers: {
+        authorization: `Bearer ${ROLE}:${ACTOR}`,
+        "x-harness-role": ROLE,
+        "x-harness-actor": ACTOR,
+      },
+    }).then((r) => r.json()).then((body) => {
+      const n = (body.gates || []).filter((g) => g.status === "ready").length;
+      const count = document.getElementById("count");
+      count.textContent = String(n);
+      count.dataset.count = String(n);
+      document.getElementById("empty").hidden = n > 0;
+    }).catch(() => {
+      document.getElementById("empty").hidden = false;
+    });
+  </script>
+</body>
+</html>

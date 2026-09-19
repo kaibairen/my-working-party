@@ -47,7 +47,7 @@ test.describe("E2E reject verbal-done", () => {
       window.dispatchEvent(new CustomEvent("chat.done", { detail: { text: "done" } }));
       window.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "chat.done", text: "我确认好了" }) }));
     });
-    await page.getByTestId("reload-ready").click();
+    await page.reload();
     await expect(page.getByTestId("inbox-empty")).toBeVisible();
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
     await page.screenshot({ path: join(shotDir, "e2e31_chat_done_never_creates_card.png"), fullPage: true });

@@ -49,6 +49,7 @@ export type AppEnv = {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const inboxHtml = readFileSync(join(here, "inbox.html"), "utf8");
+const officeHtml = readFileSync(join(here, "office.html"), "utf8");
 const opsHtml = readFileSync(join(here, "ops.html"), "utf8");
 const openapiPath = join(here, "../../../openapi/openapi.yaml");
 
@@ -104,9 +105,19 @@ export function createApp(harness: Harness) {
     return c.json({ error: { code: "internal", message: "internal error" } }, 500);
   });
 
-  app.get("/", (c) => c.redirect("/inbox"));
+  app.get("/", (c) => c.html(officeHtml));
+  app.get("/office", (c) => c.html(officeHtml));
   app.get("/inbox", (c) => c.html(inboxHtml));
-  app.get("/ops", (c) => c.html(opsHtml));
+  app.get("/ops", (c) => {
+    const role = (c.req.header("x-harness-role") ?? c.req.query("role") ?? "").toLowerCase();
+    if (role === "decision_maker") {
+      return c.json(
+        { code: "ops_forbidden", message: "决策人主路径是待办，不含运维页" },
+        403,
+      );
+    }
+    return c.html(opsHtml);
+  });
   app.get("/health", (c) => c.json(health(c.get("harness"))));
   app.get("/openapi.yaml", (c) => {
     const yaml = readFileSync(openapiPath, "utf8");

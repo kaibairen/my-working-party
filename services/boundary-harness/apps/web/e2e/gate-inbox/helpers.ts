@@ -82,7 +82,7 @@ export async function drainReadyGates(baseURL: string) {
 export async function seedDeliverPending(baseURL: string) {
   const goal = await requireOk(
     "create goal",
-    await api<{ id: string }>(baseURL, "/v1/goals", {
+    await api<{ id: string; title: string }>(baseURL, "/v1/goals", {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
