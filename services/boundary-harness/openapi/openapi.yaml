@@ -193,9 +193,11 @@ paths:
       summary: Read-only office roster (presence projection, not dispatch)
       description: |
         Pool seed desks plus live `POST /v1/agents/heartbeat` rows within TTL
-        (default 90s, advertised as `heartbeat_ttl_seconds`). Expired heartbeats
-        fall back to `source=pool_seed` / `last_heartbeat=null`. Clients MUST NOT
-        POST this path.
+        (default 90s, advertised as `heartbeat_ttl_seconds`; override with
+        `DESK_HEARTBEAT_TTL_SECONDS`). Expired heartbeats fall back to
+        `source=pool_seed` / `last_heartbeat=null` and MUST NOT stay `busy`
+        (expire to `waiting_evidence` if a pending gate remains, else `idle`).
+        Clients MUST NOT POST this path. Same projection: GET /v1/office/desks/presence.
       responses:
         "200":
           description: OK
@@ -214,10 +216,23 @@ paths:
                         presence: { type: string, enum: [busy, waiting_evidence, idle] }
                         status: { type: string }
                         last_heartbeat: { type: string, nullable: true }
+                        last_seen_at: { type: string, nullable: true, description: Alias of last_heartbeat }
                         source: { type: string, enum: [pool_seed, heartbeat] }
                   readonly: { type: boolean }
                   stub: { type: boolean }
                   heartbeat_ttl_seconds: { type: integer }
+                  ttl_seconds: { type: integer }
+        "403":
+          description: forbidden
+  /v1/office/desks/presence:
+    get:
+      summary: Alias of GET /v1/desks (office presence + real TTL)
+      description: |
+        Same read-only projection as GET /v1/desks. Paint `presence`
+        (busy | waiting_evidence | idle). A stale heartbeat cannot stay busy.
+      responses:
+        "200":
+          description: Presence roster
         "403":
           description: forbidden
   /v1/agents/heartbeat:

@@ -177,6 +177,10 @@ export function createApp(harness: Harness) {
     return c.json(listDesks(c.get("harness"), c.get("actor")));
   });
 
+  v1.get("/office/desks/presence", (c) => {
+    return c.json(listDesks(c.get("harness"), c.get("actor")));
+  });
+
   v1.post("/agents/heartbeat", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as {
       display_name?: string;

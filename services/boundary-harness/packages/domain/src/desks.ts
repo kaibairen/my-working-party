@@ -18,6 +18,15 @@ export const HEARTBEAT_TTL_SECONDS = 90;
 export const HEARTBEAT_TTL_MIN = 15;
 export const HEARTBEAT_TTL_MAX = 3600;
 
+/** Optional override of the default TTL (still clamped to HEARTBEAT_TTL_MIN/MAX). */
+export function deskHeartbeatTtlSeconds(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.DESK_HEARTBEAT_TTL_SECONDS;
+  if (raw === undefined || raw.trim() === "") return HEARTBEAT_TTL_SECONDS;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return HEARTBEAT_TTL_SECONDS;
+  return Math.min(HEARTBEAT_TTL_MAX, Math.max(HEARTBEAT_TTL_MIN, Math.floor(n)));
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DESK_NAMES: Record<string, string> = {
@@ -58,6 +67,24 @@ function isLiveHeartbeat(lastSeenAt: string, ttlSeconds: number, nowIso: string)
   return now - seen < ttlSeconds * 1000;
 }
 
+/**
+ * TTL choice (Frontend): `busy` is work-derived until a heartbeat exists for
+ * that desk and is older than its TTL. A stale heartbeat MUST NOT stay `busy`.
+ * Expired busy → `waiting_evidence` if a pending gate remains, else `idle`.
+ * No heartbeat yet keeps the #15 work projection (assignment / run / gate).
+ */
+export function applyStaleHeartbeatToBusy(input: {
+  work: DeskPresence;
+  poolBeats: Array<{ lastSeenAt: string; ttlSeconds: number }>;
+  nowIso: string;
+  pendingEvidence: boolean;
+}): DeskPresence {
+  if (input.work !== "busy" || input.poolBeats.length === 0) return input.work;
+  const live = input.poolBeats.some((b) => isLiveHeartbeat(b.lastSeenAt, b.ttlSeconds, input.nowIso));
+  if (live) return input.work;
+  return input.pendingEvidence ? "waiting_evidence" : "idle";
+}
+
 export type HeartbeatInput = {
   display_name?: string;
   pool_id?: string | null;
@@ -70,7 +97,7 @@ export type HeartbeatInput = {
  */
 export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput = {}) {
   requireRole(actor, ["coordinator", "executor", "service"]);
-  const ttlRaw = input.ttl_seconds ?? HEARTBEAT_TTL_SECONDS;
+  const ttlRaw = input.ttl_seconds ?? deskHeartbeatTtlSeconds();
   if (typeof ttlRaw !== "number" || !Number.isFinite(ttlRaw)) {
     throw new HarnessError("heartbeat_invalid", "ttl_seconds must be a number", 422);
   }
@@ -128,6 +155,7 @@ function deskRow(input: {
     presence: input.presence,
     status: DESK_STATUS[input.presence],
     last_heartbeat: input.last_heartbeat,
+    last_seen_at: input.last_heartbeat,
     source: input.source,
     ttl_seconds: input.ttl_seconds,
   };
@@ -138,7 +166,7 @@ function deskRow(input: {
  *
  * Pool seed rows stay as fallback. Live `agent_heartbeats` within TTL overlay
  * `last_heartbeat` / `source=heartbeat` and may add extra agent desks.
- * Expired heartbeats do not count as presence.
+ * Expired heartbeats do not count as live presence and cannot keep `busy`.
  */
 export function listDesks(h: Harness, actor: Actor) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
@@ -154,10 +182,20 @@ export function listDesks(h: Harness, actor: Actor) {
   const desks = poolRows.map((pool) => {
     const asgs = assignmentRows.filter((a) => a.poolId === pool.id);
     const asgIds = new Set(asgs.map((a) => a.id));
-    const presence = presenceFor({
+    const gateStatuses = gateRows
+      .filter((g) => g.assignmentId && asgIds.has(g.assignmentId))
+      .map((g) => g.status);
+    const work = presenceFor({
       runStatuses: runRows.filter((r) => asgIds.has(r.assignmentId)).map((r) => r.status),
       assignmentStatuses: asgs.map((a) => a.status),
-      gateStatuses: gateRows.filter((g) => g.assignmentId && asgIds.has(g.assignmentId)).map((g) => g.status),
+      gateStatuses,
+    });
+    const poolBeats = beats.filter((b) => b.poolId === pool.id);
+    const presence = applyStaleHeartbeatToBusy({
+      work,
+      poolBeats,
+      nowIso: now,
+      pendingEvidence: gateStatuses.some((s) => s === "pending"),
     });
     const name = humanDeskName(pool.id, pool.kind);
     const beat = live.find((b) => b.poolId === pool.id);
@@ -192,6 +230,7 @@ export function listDesks(h: Harness, actor: Actor) {
     readonly: true as const,
     hitl: "待我拍板" as const,
     stub: live.length === 0,
-    heartbeat_ttl_seconds: HEARTBEAT_TTL_SECONDS,
+    heartbeat_ttl_seconds: deskHeartbeatTtlSeconds(),
+    ttl_seconds: deskHeartbeatTtlSeconds(),
   };
 }

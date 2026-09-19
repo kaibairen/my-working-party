@@ -79,4 +79,31 @@ describe("listDesks presence projection", () => {
     expect(noop?.status).toBe("等证据");
     expect(noop?.presence).toBe("waiting_evidence");
   });
+
+  it("expires stale heartbeat busy to idle when no pending gate", () => {
+    let nowMs = Date.parse("2026-09-19T12:00:00.000Z");
+    harness = createHarness({
+      databasePath: ":memory:",
+      now: () => new Date(nowMs).toISOString(),
+    });
+    const goal = createGoal(harness, coord, {
+      title: "周报交付验收",
+      mode: "explore",
+      coordinator_ref: "coord-1",
+    });
+    fillAssignment(harness, coord, goal.id, {
+      pool_id: "pool_cursor",
+      brief: { outcome: "busy desk", constraints: [], evidence_shape: ["summary_md"] },
+    });
+    recordHeartbeat(
+      harness,
+      { id: "bot-cursor", role: "executor" },
+      { display_name: "Cursor 同事", pool_id: "pool_cursor", ttl_seconds: 60 },
+    );
+    expect(listDesks(harness, dm).desks.find((d) => d.id === "pool_cursor")?.presence).toBe("busy");
+    nowMs += 61_000;
+    const stale = listDesks(harness, dm).desks.find((d) => d.id === "pool_cursor");
+    expect(stale?.presence).not.toBe("busy");
+    expect(stale?.presence).toBe("idle");
+  });
 });

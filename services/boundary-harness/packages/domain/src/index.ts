@@ -75,6 +75,8 @@ export {
 export {
   listDesks,
   recordHeartbeat,
+  deskHeartbeatTtlSeconds,
+  applyStaleHeartbeatToBusy,
   DESK_STATUS,
   HEARTBEAT_TTL_SECONDS,
   HEARTBEAT_TTL_MIN,

@@ -223,6 +223,54 @@ describe("P0 linkage contracts", () => {
     expect(expired.body.desks.some((d: { id: string }) => d.id === "agent:sidebar-bot")).toBe(false);
   });
 
+  it("desk_heartbeat_ttl_expires_busy", async () => {
+    let nowMs = Date.parse("2026-09-19T12:00:00.000Z");
+    const { app } = setup(() => new Date(nowMs).toISOString());
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({ title: "周报交付验收", mode: "explore", coordinator_ref: "c1" }),
+    });
+    const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        brief: { outcome: "presence only", constraints: [], evidence_shape: ["summary_md"] },
+      }),
+    });
+    expect(asg.res.status).toBe(201);
+
+    const beat = await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-cursor"),
+      body: JSON.stringify({ display_name: "Cursor 同事", pool_id: "pool_cursor", ttl_seconds: 60 }),
+    });
+    expect(beat.res.status).toBe(200);
+
+    const fresh = await json(app, "/v1/office/desks/presence", {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    expect(fresh.res.status).toBe(200);
+    expect(fresh.body.readonly).toBe(true);
+    const busy = fresh.body.desks.find((d: { id: string }) => d.id === "pool_cursor");
+    expect(busy.presence).toBe("busy");
+    expect(busy.status).toBe("在忙");
+    expect(busy.last_seen_at).toBe("2026-09-19T12:00:00.000Z");
+
+    nowMs += 61_000;
+    const stale = await json(app, "/v1/office/desks/presence", {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    const expired = stale.body.desks.find((d: { id: string }) => d.id === "pool_cursor");
+    expect(expired.presence).not.toBe("busy");
+    expect(expired.presence).toBe("idle");
+    expect(expired.status).toBe("空闲");
+
+    const desks = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(desks.body.desks.find((d: { id: string }) => d.id === "pool_cursor").presence).not.toBe("busy");
+  });
+
   it("human fill path — human_allowed or exception_grant", async () => {
     const { app } = setup();
     const allowed = await json(app, "/v1/goals", {
