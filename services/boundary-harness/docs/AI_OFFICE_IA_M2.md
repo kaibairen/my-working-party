@@ -1,6 +1,6 @@
 # AI 办公室 IA（M2 · 决策人主路径）
 
-对齐 `DECISION_MAKER_CLICK_FLOW_v1` §4。默认 `/` 与 `/inbox` 是同一壳：**AI 办公室 + 待我拍板**。
+对齐 `DECISION_MAKER_CLICK_FLOW_v1` §4 + COPY map §7。默认 `/` 与 `/inbox` 是同一壳、同一 HITL：**待我拍板**（顶栏可显示 `待办 · n`）。「决策抽屉」只是这个面板的别称，不是第二条队列。
 
 - 落地：`AI 办公室` + 弱 `工位一览`（CLICK_FLOW）
 - Inbox 顶栏：仅 `待办` / `待办 · n`（COPY map）
@@ -11,4 +11,4 @@
 - 文案包：`apps/web/copy/zh-DM.ts`
 - Ops / Health / OpenAPI：仅 `/ops` 或 `?dev=1`
 
-Roster / 填充槽可写 UI / 画布派发前置 = 非本 PR。
+Roster 最小集 = P1，不挡本 PR。填充槽可写 UI / 画布派发前置 = 非本 PR。

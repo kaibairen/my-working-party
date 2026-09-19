@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { clickPass, drainReadyGates, expect, seedAuthorityReady, seedDeliverReady, shotDir, test } from "./helpers";
+import { api, clickPass, drainReadyGates, expect, headers, seedAuthorityReady, seedDeliverReady, shotDir, test } from "./helpers";
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const evidenceDir = join(dirname(fileURLToPath(import.meta.url)), "../../evidence");
@@ -63,8 +63,10 @@ test.describe("Decision-maker shell", () => {
     await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
     await expect(page.getByTestId("working-who")).toContainText(/工位/);
     await expect(page.getByTestId("working-who")).not.toHaveText(UUID_RE);
-    await expect(page.getByTestId("output-summary")).toContainText("同事已交");
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
+    await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");
     await expect(page.getByTestId("output-summary")).not.toContainText("{");
+    await expect(page.getByTestId("output-summary")).not.toContainText("[");
     await expect(page.getByTestId("card-face")).not.toContainText(ready.gate!.id);
     await expect(page.getByTestId("card-face")).not.toContainText(ready.goal.id);
     await expect(page.getByTestId("card-face")).not.toContainText(/predicate_id|predicate_version/);
@@ -87,11 +89,53 @@ test.describe("Decision-maker shell", () => {
       await expect(missingCard.getByTestId("missing-item").filter({ hasText: entry })).toHaveCount(0);
       await expect(missingCard.getByTestId("card-face")).not.toContainText(entry);
     }
-    await expect(page.getByTestId("todo-chip")).toHaveText(/^待办 · /);
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 2");
+    await expect(page.getByTestId("gate-inbox")).toHaveCount(1);
+    await expect(page.locator("body")).not.toContainText("决策抽屉");
     await expect(page.locator("body")).not.toContainText("材料齐全");
     await expect(page.locator("body")).not.toContainText("还缺这些");
     await expect(page.locator("body")).not.toContainText("已打回重做");
     await expect(page.locator("body")).not.toContainText("已稍后处理");
+  });
+
+  test("inbox_one_hitl_queue_section7", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await page.goto("/");
+    await expect(page.getByTestId("board-title")).toHaveText("待我拍板");
+    await expect(page.getByTestId("gate-inbox")).toHaveCount(1);
+    await expect(page.getByTestId("inbox-empty")).toHaveCount(1);
+    await expect(page.getByTestId("board-cta")).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("决策抽屉");
+    await expect(page.getByTestId("roster-weak")).toBeVisible();
+    await expect(page.getByRole("link", { name: "工位一览" })).toHaveCount(0);
+
+    await page.goto("/inbox");
+    await expect(page.getByTestId("board-title")).toHaveText("待我拍板");
+    await expect(page.getByTestId("gate-inbox")).toHaveCount(1);
+    await expect(page.getByTestId("inbox-empty")).toHaveText("此刻没有待办。安静是正常的。");
+
+    const ready = await seedDeliverReady(baseURL!, "本周交付包");
+    await page.reload();
+    await expect(page.getByTestId("gate-card")).toHaveCount(1);
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
+    await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
+    await expect(page.getByTestId("working-who")).toHaveText("交付工位 · 协调人");
+    await expect(page.getByTestId("working-who")).not.toHaveText(UUID_RE);
+    await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");
+    await expect(page.getByTestId("output-summary")).not.toContainText(ready.gate!.id);
+    await expect(page.getByTestId("card-face")).not.toContainText("{");
+
+    await api(baseURL!, "/v1/policy/check", {
+      method: "POST",
+      headers: headers.executor,
+      body: JSON.stringify({
+        action: "chat_done",
+        track: "advisory_hint",
+        context: { text: "hint" },
+      }),
+    });
+    await page.getByTestId("reload-ready").click();
+    await expect(page.getByTestId("gate-card")).toHaveCount(1);
   });
 
   test("ops_routes_forbidden_for_dm", async ({ page }) => {
@@ -123,8 +167,11 @@ test.describe("Decision-maker shell", () => {
 
     await seedDeliverReady(baseURL!, "本周交付包");
     await page.goto("/inbox");
-    await expect(page.getByTestId("gate-title")).toBeVisible();
+    await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
     await expect(page.getByTestId("gate-title")).not.toHaveText(UUID_RE);
+    await expect(page.getByTestId("working-who")).toHaveText("交付工位 · 协调人");
+    await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
     await page.screenshot({ path: join(evidenceDir, "inbox_one_card_human.png"), fullPage: true });
     await page.screenshot({ path: join(shotDir, "inbox_one_card_human.png"), fullPage: true });
 

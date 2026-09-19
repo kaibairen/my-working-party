@@ -321,6 +321,9 @@ describe("domain API", () => {
     expect(html).toContain("missing-title\">还差<");
     expect(html).toContain("待你决定");
     expect(html).not.toContain("查看待我拍板");
+    expect(html).not.toContain(">决策抽屉<");
+    expect(html).toContain("同事已交：结论摘要、产物");
+    expect(html).toContain("data-hitl=\"待我拍板\"");
     expect(html).not.toContain("Reload ready");
     expect(html).not.toContain("材料齐全");
     expect(html).not.toContain("还缺这些");

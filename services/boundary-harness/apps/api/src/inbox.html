@@ -45,7 +45,7 @@
   </style>
 </head>
 <body>
-  <!-- Inbox chrome: DM_INBOX_COPY_FIELD_MAP_v1. Office landing: CLICK_FLOW §4. Ops: /ops or ?dev=1. -->
+  <!-- Inbox chrome: COPY map + §7. 「决策抽屉」=「待我拍板」= one HITL queue. Ops: /ops or ?dev=1. -->
   <header data-testid="dm-topbar">
     <div>
       <h1>AI 办公室</h1>
@@ -53,7 +53,7 @@
     </div>
     <div class="row">
       <a class="chip" href="#board" id="todo-chip" data-testid="todo-chip">待办</a>
-      <span class="weak" data-testid="roster-weak">工位一览</span>
+      <span class="weak" data-testid="roster-weak" title="工位一览稍后做，不是第二条待办">工位一览</span>
       <div id="dev-controls" class="row" data-testid="dev-controls">
         <a href="/ops" data-testid="ops-link">运维</a>
         <select id="role" data-testid="role-impersonation">
@@ -65,7 +65,7 @@
     </div>
   </header>
   <main>
-    <section id="board" data-testid="gate-inbox">
+    <section id="board" data-testid="gate-inbox" data-hitl="待我拍板">
       <div class="row" style="justify-content:space-between">
         <h2 id="panel-title" data-testid="board-title">待我拍板</h2>
         <button id="reload" class="muted" data-testid="reload-ready">刷新</button>
@@ -188,8 +188,12 @@
         return {};
       }
     }
-    function setCounts(authorityN) {
-      $("todo-chip").textContent = authorityN > 0 ? `待办 · ${authorityN}` : "待办";
+    function outputSummary(missing) {
+      if (missing.length) return "材料还没齐，先看上面「还差」";
+      return "同事已交：结论摘要、产物";
+    }
+    function setCounts(queueN) {
+      $("todo-chip").textContent = queueN > 0 ? `待办 · ${queueN}` : "待办";
     }
     async function decide(card, act, structural, note) {
       const id = card.dataset.id;
@@ -225,8 +229,7 @@
       const body = await res.json();
       const gates = (body.gates || []).filter((g) => g.status === "ready" && !isAdvisory(g));
       await Promise.all(gates.map((g) => loadGoal(g.goal_id)));
-      const authorityN = gates.filter((g) => isAuthority(g, (g.ready_result && g.ready_result.missing) || [])).length;
-      setCounts(authorityN);
+      setCounts(gates.length);
       $("list").innerHTML = gates.length ? gates.map((g) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
@@ -242,9 +245,7 @@
         const why = missing.length
           ? `<p class="sub" data-testid="why-line">还不能过，先看缺什么</p>`
           : `<p class="sub" data-testid="why-line">证据已齐，等你拍板</p>`;
-        const output = missing.length
-          ? `目标：${esc(title)}`
-          : `目标：${esc(title)} · 同事已交：摘要 / 产物链接`;
+        const output = outputSummary(missing);
         return `<article class="card" data-testid="gate-card" data-id="${esc(g.id)}" data-version="${esc(g.version)}">
           <div data-testid="card-face">
             <div class="row">

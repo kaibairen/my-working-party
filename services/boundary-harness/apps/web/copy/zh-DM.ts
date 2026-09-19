@@ -1,4 +1,4 @@
-/** Inbox chrome: DM_INBOX_COPY_FIELD_MAP_v1. Office landing: CLICK_FLOW §4 where compatible. */
+/** Inbox chrome: COPY map + §7. 「决策抽屉」=「待我拍板」= one HITL queue. */
 export const zhDM = {
   officeTitle: "AI 办公室",
   officeSub: "同事在工位上干活。你只在「待我拍板」出现时进来。",
@@ -6,6 +6,8 @@ export const zhDM = {
   todoChipCount: (n: number) => `待办 · ${n}`,
   rosterWeak: "工位一览",
   boardTitle: "待我拍板",
+  outputReady: "同事已交：结论摘要、产物",
+  outputMissing: "材料还没齐，先看上面「还差」",
   emptyExact: "此刻没有待办。安静是正常的。",
   whyReady: "证据已齐，等你拍板",
   whyMissing: "还不能过，先看缺什么",
