@@ -14,7 +14,7 @@ describe("listDesks presence projection", () => {
     harness = undefined;
   });
 
-  it("desks_no_fake_seed_names", () => {
+  it("desks_no_pool_seed_fake_names", () => {
     harness = createHarness({ databasePath: ":memory:" });
     const { desks, readonly, hitl, stub, heartbeat_ttl_seconds } = listDesks(harness, dm);
     expect(readonly).toBe(true);
@@ -39,9 +39,12 @@ describe("listDesks presence projection", () => {
     expect(listDesks(harness, dm).heartbeat_ttl_seconds).toBe(HEARTBEAT_TTL_SECONDS);
   });
 
-  it("overlays a live heartbeat and drops it after TTL", () => {
+  it("desks_list_requires_fresh_heartbeat", () => {
     let nowMs = Date.parse("2026-09-19T05:00:00.000Z");
     harness = createHarness({ databasePath: ":memory:", now: () => new Date(nowMs).toISOString() });
+    const empty = listDesks(harness, dm);
+    expect(empty.stub).toBe(true);
+    expect(empty.desks).toEqual([]);
     const bot: Actor = { id: "bot-1", role: "executor" };
     recordHeartbeat(harness, bot, { display_name: "交付同事", pool_id: "pool_noop", ttl_seconds: 90 });
     const live = listDesks(harness, dm);
