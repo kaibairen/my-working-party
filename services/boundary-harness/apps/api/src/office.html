@@ -459,7 +459,15 @@
     boot();
     try {
       const es = new EventSource("/v1/events?role=" + encodeURIComponent(ROLE) + "&actor=" + encodeURIComponent(ACTOR));
-      es.addEventListener("gate.ready", () => { loadInbox(); loadOffice(); });
+      let live = false;
+      let refreshTimer = 0;
+      const refresh = () => {
+        if (!live) return;
+        clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => { loadInbox(); loadOffice(); }, 80);
+      };
+      es.addEventListener("hello", () => { live = true; });
+      es.addEventListener("gate.ready", refresh);
     } catch (_) { /* SSE optional */ }
   </script>
 </body>
