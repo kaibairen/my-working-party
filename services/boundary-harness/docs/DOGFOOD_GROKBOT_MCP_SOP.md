@@ -28,7 +28,7 @@ pnpm --filter @harness/mcp-server start:http   # HTTP 手套 :8787/mcp
 
 ## 3. 建议先调的工具
 
-1. `harness_heartbeat`（`display_name` + 可选 `pool_id=pool_noop`）→ 办公室「工位心跳」出现 `last_heartbeat`（TTL **90s**，见下）。  
+1. **必须先调 `harness_heartbeat`**（`display_name` 或 `name` = 侧栏 Bot 真名；可选 `pool_id`）——**不报心跳就不会出现在办公室工位**。种子执行池不是同事，默认花名册是空的。TTL **90s**，见下。  
 2. `harness_create_goal` / `harness_fill_assignment` / `harness_dispatch` / `harness_attach_evidence`。  
 3. 办公室槽位应显示该 Bot 的填充，而不是 curl 代跑。
 
@@ -38,10 +38,11 @@ Stdio 备选（Cursor/`mcp.json`，仍是本机配置，不是账号目录）：
 
 ## 4. 工位 TTL
 
-`GET /v1/desks` 只读。`POST /v1/agents/heartbeat`（或 `harness_heartbeat`）刷新 `last_heartbeat`。
+`GET /v1/desks` 只读，**默认只返回 TTL 内的心跳 Bot**（`display_name` / actor）。种子 `pool_noop` / `pool_cursor` **不会**当成「交付同事 / Cursor 同事」出现，也**不得占用决策人主花名册**。运维（非 decision_maker）可加 `?include_pools=1`，池行只标「执行池 · noop / Cursor」；决策人带该参数仍只见心跳。
 
+- **必须调用 `harness_heartbeat`（或 `POST /v1/agents/heartbeat`）才会出现在工位。**  
 - **默认 TTL：90 秒**（可在心跳体里设 `ttl_seconds`，夹在 15–3600）。  
-- 过期后该行不再算在线：池工位回落 `source=pool_seed`、`last_heartbeat=null`；无池的 agent 行消失。  
+- 过期后该 Bot 行消失；办公室空态「还没有 Bot 报心跳」。  
 - 看板仍是投影，**不是**派工台。无官方侧栏 roster API——不要扫 `agent-data` 或 `:1340`。
 
 ## 5. 人也能填

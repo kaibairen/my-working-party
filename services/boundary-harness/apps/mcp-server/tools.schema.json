@@ -131,12 +131,13 @@
       }
     },
     "harness_heartbeat": {
-      "description": "Report presence. GET /v1/desks reads last_heartbeat within TTL (default 90s).",
+      "description": "Report presence so the office roster shows this bot. GET /v1/desks is heartbeat-only (TTL 90s). Seed pools are not colleagues.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "display_name": { "type": "string" },
+          "name": { "type": "string", "description": "Alias for display_name" },
           "pool_id": { "type": "string" },
           "ttl_seconds": { "type": "integer", "minimum": 15, "maximum": 3600 },
           "role": { "type": "string" },

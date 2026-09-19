@@ -192,10 +192,18 @@ paths:
     get:
       summary: Read-only office roster (presence projection, not dispatch)
       description: |
-        Pool seed desks plus live `POST /v1/agents/heartbeat` rows within TTL
-        (default 90s, advertised as `heartbeat_ttl_seconds`). Expired heartbeats
-        fall back to `source=pool_seed` / `last_heartbeat=null`. Clients MUST NOT
-        POST this path.
+        Default office roster is live `POST /v1/agents/heartbeat` rows within TTL
+        only (default 90s, advertised as `heartbeat_ttl_seconds`), named from
+        heartbeat `display_name`. Seed execution pools are not Bot colleagues.
+        Pass `include_pools=1` for a **non-DM** ops overlay labeled 「执行池 · …」.
+        Decision-maker requests ignore the flag — seed pools never occupy the
+        primary roster. Expired heartbeats are omitted. Clients MUST NOT POST this path.
+      parameters:
+        - name: include_pools
+          in: query
+          required: false
+          schema: { type: string, enum: ["1", "true"] }
+          description: Non-DM ops overlay. Ignored for decision_maker. Pools labeled 执行池, never 同事.
       responses:
         "200":
           description: OK
@@ -218,6 +226,7 @@ paths:
                   readonly: { type: boolean }
                   stub: { type: boolean }
                   heartbeat_ttl_seconds: { type: integer }
+                  include_pools: { type: boolean }
         "403":
           description: forbidden
   /v1/agents/heartbeat:
@@ -233,6 +242,7 @@ paths:
               type: object
               properties:
                 display_name: { type: string }
+                name: { type: string, description: "Alias for display_name (sidebar bot real name)" }
                 pool_id: { type: string }
                 ttl_seconds: { type: integer, minimum: 15, maximum: 3600 }
       responses:

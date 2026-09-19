@@ -174,18 +174,24 @@ export function createApp(harness: Harness) {
   v1.get("/pools", (c) => c.json({ pools: listPools(c.get("harness")) }));
 
   v1.get("/desks", (c) => {
-    return c.json(listDesks(c.get("harness"), c.get("actor")));
+    const flag = (c.req.query("include_pools") ?? "").trim().toLowerCase();
+    const requested = flag === "1" || flag === "true" || flag === "yes";
+    const actor = c.get("actor");
+    const includePools = requested && actor.role !== "decision_maker";
+    return c.json(listDesks(c.get("harness"), actor, { includePools }));
   });
 
   v1.post("/agents/heartbeat", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as {
       display_name?: string;
+      name?: string;
       pool_id?: string;
       ttl_seconds?: number;
     };
     return c.json(
       recordHeartbeat(c.get("harness"), c.get("actor"), {
         display_name: body.display_name,
+        name: body.name,
         pool_id: body.pool_id,
         ttl_seconds: body.ttl_seconds,
       }),

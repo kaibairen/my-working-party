@@ -173,6 +173,49 @@ describe("P0 linkage contracts", () => {
     expect(listTools({ http: true }).some((t) => t.name.includes("cursor_raw"))).toBe(false);
   });
 
+  it("office_no_fake_name_wall", async () => {
+    const { app } = setup();
+    const dm = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(dm.body.readonly).toBe(true);
+    expect(dm.body.desks).toEqual([]);
+    expect(JSON.stringify(dm.body)).not.toMatch(/交付同事|Cursor 同事/);
+    const dmFlag = await json(app, "/v1/desks?include_pools=1", { headers: mcpHeaders("decision_maker", "you") });
+    expect(dmFlag.body.include_pools).toBe(false);
+    expect(dmFlag.body.desks).toEqual([]);
+    expect(JSON.stringify(dmFlag.body)).not.toMatch(/交付同事|Cursor 同事/);
+    expect(dmFlag.body.desks.some((d: { source: string }) => d.source === "pool_seed")).toBe(false);
+
+    const beat = await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-deliver"),
+      body: JSON.stringify({ display_name: "周报 Bot" }),
+    });
+    expect(beat.res.status).toBe(200);
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(live.body.desks).toHaveLength(1);
+    expect(live.body.desks[0].name).toBe("周报 Bot");
+    expect(live.body.desks[0].id).toBe("agent:bot-deliver");
+    expect(live.body.desks[0].source).toBe("heartbeat");
+    expect(JSON.stringify(live.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
+  });
+
+  it("heartbeat_ttl_expiry_clears_row", async () => {
+    let nowMs = Date.parse("2026-09-19T04:00:00.000Z");
+    const { app } = setup(() => new Date(nowMs).toISOString());
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-deliver"),
+      body: JSON.stringify({ display_name: "周报 Bot", ttl_seconds: HEARTBEAT_TTL_SECONDS }),
+    });
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(live.body.desks.map((d: { id: string }) => d.id)).toEqual(["agent:bot-deliver"]);
+    nowMs += (HEARTBEAT_TTL_SECONDS + 1) * 1000;
+    const expired = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(expired.body.desks).toEqual([]);
+    expect(expired.body.stub).toBe(true);
+    expect(expired.body.desks.some((d: { source: string }) => d.source === "pool_seed")).toBe(false);
+  });
+
   it("harness_heartbeat_desks_ttl_readonly", async () => {
     let nowMs = Date.parse("2026-09-19T04:00:00.000Z");
     const { app } = setup(() => new Date(nowMs).toISOString());
@@ -181,32 +224,36 @@ describe("P0 linkage contracts", () => {
     expect(before.body.readonly).toBe(true);
     expect(before.body.stub).toBe(true);
     expect(before.body.heartbeat_ttl_seconds).toBe(HEARTBEAT_TTL_SECONDS);
-    expect(before.body.desks.find((d: { id: string }) => d.id === "pool_noop").last_heartbeat).toBeNull();
-    expect(before.body.desks.find((d: { id: string }) => d.id === "pool_noop").source).toBe("pool_seed");
+    expect(before.body.desks).toEqual([]);
+    expect(JSON.stringify(before.body)).not.toMatch(/交付同事|Cursor 同事/);
 
     const beat = await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "bot-deliver"),
-      body: JSON.stringify({ display_name: "交付同事", pool_id: "pool_noop" }),
+      body: JSON.stringify({ display_name: "周报 Bot", pool_id: "pool_noop" }),
     });
     expect(beat.res.status).toBe(200);
     expect(beat.body.ttl_seconds).toBe(HEARTBEAT_TTL_SECONDS);
+    expect(beat.body.display_name).toBe("周报 Bot");
 
     const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
     expect(live.body.stub).toBe(false);
     expect(live.body.readonly).toBe(true);
-    const noop = live.body.desks.find((d: { id: string }) => d.id === "pool_noop");
-    expect(noop.last_heartbeat).toBe(beat.body.last_heartbeat);
-    expect(noop.source).toBe("heartbeat");
+    const agent = live.body.desks.find((d: { id: string }) => d.id === "agent:bot-deliver");
+    expect(agent.name).toBe("周报 Bot");
+    expect(agent.last_heartbeat).toBe(beat.body.last_heartbeat);
+    expect(agent.source).toBe("heartbeat");
+    expect(live.body.desks.some((d: { name: string }) => /交付同事|Cursor 同事/.test(d.name))).toBe(false);
 
     const extra = await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "sidebar-bot"),
-      body: JSON.stringify({ display_name: "侧栏同事", ttl_seconds: 60 }),
+      body: JSON.stringify({ name: "侧栏真名", ttl_seconds: 60 }),
     });
     expect(extra.body.ttl_seconds).toBe(60);
+    expect(extra.body.display_name).toBe("侧栏真名");
     const withExtra = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
-    expect(withExtra.body.desks.some((d: { id: string }) => d.id === "agent:sidebar-bot")).toBe(true);
+    expect(withExtra.body.desks.some((d: { id: string; name: string }) => d.id === "agent:sidebar-bot" && d.name === "侧栏真名")).toBe(true);
 
     const write = await app.request("/v1/desks", {
       method: "POST",
@@ -218,8 +265,7 @@ describe("P0 linkage contracts", () => {
     nowMs += (HEARTBEAT_TTL_SECONDS + 1) * 1000;
     const expired = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
     expect(expired.body.stub).toBe(true);
-    expect(expired.body.desks.find((d: { id: string }) => d.id === "pool_noop").source).toBe("pool_seed");
-    expect(expired.body.desks.find((d: { id: string }) => d.id === "pool_noop").last_heartbeat).toBeNull();
+    expect(expired.body.desks).toEqual([]);
     expect(expired.body.desks.some((d: { id: string }) => d.id === "agent:sidebar-bot")).toBe(false);
   });
 
@@ -304,6 +350,8 @@ describe("P0 linkage contracts", () => {
     const names = listTools({ http: true }).map((t) => t.name);
     expect(names.every((n) => n.startsWith("harness_"))).toBe(true);
     expect(names).toContain("harness_heartbeat");
+    expect(sop).toMatch(/harness_heartbeat/);
+    expect(sop).toMatch(/出现在工位|工位心跳/);
     const mcpApp = createMcpHttpApp();
     const healthz = await mcpApp.request("/healthz");
     const hz = (await healthz.json()) as { ok: boolean; api: string };

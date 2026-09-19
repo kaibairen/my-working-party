@@ -207,7 +207,27 @@ export async function seedAuthorityReady(baseURL: string, action = "destructive_
   return { goal, gate: check.gate_instance };
 }
 
-/** Fill an assignment without dispatch so the desk projects 在忙. */
+/** Bot self-report so the office roster shows a real name (not a seed pool). */
+export async function seedHeartbeat(
+  baseURL: string,
+  opts: { actor?: string; display_name: string; pool_id?: string; ttl_seconds?: number },
+) {
+  const actor = opts.actor ?? "bot-1";
+  return requireOk(
+    "heartbeat",
+    await api(baseURL, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: jsonHeaders("executor", actor),
+      body: JSON.stringify({
+        display_name: opts.display_name,
+        pool_id: opts.pool_id,
+        ttl_seconds: opts.ttl_seconds,
+      }),
+    }),
+  );
+}
+
+/** Fill an assignment without dispatch so a bound heartbeat desk projects 在忙. */
 export async function seedBusyDesk(baseURL: string, poolId = "pool_cursor") {
   const goal = await requireOk(
     "create busy-desk goal",

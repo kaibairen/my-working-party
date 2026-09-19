@@ -312,7 +312,9 @@ describe("domain API", () => {
     expect(officeHtml).toContain("exception-grants");
     expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
     expect(officeHtml).toContain("工位心跳");
-    expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
+    expect(officeHtml).toContain("工位是 Bot 自报心跳，不是侧栏同步");
+    expect(officeHtml).toContain("还没有 Bot 报心跳");
+    expect(officeHtml).toContain("只读投影");
     expect(officeHtml).toContain('data-testid="roster"');
     expect(officeHtml).toContain('data-readonly="true"');
     expect(officeHtml).toContain("/v1/desks");
@@ -365,12 +367,21 @@ describe("domain API", () => {
     expect(listed.body.hitl).toBe("待我拍板");
     expect(listed.body.stub).toBe(true);
     expect(listed.body.heartbeat_ttl_seconds).toBe(90);
-    expect(listed.body.desks).toEqual(
+    expect(listed.body.include_pools).toBe(false);
+    expect(listed.body.desks).toEqual([]);
+    expect(JSON.stringify(listed.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
+    const dmFlag = await json(app, "/v1/desks?include_pools=1", { headers: headers("decision_maker", "you") });
+    expect(dmFlag.body.include_pools).toBe(false);
+    expect(dmFlag.body.desks).toEqual([]);
+    const ops = await json(app, "/v1/desks?include_pools=1", { headers: headers("coordinator", "coord-1") });
+    expect(ops.body.include_pools).toBe(true);
+    expect(ops.body.desks).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "交付同事", status: "空闲", presence: "idle", source: "pool_seed" }),
-        expect.objectContaining({ name: "Cursor 同事", status: "空闲", presence: "idle", source: "pool_seed" }),
+        expect.objectContaining({ name: "执行池 · noop", status: "空闲", presence: "idle", source: "pool_seed" }),
+        expect.objectContaining({ name: "执行池 · Cursor", status: "空闲", presence: "idle", source: "pool_seed" }),
       ]),
     );
+    expect(JSON.stringify(ops.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
     const write = await app.request("/v1/desks", {
       method: "POST",
       headers: headers("decision_maker", "you"),
