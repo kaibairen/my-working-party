@@ -12,6 +12,8 @@ X-Harness-Actor: you
 
 These office routes are a **READ projection + limited create**. Do not add assign / drag / start-run controls.
 
+Backend hangs QA antis `office_no_assign_desk`, `office_no_drag_dispatch`, `office_no_start_run_button`, `fill_board_not_dispatch_console` as **403** on those write attempts. Frontend owns the matching button absences.
+
 ## 1. Goal list (human titles)
 
 ```http
