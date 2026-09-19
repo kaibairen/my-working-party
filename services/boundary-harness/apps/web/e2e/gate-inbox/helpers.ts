@@ -234,6 +234,11 @@ export async function clickPass(page: Page) {
   await page.getByTestId("decide-pass-confirm").click();
 }
 
+export async function clickRevise(page: Page) {
+  await page.getByTestId("decide-revise").click();
+  await page.getByTestId("decide-revise-confirm").click();
+}
+
 export const VERBAL_DONE_RE =
   /标记完成|mark done|mark as done|i(?:'|’)m done|我确认好了|我确认了|口头完成/i;
 export const CANVAS_CTA_RE = /去画布看进度|go to canvas|view progress on canvas|open canvas/i;

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { api, clickPass, drainReadyGates, expect, headers, seedDeliverReady, shotDir, test } from "./helpers";
+import { api, clickPass, clickRevise, drainReadyGates, expect, headers, seedDeliverReady, shotDir, test } from "./helpers";
 
 test.describe("E2E decide", () => {
   test("decide_pass_uses_version", async ({ page, baseURL }) => {
@@ -38,7 +38,7 @@ test.describe("E2E decide", () => {
     const decideRes = page.waitForResponse(
       (res) => res.request().method() === "POST" && res.url().includes(`/v1/gates/${ready.gate!.id}/decide`),
     );
-    await page.getByTestId("decide-revise").click();
+    await clickRevise(page);
     const req = await decideReq;
     const body = req.postDataJSON() as Record<string, unknown>;
     expect(body.decision).toBe("revise");
@@ -75,7 +75,7 @@ test.describe("E2E decide", () => {
     expect(conflict.status).toBe(200);
 
     await clickPass(page);
-    await expect(page.getByTestId("inbox-flash")).toContainText(/别人刚处理过这张，已帮你刷新/);
+    await expect(page.getByTestId("inbox-flash")).toContainText(/别人刚拍过，已为你刷新/);
     await expect(page.getByTestId("inbox-flash")).toHaveClass(/conflict/);
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
 

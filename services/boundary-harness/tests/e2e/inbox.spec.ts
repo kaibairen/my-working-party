@@ -73,6 +73,6 @@ test("Gate Inbox lists ready gate, shows missing[], decide pass", async ({ page,
 
   await page.getByTestId("decide-pass").click();
   await page.getByTestId("decide-pass-confirm").click();
-  await expect(page.locator("#flash")).toContainText("已通过。");
+  await expect(page.locator("#flash")).toContainText(/已通过/);
   await page.screenshot({ path: join(shotDir, "gate_decide_success.png"), fullPage: true });
 });

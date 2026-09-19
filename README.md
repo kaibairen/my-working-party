@@ -42,7 +42,7 @@ Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`)
 
 | Mode | How to open | What you see |
 |------|-------------|--------------|
-| **Decision-maker (default)** | `/` or `/inbox` | AI 办公室 + 待我拍板. Top bar: `待办` / `待办 · n` and weak `工位一览`. No Health / OpenAPI / outbox / role switch. |
+| **Decision-maker (default)** | `/` or `/inbox` | AI 办公室 + 待我拍板. Top bar: `查看待我拍板` / `待我拍板 · N`, `待办` / `待办 · n`, weak `工位一览`. No Health / OpenAPI / outbox / role switch. |
 | **Ops** | `/ops` (direct URL; not linked from the DM shell) | Health, OpenAPI prefix, outbox / delivery. |
 | **Dev** | `/inbox?dev=1` | Same office, plus role-impersonation and a 运维 link to `/ops`. |
 

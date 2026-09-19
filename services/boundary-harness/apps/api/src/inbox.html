@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI 办公室</title>
   <style>
-    :root { color-scheme: dark; --bg:#0f1419; --card:#1a222c; --line:#2b3643; --ok:#3dd68c; --warn:#f5c26b; --ink:#e8eef4; --muted:#93a1b1; }
+    :root { color-scheme: dark; --bg:#0f1419; --card:#1a222c; --line:#2b3643; --ok:#3dd68c; --warn:#f5c26b; --ink:#e8eef4; --muted:#93a1b1; --dot:#ff6b6b; }
     * { box-sizing: border-box; }
     body { margin: 0; font: 15px/1.5 "Noto Sans CJK SC", "Noto Sans SC", "Noto Sans CJK", ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--ink); }
-    header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
     h1 { margin: 0; font-size: 20px; font-weight: 650; }
     h2 { margin: 0 0 8px; font-size: 16px; }
     .sub { color: var(--muted); font-size: 13px; }
-    .meta { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+    .fine { color: var(--muted); font-size: 12px; }
     .weak { color: var(--muted); font-size: 13px; opacity: .75; }
     main { padding: 24px; max-width: 880px; margin: 0 auto; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -22,39 +22,38 @@
     button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
     button.muted { background: #1a222c; color: var(--muted); }
     button:disabled { opacity: .45; cursor: not-allowed; }
+    button.active { border-color: #8cb4ff; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 12px 0; }
     .missing { color: var(--warn); font-size: 13px; margin-top: 8px; }
     .missing-list { margin: 6px 0 0; padding-left: 18px; }
-    .missing-code { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
-    .status { text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
-    .ready { color: var(--ok); }
     .badge { font-size: 12px; border: 1px solid #6b5420; color: var(--warn); border-radius: 999px; padding: 2px 8px; }
+    .chip { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--ink); font-size: 13px; }
+    .chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dot); margin-right: 6px; }
     .flash { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #163526; color: var(--ok); display: none; }
     .flash.show { display: block; }
     .flash.conflict { background: #3a2e14; color: var(--warn); }
     a { color: #8cb4ff; text-decoration: none; }
     .title { font-size: 17px; }
-    .chip { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--ink); font-size: 13px; }
-    .confirm { margin-top: 10px; padding: 10px; border-radius: 8px; background: #163526; }
-    .struct { margin-top: 8px; }
+    .confirm, .revise-box { margin-top: 10px; padding: 10px; border-radius: 8px; background: #163526; }
+    .revise-box { background: #3a2e14; }
     #dev-controls { display: none; }
     body.dev #dev-controls { display: flex; }
     details.meta-box { margin-top: 8px; color: var(--muted); font-size: 12px; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .empty { text-align: left; max-width: 36em; }
+    .empty h3 { margin: 8px 0; font-size: 18px; font-weight: 600; }
   </style>
 </head>
 <body>
-  <!--
-    Decision-maker vs ops/dev (CLICK_FLOW §4 + COPY map + §7):
-    / and /inbox are the same AI 办公室 shell. 待我拍板 is the only HITL queue.
-    Ops dashboards and role-impersonation are only via /ops or ?dev=1.
-  -->
+  <!-- Copy SoT: apps/web/copy/zh-DM.ts · CLICK_FLOW §1/§4. Ops only via /ops or ?dev=1. -->
   <header data-testid="dm-topbar">
     <div>
       <h1>AI 办公室</h1>
+      <p class="sub" data-testid="office-sub">同事在工位上干活。你只在「待我拍板」出现时进来。</p>
     </div>
     <div class="row">
       <a class="chip" href="#board" id="todo-chip" data-testid="todo-chip">待办</a>
+      <a class="chip" href="#board" id="board-cta" data-testid="board-cta">查看待我拍板</a>
       <span class="weak" data-testid="roster-weak">工位一览</span>
       <div id="dev-controls" class="row" data-testid="dev-controls">
         <a href="/ops" data-testid="ops-link">运维</a>
@@ -72,6 +71,11 @@
         <h2 id="panel-title" data-testid="board-title">待我拍板</h2>
         <button id="reload" class="muted" data-testid="reload-ready">刷新</button>
       </div>
+      <div class="row" data-testid="filter-row">
+        <button type="button" class="chip active" data-filter="ready" data-testid="filter-ready">要你决定</button>
+        <button type="button" class="chip" data-filter="decided" data-testid="filter-decided">已决定</button>
+      </div>
+      <p class="sub" id="list-hint" data-testid="list-hint">下面每张卡都过了硬门禁检查，可以拍板。</p>
       <div id="flash" class="flash" data-testid="inbox-flash"></div>
       <div id="list" data-testid="gate-list"></div>
     </section>
@@ -83,24 +87,19 @@
     const goalCache = new Map();
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const MISSING_ZH = {
-      "evidence:summary_md": "缺少摘要",
-      "evidence:artifact_uri": "缺少产物",
-      "evidence:pr": "缺少 PR",
-      "evidence:report_md": "缺少报告",
-      "evidence:screenshot": "缺少截图",
-      "evidence:ci_check": "缺少 CI 检查",
-      "noop_or_offline_contract": "离线/空跑契约未满足",
-      "run_lifecycle:FINISHED": "运行尚未结束",
-      "policy_clearance:no_open_authority_escalation": "仍有未关闭的权限升级",
+      "evidence:summary_md": "还缺一份结论摘要",
+      summary_md: "还缺一份结论摘要",
+      "evidence:artifact_uri": "还缺可打开的产物",
+      artifact_uri: "还缺可打开的产物",
+      "evidence:pr": "相关合并请求还是草稿",
+      "github_pr:is_draft=true": "相关合并请求还是草稿",
+      "noop_or_offline_contract": "还缺可打开的产物",
+      "run_lifecycle:FINISHED": "运行还没结束",
+      "policy_clearance:no_open_authority_escalation": "还不能过：仍有未关闭的权限升级",
     };
     const ACTION_ZH = { destructive_delete: "破坏性删除" };
-    const KIND_ZH = { deliver_ready_v1: "交付待审", safety_only_v1: "安全门待审" };
     const RULE_ZH = { deliver_ready_v1: "交付验收", safety_only_v1: "安全门禁" };
-    const TOAST = {
-      pass: "已通过。",
-      revise: "已打回，同事会再交一版。",
-      defer: "已搁下，需要时还会出现。",
-    };
+    let filter = "ready";
     function currentRole() { return ($("role") && $("role").value) || "decision_maker"; }
     function currentActor() { return ($("actor") && $("actor").value) || "dm-1"; }
     const headers = () => ({
@@ -134,20 +133,14 @@
     }
     function missingLabel(code) {
       const raw = String(code ?? "");
-      if (MISSING_ZH[raw]) return `${MISSING_ZH[raw]}（${raw}）`;
+      if (MISSING_ZH[raw]) return MISSING_ZH[raw];
       const auth = raw.match(/^authority_escalation:(.+)$/);
-      if (auth) {
-        const action = ACTION_ZH[auth[1]] || auth[1];
-        return `需要批准权限升级：${action}（${raw}）`;
-      }
-      const ghPr = raw.match(/^github_pr:is_draft=(.+)$/);
-      if (ghPr) return `GitHub PR 仍为草稿（${raw}）`;
-      const ghCk = raw.match(/^github_checks:conclusion=(.+)$/);
-      if (ghCk) return `GitHub 检查结论：${ghCk[1]}（${raw}）`;
-      if (raw.startsWith("unknown_predicate:")) return `未知就绪条件（${raw}）`;
-      if (raw.startsWith("unknown_predicate_node:")) return `未知条件节点（${raw}）`;
-      if (raw.startsWith("evidence:")) return `缺少材料（${raw}）`;
-      return raw;
+      if (auth) return `还不能过：需要批准${ACTION_ZH[auth[1]] || auth[1]}`;
+      if (/github_pr:is_draft/.test(raw)) return "相关合并请求还是草稿";
+      if (/github_checks:conclusion/.test(raw) && !/=success$/.test(raw)) return "检查还没全部通过";
+      if (raw.startsWith("github_checks:")) return "检查还没全部通过";
+      if (raw.startsWith("evidence:")) return `还缺：${raw.slice("evidence:".length)}`;
+      return `还缺：${raw}`;
     }
     function isAdvisory(g) {
       const track = g.track || (g.ready_result && g.ready_result.track) || "";
@@ -176,15 +169,20 @@
       const name = String((goal && goal.title) || "").trim();
       if (name && !UUID_RE.test(name)) return name;
       const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
-      return KIND_ZH[pred] || "待办事项";
+      return RULE_ZH[pred] || "待我拍板";
     }
     function missingHtml(missing) {
       if (!missing.length) return "";
-      return `<div class="missing" data-testid="missing-block">还差
-        <ul class="missing-list">${missing.map((m) => {
-          const zh = missingLabel(m).replace(/（[^）]*）$/, "");
-          return `<li data-testid="missing-item">${esc(zh)}</li>`;
-        }).join("")}</ul>
+      return `<div class="missing" data-testid="missing-block"><span class="sr-only">还差</span>还不能过，缺这些
+        <ul class="missing-list">${missing.map((m) => `<li data-testid="missing-item">${esc(missingLabel(m))}</li>`).join("")}</ul>
+      </div>`;
+    }
+    function emptyHtml() {
+      return `<div class="empty" data-testid="inbox-empty-wrap">
+        <h3 data-testid="empty-title">此刻没有需要你拍板的事</h3>
+        <p data-testid="inbox-empty">此刻没有待办。安静是正常的。</p>
+        <p class="sub">安静是正常的。同事填满工位后，卡片会自己出现在这里。</p>
+        <p class="fine">不用去盯进度。完成以证据为准，不认口头说「好了」。</p>
       </div>`;
     }
     async function loadGoal(id) {
@@ -203,37 +201,57 @@
     }
     function setCounts(shown, authorityN) {
       $("todo-chip").textContent = authorityN > 0 ? `待办 · ${authorityN}` : "待办";
+      const cta = $("board-cta");
+      cta.innerHTML = shown > 0 ? `<span class="dot"></span>待我拍板 · ${shown}` : "查看待我拍板";
       $("panel-title").textContent = shown > 0 ? `待我拍板 · ${shown}` : "待我拍板";
+      $("list-hint").hidden = shown === 0 || filter === "decided";
     }
-    async function decide(card, act, structural) {
+    async function decide(card, act, structural, note) {
       const id = card.dataset.id;
       const version = Number(card.dataset.version);
+      const payload = { decision: act, version, structural_change: !!structural };
+      if (note) payload.note = note;
       const res = await fetch(`/v1/gates/${id}/decide`, {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ decision: act, version, structural_change: !!structural }),
+        body: JSON.stringify(payload),
       });
       const body = await res.json();
       const code = (body && body.code) || (body.error && body.error.code);
       if (!res.ok) {
         if (res.status === 409 || code === "optimistic_lock") {
-          flash("别人刚处理过这张，已帮你刷新。", "conflict");
+          flash("别人刚拍过，已为你刷新", "conflict");
           await load();
           return;
         }
-        flash(`没能处理：${code || res.status}`);
+        flash(`没能处理`);
         return;
       }
-      flash(TOAST[act] || "已处理。");
+      const toasts = {
+        pass: "已通过 · 办公室少了一张待办",
+        revise: "已打回，同事会再交一版。",
+        defer: "已搁下，需要时还会出现。",
+      };
+      flash(toasts[act] || "已处理");
       await load();
     }
     async function load() {
-      const res = await fetch("/v1/gates?status=ready", { headers: headers() });
+      const status = filter === "decided" ? "decided" : "ready";
+      const res = await fetch(`/v1/gates?status=${status}`, { headers: headers() });
       const body = await res.json();
-      const gates = (body.gates || []).filter((g) => g.status === "ready" && !isAdvisory(g));
+      const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
       await Promise.all(gates.map((g) => loadGoal(g.goal_id)));
       const authorityN = gates.filter((g) => isAuthority(g, (g.ready_result && g.ready_result.missing) || [])).length;
-      setCounts(gates.length, authorityN);
+      setCounts(filter === "ready" ? gates.length : 0, filter === "ready" ? authorityN : 0);
+      if (filter === "decided") {
+        $("list").innerHTML = gates.length
+          ? gates.map((g) => {
+            const goal = goalCache.get(g.goal_id) || {};
+            return `<article class="card" data-testid="gate-card-readonly"><strong>${esc(cardTitle(g, goal))}</strong><p class="sub">已决定 · 只读</p></article>`;
+          }).join("")
+          : `<p class="sub">还没有已决定的卡片。</p>`;
+        return;
+      }
       $("list").innerHTML = gates.length ? gates.map((g) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
@@ -244,54 +262,80 @@
         const who = humanColleague(goal.coordinator_ref);
         const station = goal.mode === "explore" ? "探索工位" : "交付工位";
         const hard = isAuthority(g, missing);
-        const passDisabled = !hard && missing.length > 0;
+        const passDisabled = evidenceGap(missing);
         const rule = RULE_ZH[pred] || "";
+        const why = missing.length ? "" : `<p class="sub" data-testid="why-line">证据已齐，等你过这一关</p>`;
         return `<article class="card" data-testid="gate-card" data-id="${esc(g.id)}" data-version="${esc(g.version)}">
           <div class="row">
             <strong class="title" data-testid="gate-title">${esc(title)}</strong>
             ${hard ? `<span class="badge" data-testid="hard-gate-badge">硬门禁</span>` : ""}
             <span class="badge" data-testid="gate-status" data-status="${esc(g.status)}">待你决定</span>
           </div>
-          <p class="sub" data-testid="working-who">${esc(station)} · ${esc(who)}</p>
           ${rule ? `<p class="sub" data-testid="rule-human">规则：${esc(rule)}</p>` : ""}
-          <p class="sub" data-testid="ready-at"><span class="sr-only">ready_at</span> <time datetime="${esc(g.ready_at || "")}">${esc(rel)}</time></p>
+          <p class="sub" data-testid="working-who">${esc(station)} · ${esc(who)}</p>
+          <p class="sub" data-testid="output-summary">目标：${esc(title)} · 同事已交：摘要 / 产物链接</p>
+          ${why}
+          <p class="sub" data-testid="ready-at"><span class="sr-only">ready_at</span> 就绪时间：<time datetime="${esc(g.ready_at || "")}">${esc(rel)}</time></p>
           ${missingHtml(missing)}
           <div class="row">
             <button class="ok" data-act="pass" data-testid="decide-pass"${passDisabled ? " disabled" : ""}>通过</button>
             <button class="warn" data-act="revise" data-testid="decide-revise">打回重做</button>
-            <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
+            <button class="muted" data-act="defer" data-testid="decide-defer">以后再说</button>
           </div>
           <div class="confirm" data-testid="pass-confirm-strip" hidden>
-            确认通过这张？不会记下编号。
+            <strong>确认通过？</strong>
+            <p class="sub">通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
             <button type="button" class="ok" data-testid="decide-pass-confirm">确认通过</button>
             <button type="button" class="muted" data-cancel>取消</button>
           </div>
-          <p class="struct sub"><button type="button" class="muted" data-testid="revise-structural">结构有变，另开一版</button></p>
+          <div class="revise-box" data-testid="revise-panel" hidden>
+            <strong>打回重做</strong>
+            <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="same" checked /> 让同一工位再跑一版</label>
+            <details>
+              <summary class="sub">这是结构问题，要换任务边界</summary>
+              <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="struct" /> 确认换任务边界</label>
+            </details>
+            <input data-testid="revise-note" placeholder="想改的方向（可选）" />
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="warn" data-testid="decide-revise-confirm">确认打回</button>
+              <button type="button" class="muted" data-revise-cancel>取消</button>
+            </div>
+          </div>
           <details class="meta-box">
-            <summary>详情</summary>
+            <summary>工程详情</summary>
             <p data-testid="gate-id">${esc(g.id)}</p>
             <p data-testid="predicate-id">predicate_id ${esc(pred)}</p>
             <p data-testid="predicate-version">predicate_version ${esc(pver)}</p>
             ${missing.map((m) => `<p data-testid="missing-code">${esc(m)}</p>`).join("")}
           </details>
         </article>`;
-      }).join("") : `<p class="sub" data-testid="inbox-empty">此刻没有待办。安静是正常的。</p>`;
+      }).join("") : emptyHtml();
     }
+    document.querySelector("[data-testid='filter-row']").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-filter]");
+      if (!btn) return;
+      filter = btn.dataset.filter;
+      document.querySelectorAll("[data-filter]").forEach((el) => el.classList.toggle("active", el === btn));
+      load();
+    });
     $("list").addEventListener("click", async (e) => {
       const card = e.target.closest(".card");
       if (!card) return;
-      if (e.target.closest("[data-testid='revise-structural']")) {
-        if (!window.confirm("结构有变会另开一版。确定打回？")) return;
-        await decide(card, "revise", true);
-        return;
-      }
-      if (e.target.closest("[data-cancel]")) {
-        const strip = card.querySelector("[data-testid='pass-confirm-strip']");
-        if (strip) strip.hidden = true;
+      if (e.target.closest("[data-cancel]") || e.target.closest("[data-revise-cancel]")) {
+        const pass = card.querySelector("[data-testid='pass-confirm-strip']");
+        const rev = card.querySelector("[data-testid='revise-panel']");
+        if (pass) pass.hidden = true;
+        if (rev) rev.hidden = true;
         return;
       }
       if (e.target.closest("[data-testid='decide-pass-confirm']")) {
         await decide(card, "pass", false);
+        return;
+      }
+      if (e.target.closest("[data-testid='decide-revise-confirm']")) {
+        const struct = card.querySelector("input[value='struct']");
+        const note = card.querySelector("[data-testid='revise-note']");
+        await decide(card, "revise", !!(struct && struct.checked), note && note.value);
         return;
       }
       const btn = e.target.closest("button[data-act]");
@@ -299,6 +343,11 @@
       if (btn.dataset.act === "pass") {
         const strip = card.querySelector("[data-testid='pass-confirm-strip']");
         if (strip) strip.hidden = false;
+        return;
+      }
+      if (btn.dataset.act === "revise") {
+        const panel = card.querySelector("[data-testid='revise-panel']");
+        if (panel) panel.hidden = false;
         return;
       }
       await decide(card, btn.dataset.act, false);
