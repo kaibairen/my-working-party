@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { clickPass, drainReadyGates, expect, seedDeliverReady, shotDir, test } from "./helpers";
+import { clickPass, drainReadyGates, expect, seedAuthorityReady, seedDeliverReady, shotDir, test } from "./helpers";
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const evidenceDir = join(dirname(fileURLToPath(import.meta.url)), "../../evidence");
