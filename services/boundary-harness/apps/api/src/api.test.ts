@@ -305,13 +305,16 @@ describe("domain API", () => {
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);
     const html = await inbox.text();
-    expect(html).toContain("Gate Inbox");
+    expect(html).toContain("待办");
+    expect(html).not.toContain("M2-preview");
+    expect(html).not.toContain("Health / OpenAPI");
     expect(html).toContain('data-testid="gate-card"');
     expect(html).toContain('data-testid="missing-item"');
     expect(html).toContain('data-testid="decide-pass"');
     expect(html).toContain('data-testid="decide-revise"');
     expect(html).toContain('data-testid="decide-defer"');
     expect(html).toContain("/v1/gates?status=ready");
+    expect(html).toContain("version, structural_change: false");
     expect(html).not.toContain("标记完成");
     expect(html).not.toContain("mark done");
     expect(html).not.toContain("去画布看进度");
