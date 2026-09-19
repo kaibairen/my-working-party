@@ -219,6 +219,6 @@ test.describe("Decision-maker shell", () => {
     const title = page.getByTestId("gate-title");
     await expect(title).not.toHaveText(DIRTY_TITLE_RE);
     await expect(title).not.toHaveText(UUID_RE);
-    await expect(title).toHaveText(/交付验收|未命名目标/);
+    await expect(title).toHaveText("未命名目标");
   });
 });

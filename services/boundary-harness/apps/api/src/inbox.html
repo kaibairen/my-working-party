@@ -170,11 +170,11 @@
       if (/\bg-[a-z0-9-]+/i.test(raw)) return false;
       return true;
     }
-    function cardTitle(g, goal) {
-      const name = String((goal && (goal.title || goal.summary)) || "").trim();
-      if (isHumanTitle(name)) return name;
-      const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
-      return RULE_ZH[pred] || "未命名目标";
+    function cardTitle(_g, goal) {
+      for (const cand of [goal && goal.title, goal && goal.summary]) {
+        if (isHumanTitle(cand)) return String(cand).trim();
+      }
+      return "未命名目标";
     }
     function missingHtml(missing) {
       if (!missing.length) return "";
@@ -192,7 +192,7 @@
       try {
         const res = await fetch(`/v1/goals/${id}`, { headers: headers() });
         const body = await res.json();
-        const g = { title: body.title || "", coordinator_ref: body.coordinator_ref || "", mode: body.mode || "" };
+        const g = { title: body.title || "", summary: body.summary || "", coordinator_ref: body.coordinator_ref || "", mode: body.mode || "" };
         goalCache.set(id, g);
         return g;
       } catch {
