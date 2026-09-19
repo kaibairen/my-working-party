@@ -13,7 +13,7 @@ test.describe("QA 2048 freeze", () => {
     await expect(filledTiles(page)).toHaveCount(2);
   });
 
-  test("game_2048_arrow_or_swipe_moves", async ({ page }) => {
+  test("game_2048_moves", async ({ page }) => {
     await page.goto("/examples/2048/");
     await page.getByTestId("board").click();
     const snapshot = () =>

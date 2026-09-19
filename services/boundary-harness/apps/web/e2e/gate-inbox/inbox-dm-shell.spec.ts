@@ -101,7 +101,7 @@ test.describe("E2E decision-maker shell", () => {
     const rows = page.getByTestId("desk-row");
     await expect(rows).toHaveCount(2);
     await expect(page.getByTestId("desk-group")).toHaveCount(2);
-    await expect(page.getByTestId("desk-group-title")).toHaveText(["harness开发", "2048工作组"]);
+    await expect(page.getByTestId("desk-group-title")).toHaveText(["pool_cursor", "pool_noop"]);
     await expect(page.getByTestId("desk-name")).toHaveText(["周报 Bot", "调研 Bot"]);
     await expect(page.getByTestId("desk-status")).toHaveText([/在忙|等证据|空闲/, /在忙|等证据|空闲/]);
     await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "在忙" }) })).toHaveCount(1);

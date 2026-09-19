@@ -32,7 +32,7 @@ export const DESKS_GROUP_MERGE_GATES = [
 /** QA #21 2048 freeze — `it("…")` titles must match exactly. */
 export const GAME_2048_MERGE_GATES = [
   "game_2048_loads_playable",
-  "game_2048_arrow_or_swipe_moves",
+  "game_2048_moves",
   "game_2048_score_updates",
   "game_2048_new_game_resets",
 ] as const;

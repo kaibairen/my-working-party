@@ -33,7 +33,7 @@ describe("listDesks presence projection", () => {
     harness = createHarness({ databasePath: ":memory:", now: () => new Date(nowMs).toISOString() });
     const bot: Actor = { id: "bot-1", role: "executor" };
     const beat = recordHeartbeat(harness, bot, { display_name: "周报 Bot", pool_id: "pool_noop", ttl_seconds: 90 });
-    expect(beat.group).toBe("其他");
+    expect(beat.group).toBe("pool_noop");
     const live = listDesks(harness, dm);
     expect(live.stub).toBe(false);
     expect(live.desks).toHaveLength(1);
@@ -41,10 +41,11 @@ describe("listDesks presence projection", () => {
       id: "agent:bot-1",
       name: "周报 Bot",
       source: "heartbeat",
-      group: "其他",
+      pool_id: "pool_noop",
+      group: "pool_noop",
       last_heartbeat: "2026-09-19T05:00:00.000Z",
     });
-    expect(live.groups).toEqual([expect.objectContaining({ name: "其他" })]);
+    expect(live.groups).toEqual([expect.objectContaining({ name: "pool_noop" })]);
     expect(live.desks.some((d) => FAKE_COLLEAGUE.test(d.name))).toBe(false);
     nowMs += 91_000;
     const expired = listDesks(harness, dm);
@@ -103,18 +104,18 @@ describe("listDesks presence projection", () => {
 
   it("desks_grouped_layout_readonly", () => {
     harness = createHarness({ databasePath: ":memory:" });
-    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", group: "harness" });
-    recordHeartbeat(harness, { id: "bot-g", role: "executor" }, { display_name: "2048 Bot", section: "2048" });
+    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", pool_id: "pool_noop" });
+    recordHeartbeat(harness, { id: "bot-g", role: "executor" }, { display_name: "2048 Bot", pool_id: "pool_cursor" });
     const listed = listDesks(harness, dm);
     expect(listed.readonly).toBe(true);
-    expect(listed.groups.map((g) => g.name)).toEqual(["harness开发", "2048工作组"]);
+    expect(listed.groups.map((g) => g.name)).toEqual(["pool_cursor", "pool_noop"]);
     expect(listed.groups.every((g) => g.desks.length > 0)).toBe(true);
-    expect(listed.groups.some((g) => g.name === "其他")).toBe(false);
+    expect(listed.groups.some((g) => g.name === "未分组")).toBe(false);
   });
 
   it("desks_group_no_drag_assign", () => {
     harness = createHarness({ databasePath: ":memory:" });
-    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", group: "harness" });
+    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", pool_id: "pool_noop" });
     const listed = listDesks(harness, dm);
     expect(listed.readonly).toBe(true);
     expect(listed.hitl).toBe("待我拍板");
@@ -124,7 +125,7 @@ describe("listDesks presence projection", () => {
   it("desks_group_no_fake_seeds", () => {
     harness = createHarness({ databasePath: ":memory:" });
     expect(listDesks(harness, dm).desks).toEqual([]);
-    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", group: "harness" });
+    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", pool_id: "pool_noop" });
     const listed = listDesks(harness, dm);
     expect(listed.desks.map((d) => d.name)).toEqual(["Harness Bot"]);
     expect(listed.desks.every((d) => d.source === "heartbeat")).toBe(true);
@@ -135,15 +136,18 @@ describe("listDesks presence projection", () => {
   it("desks_ungrouped_bucket", () => {
     harness = createHarness({ databasePath: ":memory:" });
     recordHeartbeat(harness, { id: "bot-o", role: "executor" }, { display_name: "闲逛 Bot" });
-    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", group: "harness" });
+    recordHeartbeat(harness, { id: "bot-h", role: "executor" }, { display_name: "Harness Bot", pool_id: "pool_noop" });
     const listed = listDesks(harness, dm);
-    expect(listed.desks.find((d) => d.id === "agent:bot-o")?.group).toBe("其他");
-    expect(listed.groups.map((g) => g.name)).toEqual(["harness开发", "其他"]);
-    expect(listed.groups.find((g) => g.name === "其他")?.desks.map((d) => d.name)).toEqual(["闲逛 Bot"]);
+    expect(listed.desks.find((d) => d.id === "agent:bot-o")?.group).toBe("未分组");
+    expect(listed.groups.map((g) => g.name)).toEqual(["pool_noop", "未分组"]);
+    expect(listed.groups.find((g) => g.name === "未分组")?.desks.map((d) => d.name)).toEqual(["闲逛 Bot"]);
     recordHeartbeat(harness, { id: "bot-o", role: "executor" }, { display_name: "闲逛 Bot", group: "2048" });
+    const stillLoose = listDesks(harness, dm);
+    expect(stillLoose.desks.find((d) => d.id === "agent:bot-o")?.group).toBe("未分组");
+    recordHeartbeat(harness, { id: "bot-o", role: "executor" }, { display_name: "闲逛 Bot", pool_id: "pool_cursor" });
     const after = listDesks(harness, dm);
-    expect(after.groups.map((g) => g.name)).toEqual(["harness开发", "2048工作组"]);
-    expect(after.groups.some((g) => g.name === "其他")).toBe(false);
+    expect(after.groups.map((g) => g.name)).toEqual(["pool_cursor", "pool_noop"]);
+    expect(after.groups.some((g) => g.name === "未分组")).toBe(false);
   });
 
   it("marks a pending deliver gate as 等证据 on the heartbeat desk", async () => {

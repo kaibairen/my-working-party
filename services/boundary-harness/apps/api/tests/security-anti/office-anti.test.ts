@@ -117,7 +117,9 @@ describe("office anti-dispatch regressions", () => {
   });
 
   it("desks_ungrouped_bucket", () => {
-    expect(officeHtml).toContain("其他");
-    expect(officeHtml).toContain('d.group || "其他"');
+    expect(officeHtml).toContain("未分组");
+    expect(officeHtml).toContain("deskGroupLabel");
+    expect(officeHtml).toContain("pool_id");
+    expect(officeHtml).not.toContain('d.group || "其他"');
   });
 });
