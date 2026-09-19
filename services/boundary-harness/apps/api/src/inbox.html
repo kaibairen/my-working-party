@@ -3,63 +3,97 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>待办</title>
+  <title>待我拍板</title>
   <style>
-    :root { color-scheme: dark; --bg:#0c1014; --card:#161d26; --line:#243040; --ok:#3dd68c; --warn:#f5c26b; --ink:#e8eef4; --muted:#8b98a8; }
+    :root { color-scheme: dark; --bg:#0c1014; --card:#161d26; --line:#243040; --ok:#3dd68c; --warn:#f5c26b; --ink:#e8eef4; --muted:#8b98a8; --bad:#e85d4c; }
     * { box-sizing: border-box; }
     body { margin: 0; font: 16px/1.5 ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--ink); }
-    header { padding: 28px 24px 8px; max-width: 720px; margin: 0 auto; }
-    h1 { margin: 0; font-size: 28px; font-weight: 650; letter-spacing: -0.02em; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 8px; max-width: 720px; margin: 0 auto; }
+    header a { color: inherit; text-decoration: none; }
+    h1 { margin: 0; font-size: 22px; font-weight: 650; }
+    .count { color: var(--muted); font-weight: 600; }
     main { padding: 8px 24px 48px; max-width: 720px; margin: 0 auto; }
+    .lead { color: var(--muted); font-size: 14px; }
+    .filters { display: flex; gap: 8px; margin: 12px 0; }
+    .filters button { border-radius: 999px; padding: 6px 12px; }
+    .filters button.on { background: #163526; border-color: #245c3d; color: var(--ok); }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 16px 0; }
     .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
-    .meta { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
-    .badge { display: inline-block; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: #1d3a2c; color: var(--ok); margin-left: 8px; vertical-align: middle; }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; align-items: center; }
-    .chip { background: #3a2e14; color: var(--warn); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
-    .chip-label { color: var(--muted); font-size: 13px; }
+    .kind { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+    .meta { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+    .badge { display: inline-block; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: #1d3a2c; color: var(--ok); }
+    .chips { margin: 10px 0 14px; }
+    .chip { display: inline-block; background: #3a2e14; color: var(--warn); border-radius: 999px; padding: 4px 10px; font-size: 13px; margin: 0 6px 6px 0; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; }
     button { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: #243044; color: var(--ink); padding: 9px 14px; cursor: pointer; }
     button.ok { background: #163526; border-color: #245c3d; color: var(--ok); }
     button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
     button.muted { background: #1a222c; color: var(--muted); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
     .flash { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: #163526; color: var(--ok); display: none; }
     .flash.show { display: block; }
     .flash.conflict { background: #3a2e14; color: var(--warn); }
-    .empty { color: var(--muted); font-size: 16px; padding: 32px 0; }
+    .empty h2 { margin: 28px 0 8px; font-size: 22px; }
+    .empty p { color: var(--muted); }
     details { margin-top: 12px; color: var(--muted); font-size: 13px; }
     .sr-only, [hidden] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
     #reload { display: none; }
+    dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); padding: 20px; max-width: 420px; }
+    dialog::backdrop { background: rgba(0,0,0,.45); }
+    dialog h3 { margin: 0 0 8px; }
+    dialog p, dialog label { color: var(--muted); font-size: 14px; }
+    dialog textarea { width: 100%; margin: 10px 0; }
   </style>
 </head>
 <body>
   <header>
-    <h1 id="heading" data-testid="inbox-heading">待办</h1>
+    <a href="/"><h1>AI 办公室</h1></a>
+    <span class="count" id="count-link" data-testid="inbox-count">待我拍板 · 0</span>
   </header>
   <main data-testid="gate-inbox">
+    <h1 id="heading" data-testid="inbox-heading">待我拍板</h1>
+    <div class="filters">
+      <button type="button" class="on" data-filter="ready" data-testid="filter-ready">要你决定</button>
+      <button type="button" data-filter="decided" data-testid="filter-decided">已决定</button>
+    </div>
+    <p class="lead" id="lead">下面每张卡都过了硬门禁检查，可以拍板。</p>
     <div id="flash" class="flash" data-testid="inbox-flash"></div>
     <button id="reload" data-testid="reload-ready" tabindex="-1">刷新</button>
     <div id="list" data-testid="gate-list"></div>
   </main>
+  <dialog id="pass-dialog">
+    <h3>确认通过？</h3>
+    <p>通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
+    <div class="row">
+      <button class="ok" id="pass-confirm" data-testid="decide-pass-confirm">确认通过</button>
+      <button class="muted" id="pass-cancel">取消</button>
+    </div>
+  </dialog>
+  <dialog id="revise-dialog">
+    <h3>打回重做</h3>
+    <label><input type="radio" name="rev-mode" value="false" checked /> 让同一工位再跑一版</label><br />
+    <details>
+      <summary>这是结构问题，要换任务边界</summary>
+      <label><input type="radio" name="rev-mode" value="true" /> 这是结构问题，要换任务边界</label>
+    </details>
+    <textarea id="revise-note" rows="2" placeholder="想改的方向（可选）"></textarea>
+    <div class="row">
+      <button class="warn" id="revise-confirm" data-testid="decide-revise-confirm">确认打回</button>
+      <button class="muted" id="revise-cancel">取消</button>
+    </div>
+  </dialog>
   <script>
     const ROLE = "decision_maker";
-    const ACTOR = "dm-1";
-    const PREDICATE_LABELS = {
-      deliver_ready_v1: "验收标准：交付就绪",
-      safety_only_v1: "验收标准：安全审批",
-    };
-    const MISSING_LABELS = {
-      "authority_escalation:destructive_delete": "破坏性删除",
-      "authority_escalation:external_send": "对外发送",
-      "authority_escalation:protected_merge": "受保护合并",
-      "authority_escalation:over_budget": "超预算",
-      "authority_escalation:privilege_escalation": "提权",
-      "run_lifecycle:FINISHED": "运行尚未结束",
-      "evidence:summary_md": "摘要",
-      "evidence:artifact_uri": "产物",
-      "evidence:pr": "PR",
-      "evidence:report_md": "报告",
-    };
+    const ACTOR = "you";
+    const KIND = { deliver_ready_v1: "交付验收", safety_only_v1: "安全审批" };
+    function missingLabel(code) {
+      const raw = String(code ?? "");
+      if (/summary_md/.test(raw)) return "还缺一份结论摘要";
+      if (/artifact_uri/.test(raw)) return "还缺可打开的产物";
+      if (/github_pr|is_draft/.test(raw)) return "相关合并请求还是草稿";
+      if (/checks|conclusion/.test(raw)) return "检查还没全部通过";
+      return "还缺：" + raw;
+    }
     const headers = () => ({
       "content-type": "application/json",
       authorization: `Bearer ${ROLE}:${ACTOR}`,
@@ -67,97 +101,132 @@
       "x-harness-actor": ACTOR,
     });
     const $ = (id) => document.getElementById(id);
+    let filter = "ready";
+    let pending = null;
     function flash(msg, kind) {
       $("flash").textContent = msg;
       $("flash").classList.add("show");
       $("flash").classList.toggle("conflict", kind === "conflict");
     }
-    function relativeTime(iso) {
-      if (!iso) return "";
-      const then = Date.parse(iso);
-      if (!Number.isFinite(then)) return iso;
-      const delta = Math.max(0, Date.now() - then);
-      const min = Math.floor(delta / 60000);
-      if (min < 1) return "刚刚";
-      if (min < 60) return `${min} 分钟前`;
-      const hr = Math.floor(min / 60);
-      if (hr < 24) return `${hr} 小时前`;
-      return `${Math.floor(hr / 24)} 天前`;
+    function emptyHtml() {
+      return `<section class="empty" data-testid="inbox-empty">
+        <h2>此刻没有需要你拍板的事</h2>
+        <p>安静是正常的。同事填满工位后，卡片会自己出现在这里。</p>
+        <p>不用去盯进度。完成以证据为准，不认口头说「好了」。</p>
+      </section>`;
     }
     function missingHtml(missing) {
       if (!missing.length) {
-        return `<span class="sr-only" data-testid="missing-empty" hidden>missing[] empty</span>`;
+        return `<p class="meta" data-testid="why-ready">证据已齐，等你过这一关</p>
+          <span class="sr-only" data-testid="missing-empty" hidden>missing[] empty</span>`;
       }
       return `<div class="chips" data-testid="missing-list">
-        <span class="chip-label">还差：</span>
-        ${missing.map((m) => {
-          const label = MISSING_LABELS[m] || m;
-          return `<span class="chip" data-testid="missing-item">${label}<span class="sr-only"> ${m}</span></span>`;
-        }).join("")}
+        <p class="meta">还不能过，缺这些</p>
+        ${missing.map((m) => `<span class="chip" data-testid="missing-item">${missingLabel(m)}<span class="sr-only"> ${m}</span></span>`).join("")}
       </div>`;
     }
-    function flashCopy(act) {
-      if (act === "pass") return "已通过。";
-      if (act === "revise") return "已打回重做。";
-      if (act === "defer") return "已稍后处理。";
-      return "已处理。";
+    function isAdvisory(g) {
+      const rr = g.ready_result || {};
+      return rr.advisory === true || rr.track === "advisory_hint" || g.track === "advisory_hint";
     }
     async function load() {
-      const res = await fetch("/v1/gates?status=ready", { headers: headers() });
+      const status = filter === "decided" ? "decided" : "ready";
+      const res = await fetch("/v1/gates?status=" + status, { headers: headers() });
       const body = await res.json();
-      const gates = (body.gates || []).filter((g) => g.status === "ready");
-      $("heading").textContent = "待办·" + gates.length;
+      const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
+      if (filter === "ready") $("count-link").textContent = "待我拍板 · " + gates.length;
+      $("lead").hidden = filter !== "ready" || !gates.length;
       $("list").innerHTML = gates.length ? gates.map((g) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
         const pver = g.predicate_version ?? (g.ready_result && g.ready_result.predicate_version) ?? "";
         const title = g.goal_title || "需要你拍板";
-        const predLabel = PREDICATE_LABELS[pred] || pred;
+        const kind = KIND[pred] || "交付验收";
+        const canPass = filter === "ready" && missing.length === 0;
+        const actions = filter === "ready" ? `<div class="row">
+            <button class="ok" data-act="pass-open" data-testid="decide-pass" ${canPass ? "" : "disabled"}>通过</button>
+            <button class="warn" data-act="revise-open" data-testid="decide-revise">打回重做</button>
+            <button class="muted" data-act="defer" data-testid="decide-defer">以后再说</button>
+          </div>` : "";
         return `<article class="card" data-testid="gate-card" data-id="${g.id}" data-version="${g.version}">
+          <p class="kind">${kind}</p>
           <h2 class="title" data-testid="gate-title">${title}</h2>
-          <p class="meta"><span class="badge" data-testid="gate-status" data-status="${g.status}">待你决定</span></p>
-          <p class="meta" data-testid="predicate-label">${predLabel}</p>
-          <p class="meta" data-testid="ready-at-label">${relativeTime(g.ready_at)}</p>
-          ${missingHtml(missing)}
-          <div class="row">
-            <button class="ok" data-act="pass" data-testid="decide-pass">通过</button>
-            <button class="warn" data-act="revise" data-testid="decide-revise">打回重做</button>
-            <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
-          </div>
+          <p class="meta"><span class="badge" data-testid="gate-status" data-status="${g.status}">硬门禁</span></p>
+          <p class="meta">${canPass || filter !== "ready" ? "检查已齐，可以拍板" : ""}</p>
+          <p class="meta">目标：${title}</p>
+          ${filter === "ready" && !missing.length ? `<p class="meta">同事已交：摘要 / 产物链接</p>` : ""}
+          ${filter === "ready" ? missingHtml(missing) : ""}
+          ${actions}
           <details>
-            <summary>详情</summary>
+            <summary>工程详情</summary>
             <p data-testid="gate-id">${g.id}</p>
             <p data-testid="predicate-id">predicate_id ${pred}</p>
             <p data-testid="predicate-version">predicate_version ${pver}</p>
             <p data-testid="ready-at">ready_at ${g.ready_at || ""}</p>
           </details>
         </article>`;
-      }).join("") : `<p class="empty" data-testid="inbox-empty">现在没有需要你拍板的事。</p>`;
+      }).join("") : emptyHtml();
     }
-    $("list").addEventListener("click", async (e) => {
-      const btn = e.target.closest("button[data-act]");
-      if (!btn) return;
-      const card = btn.closest(".card");
-      const id = card.dataset.id;
-      const version = Number(card.dataset.version);
+    async function decide(id, version, decision, extra) {
       const res = await fetch(`/v1/gates/${id}/decide`, {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ decision: btn.dataset.act, version, structural_change: false }),
+        body: JSON.stringify({ decision, version, structural_change: false, ...extra }),
       });
       const body = await res.json();
       const code = (body && body.code) || (body.error && body.error.code);
       if (!res.ok) {
         if (res.status === 409 || code === "optimistic_lock") {
-          flash("这条已有人处理，已为你刷新", "conflict");
+          flash("别人刚拍过，已为你刷新", "conflict");
           await load();
           return;
         }
         flash("处理失败，请再试一次");
         return;
       }
-      flash(flashCopy(btn.dataset.act));
+      if (decision === "pass") flash("已通过 · 办公室少了一张待办");
+      else if (decision === "revise") flash("已打回重做");
+      else flash("以后再说");
       await load();
+    }
+    $("list").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn || btn.disabled) return;
+      const card = btn.closest(".card");
+      const id = card.dataset.id;
+      const version = Number(card.dataset.version);
+      const act = btn.dataset.act;
+      if (act === "pass-open") {
+        pending = { id, version };
+        $("pass-dialog").showModal();
+        return;
+      }
+      if (act === "revise-open") {
+        pending = { id, version };
+        $("revise-dialog").showModal();
+        return;
+      }
+      if (act === "defer") await decide(id, version, "defer");
+    });
+    $("pass-confirm").onclick = async () => {
+      $("pass-dialog").close();
+      if (pending) await decide(pending.id, pending.version, "pass");
+      pending = null;
+    };
+    $("pass-cancel").onclick = () => { $("pass-dialog").close(); pending = null; };
+    $("revise-confirm").onclick = async () => {
+      const structural = document.querySelector('input[name="rev-mode"]:checked')?.value === "true";
+      $("revise-dialog").close();
+      if (pending) await decide(pending.id, pending.version, "revise", { structural_change: structural, note: $("revise-note").value || undefined });
+      pending = null;
+    };
+    $("revise-cancel").onclick = () => { $("revise-dialog").close(); pending = null; };
+    document.querySelectorAll("[data-filter]").forEach((el) => {
+      el.onclick = () => {
+        filter = el.dataset.filter;
+        document.querySelectorAll("[data-filter]").forEach((b) => b.classList.toggle("on", b === el));
+        load();
+      };
     });
     $("reload").onclick = load;
     load();

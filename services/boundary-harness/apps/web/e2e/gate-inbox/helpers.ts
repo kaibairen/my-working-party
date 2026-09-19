@@ -235,3 +235,13 @@ export const CANVAS_CTA_RE = /去画布看进度|go to canvas|view progress on c
 export const RUN_GREEN_PASS_RE = /Run 绿了直接通过|run succeeded.?pass|pass because run (?:is )?green/i;
 export const PLEASE_APPROVE_ONLY_RE = /请批准/;
 export const MISSING_EVIDENCE_FAKE_RE = /缺证据|missing evidence required/;
+
+export async function confirmPass(page: Page) {
+  await page.getByTestId("decide-pass").click();
+  await page.getByTestId("decide-pass-confirm").click();
+}
+
+export async function confirmRevise(page: Page) {
+  await page.getByTestId("decide-revise").click();
+  await page.getByTestId("decide-revise-confirm").click();
+}

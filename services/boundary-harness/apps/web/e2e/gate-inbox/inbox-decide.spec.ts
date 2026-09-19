@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { api, drainReadyGates, expect, headers, seedDeliverReady, shotDir, test } from "./helpers";
+import { api, confirmPass, confirmRevise, drainReadyGates, expect, headers, seedDeliverReady, shotDir, test } from "./helpers";
 
 test.describe("E2E decide", () => {
   test("decide_pass_uses_version", async ({ page, baseURL }) => {
@@ -13,7 +13,7 @@ test.describe("E2E decide", () => {
     const decideReq = page.waitForRequest(
       (req) => req.method() === "POST" && req.url().includes(`/v1/gates/${ready.gate!.id}/decide`),
     );
-    await page.getByTestId("decide-pass").click();
+    await confirmPass(page);
     const req = await decideReq;
     const body = req.postDataJSON() as Record<string, unknown>;
     expect(body.decision).toBe("pass");
@@ -38,7 +38,7 @@ test.describe("E2E decide", () => {
     const decideRes = page.waitForResponse(
       (res) => res.request().method() === "POST" && res.url().includes(`/v1/gates/${ready.gate!.id}/decide`),
     );
-    await page.getByTestId("decide-revise").click();
+    await confirmRevise(page);
     const req = await decideReq;
     const body = req.postDataJSON() as Record<string, unknown>;
     expect(body.decision).toBe("revise");
@@ -48,7 +48,7 @@ test.describe("E2E decide", () => {
     const json = (await (await decideRes).json()) as { follow_up?: { assignment_id?: string } };
     expect(json.follow_up?.assignment_id ?? assignmentId).toBe(assignmentId);
 
-    await expect(page.getByTestId("inbox-flash")).toContainText(/已打回重做|已通过|已稍后处理/);
+    await expect(page.getByTestId("inbox-flash")).toContainText(/已打回重做|已通过|以后再说/);
     await expect(page.locator(`[data-testid="gate-card"][data-id="${ready.gate!.id}"]`)).toHaveCount(0);
     await page.screenshot({ path: join(shotDir, "e2e11_decide_revise_same_assignment.png"), fullPage: true });
   });
@@ -74,8 +74,8 @@ test.describe("E2E decide", () => {
     });
     expect(conflict.status).toBe(200);
 
-    await page.getByTestId("decide-pass").click();
-    await expect(page.getByTestId("inbox-flash")).toContainText(/这条已有人处理，已为你刷新/);
+    await confirmPass(page);
+    await expect(page.getByTestId("inbox-flash")).toContainText(/别人刚拍过，已为你刷新/);
     await expect(page.getByTestId("inbox-flash")).toHaveClass(/conflict/);
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
 

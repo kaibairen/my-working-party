@@ -65,13 +65,14 @@ test("Gate Inbox lists ready gate, shows missing[], decide pass", async ({ page,
   await page.screenshot({ path: join(shotDir, "health_openapi.png"), fullPage: true });
 
   await page.goto("/inbox");
-  await expect(page.locator("h1")).toContainText("待办");
+  await expect(page.getByTestId("inbox-heading")).toContainText("待我拍板");
   await expect(page.locator(".card").first()).toBeVisible();
   await expect(page.getByTestId("gate-title")).toHaveText(/Inbox demo/);
   await expect(page.getByTestId("decide-pass")).toHaveText("通过");
   await page.screenshot({ path: join(shotDir, "gate_inbox_ready.png"), fullPage: true });
 
-  await page.locator("button.ok").first().click();
+  await page.getByTestId("decide-pass").click();
+  await page.getByTestId("decide-pass-confirm").click();
   await expect(page.locator("#flash")).toContainText("已通过");
   await page.screenshot({ path: join(shotDir, "gate_decide_success.png"), fullPage: true });
 });

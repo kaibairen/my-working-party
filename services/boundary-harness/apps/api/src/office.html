@@ -3,47 +3,63 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI办公室</title>
+  <title>AI 办公室</title>
   <style>
-    :root { color-scheme: dark; --bg:#0b0f12; --card:#141b22; --line:#243040; --ok:#3dd68c; --ink:#e8eef4; --muted:#8b98a8; }
+    :root { color-scheme: dark; --bg:#0b0f12; --card:#141b22; --line:#243040; --ok:#3dd68c; --ink:#e8eef4; --muted:#8b98a8; --bad:#e85d4c; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; font: 16px/1.55 ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif; background: radial-gradient(1200px 600px at 50% -10%, #1a2733 0%, var(--bg) 55%); color: var(--ink); }
-    main { max-width: 560px; margin: 0 auto; padding: 18vh 24px 48px; text-align: center; }
-    h1 { margin: 0 0 10px; font-size: 32px; font-weight: 650; letter-spacing: -0.03em; }
-    .lede { color: var(--muted); margin: 0 0 28px; font-size: 16px; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 20px 28px; max-width: 960px; margin: 0 auto; }
+    h1 { margin: 0; font-size: 22px; font-weight: 650; }
+    .count { color: var(--muted); font-weight: 600; }
+    .count[data-count]:not([data-count="0"]) { color: var(--bad); }
+    main { max-width: 560px; margin: 0 auto; padding: 12vh 24px 48px; text-align: center; }
+    .lede { color: var(--muted); margin: 0 0 28px; }
     .cta { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 12px 20px; font-weight: 600; }
-    .cta:hover { border-color: #3a4d63; }
-    .count { min-width: 1.5em; padding: 2px 8px; border-radius: 999px; background: #163526; color: var(--ok); font-size: 13px; }
-    .count[data-count="0"] { background: #1a222c; color: var(--muted); }
-    .empty { color: var(--muted); margin: 28px 0 0; font-size: 16px; }
-    .empty[hidden] { display: none; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); display: none; }
+    .cta.has-items .dot { display: inline-block; }
+    .weak { display: block; margin: 18px auto 0; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .desks { display: none; margin-top: 24px; text-align: left; color: var(--muted); font-size: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+    .desks.show { display: block; }
+    .empty h2 { margin: 36px 0 8px; font-size: 22px; font-weight: 600; }
+    .empty p { color: var(--muted); margin: 8px 0; }
+    .foot { font-size: 13px; }
   </style>
 </head>
 <body>
+  <header>
+    <h1>AI 办公室</h1>
+    <a class="count" href="/inbox" id="count-link" data-testid="inbox-count">待我拍板 · 0</a>
+  </header>
   <main data-testid="office-shell">
-    <h1>AI办公室</h1>
-    <p class="lede">工作在推进。需要你拍板时，会进待办。</p>
-    <a class="cta" href="/inbox" data-testid="open-inbox">待我拍板 <span id="count" class="count" data-testid="inbox-count" data-count="0">0</span></a>
-    <p id="empty" class="empty" data-testid="office-empty" hidden>现在没有需要你拍板的事。</p>
+    <p class="lede">同事在工位上干活。你只在「待我拍板」出现时进来。</p>
+    <a class="cta" href="/inbox" data-testid="open-inbox"><span class="dot"></span>查看待我拍板</a>
+    <button type="button" class="weak" id="desks-toggle" data-testid="desks-entry">工位一览</button>
+    <div id="desks" class="desks" data-testid="desks-panel">只读投影。开跑不依赖打开这一页或画布。</div>
+    <section class="empty" data-testid="office-empty">
+      <h2 data-testid="inbox-empty">此刻没有需要你拍板的事</h2>
+      <p>安静是正常的。同事填满工位后，卡片会自己出现在这里。</p>
+      <p class="foot">不用去盯进度。完成以证据为准，不认口头说「好了」。</p>
+    </section>
   </main>
   <script>
-    const ROLE = "decision_maker";
-    const ACTOR = "dm-1";
-    fetch("/v1/gates?status=ready", {
-      headers: {
-        authorization: `Bearer ${ROLE}:${ACTOR}`,
-        "x-harness-role": ROLE,
-        "x-harness-actor": ACTOR,
-      },
-    }).then((r) => r.json()).then((body) => {
-      const n = (body.gates || []).filter((g) => g.status === "ready").length;
-      const count = document.getElementById("count");
-      count.textContent = String(n);
+    const headers = {
+      authorization: "Bearer decision_maker:you",
+      "x-harness-role": "decision_maker",
+      "x-harness-actor": "you",
+    };
+    document.getElementById("desks-toggle").onclick = () => {
+      document.getElementById("desks").classList.toggle("show");
+    };
+    fetch("/v1/gates?status=ready", { headers }).then((r) => r.json()).then((body) => {
+      const n = (body.gates || []).filter((g) => g.status === "ready" && !(g.ready_result && g.ready_result.advisory)).length;
+      const label = "待我拍板 · " + n;
+      const count = document.getElementById("count-link");
+      count.textContent = label;
       count.dataset.count = String(n);
-      document.getElementById("empty").hidden = n > 0;
-    }).catch(() => {
-      document.getElementById("empty").hidden = false;
-    });
+      const cta = document.querySelector(".cta");
+      cta.classList.toggle("has-items", n > 0);
+      document.querySelector("[data-testid=office-empty]").hidden = n > 0;
+    }).catch(() => {});
   </script>
 </body>
 </html>
