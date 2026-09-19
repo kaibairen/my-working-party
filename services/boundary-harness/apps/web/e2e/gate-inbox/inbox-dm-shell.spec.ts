@@ -26,9 +26,10 @@ test.describe("E2E decision-maker shell", () => {
     await drainReadyGates(baseURL!);
     await page.goto("/");
     await expect(page.locator("h1")).toHaveText("AI 办公室");
-    await expect(page.getByTestId("open-inbox")).toHaveText(/查看待我拍板/);
-    await expect(page.getByTestId("office-empty")).toBeVisible();
-    await expect(page.getByTestId("office-empty")).toContainText("此刻没有待办。安静是正常的。");
+    await expect(page.getByTestId("open-inbox")).toHaveText(/待办/);
+    await expect(page.getByTestId("new-goal")).toBeVisible();
+    await expect(page.getByTestId("office-empty")).toContainText("还没有目标。建一个，同事才会开工。");
+    await expect(page.getByTestId("office-shell").getByTestId("gate-card")).toHaveCount(0);
     await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
     const officeHrefs = await page.locator("a[href]").evaluateAll((els) =>
       els.map((el) => (el as HTMLAnchorElement).getAttribute("href") || ""),
@@ -81,7 +82,7 @@ test.describe("E2E decision-maker shell", () => {
     await page.goto("/");
     await expect(page.locator("h1")).toHaveText("AI 办公室");
     await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
-    await page.getByTestId("desks-entry").click();
+    await expect(page.getByTestId("desks-entry")).toHaveText("工位心跳");
     const roster = page.getByTestId("roster");
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");

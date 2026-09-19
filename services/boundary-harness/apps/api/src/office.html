@@ -5,69 +5,209 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI 办公室</title>
   <style>
-    :root { color-scheme: dark; --bg:#0b0f12; --card:#141b22; --line:#243040; --ok:#3dd68c; --ink:#e8eef4; --muted:#8b98a8; --bad:#e85d4c; }
+    :root { color-scheme: dark; --bg:#0b0f12; --card:#141b22; --line:#243040; --ok:#3dd68c; --ink:#e8eef4; --muted:#8b98a8; --bad:#e85d4c; --warn:#f5c26b; --accent:#8cb4ff; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; font: 16px/1.55 ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif; background: radial-gradient(1200px 600px at 50% -10%, #1a2733 0%, var(--bg) 55%); color: var(--ink); }
-    header { display: flex; justify-content: space-between; align-items: center; padding: 20px 28px; max-width: 960px; margin: 0 auto; }
+    header.top { display: flex; justify-content: space-between; align-items: center; padding: 20px 28px; max-width: 1100px; margin: 0 auto; }
     h1 { margin: 0; font-size: 22px; font-weight: 650; }
-    .count { color: var(--muted); font-weight: 600; }
-    .count[data-count]:not([data-count="0"]) { color: var(--bad); }
-    main { max-width: 560px; margin: 0 auto; padding: 12vh 24px 48px; text-align: center; }
-    .lede { color: var(--muted); margin: 0 0 28px; }
-    .cta { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 12px 20px; font-weight: 600; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); display: none; }
-    .cta.has-items .dot { display: inline-block; }
-    .weak { display: block; margin: 18px auto 0; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-    .desks { display: none; margin-top: 24px; text-align: left; color: var(--muted); font-size: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
-    .desks.show { display: block; }
-    .desks-hint { margin: 0 0 12px; }
+    .count { color: var(--muted); font-weight: 600; background: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; font: inherit; }
+    .count[data-count]:not([data-count="0"]) { color: var(--bad); border-color: #5a2a24; }
+    .lede { color: var(--muted); margin: 0 0 18px; }
+    .office { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; max-width: 1100px; margin: 0 auto; padding: 8px 24px 64px; }
+    @media (max-width: 800px) { .office { grid-template-columns: 1fr; } }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 16px; }
+    .panel h2 { margin: 0 0 12px; font-size: 16px; font-weight: 650; }
+    .goal-form { display: grid; gap: 8px; margin-bottom: 16px; }
+    .goal-form label { color: var(--muted); font-size: 13px; }
+    .goal-form input { width: 100%; font: inherit; color: var(--ink); background: #0f151c; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+    .goal-form button { font: inherit; border-radius: 10px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 9px 14px; cursor: pointer; font-weight: 600; justify-self: start; }
+    .goal-list { display: flex; flex-direction: column; gap: 12px; }
+    .goal-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #10171e; }
+    .goal-name { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+    .goal-status { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+    .fill-board { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .fill-slot { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
+    .fill-slot .who { color: var(--ink); font-weight: 600; }
+    .fill-slot a { color: var(--accent); }
+    .empty { color: var(--muted); padding: 12px 4px 4px; }
+    .empty h3 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--ink); }
+    .desks-hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
     .desk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
     .desk-row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; }
     .desk-avatar { width: 36px; height: 36px; border-radius: 50%; background: #1d2a36; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 650; color: var(--ink); flex: 0 0 auto; }
     .desk-name { color: var(--ink); font-weight: 600; }
-    .desk-meta { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; }
+    .desk-meta { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; color: var(--muted); }
     .desk-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7c8d; }
-    .desk-row[data-presence="busy"] .desk-dot { background: #f5c26b; }
-    .desk-row[data-presence="waiting_evidence"] .desk-dot { background: #8cb4ff; }
+    .desk-row[data-presence="busy"] .desk-dot { background: var(--warn); }
+    .desk-row[data-presence="waiting_evidence"] .desk-dot { background: var(--accent); }
     .desk-row[data-presence="idle"] .desk-dot { background: var(--ok); }
-    .empty h2 { margin: 36px 0 8px; font-size: 22px; font-weight: 600; }
-    .empty p { color: var(--muted); margin: 8px 0; }
-    .foot { font-size: 13px; }
+    .flash { margin: 0 0 12px; padding: 8px 10px; border-radius: 10px; background: #163526; color: var(--ok); display: none; }
+    .flash.show { display: block; }
+    .flash.bad { background: #3a2e14; color: var(--warn); }
+    .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); border: 0; padding: 0; margin: 0; display: none; }
+    .backdrop.open { display: block; }
+    .drawer { position: fixed; top: 0; right: 0; width: min(460px, 100vw); height: 100vh; background: #0c1014; border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s ease; overflow: auto; z-index: 2; }
+    .drawer.open { transform: translateX(0); }
+    .drawer header { display: flex; justify-content: space-between; align-items: center; padding: 20px 20px 8px; }
+    .drawer header a { color: inherit; text-decoration: none; font-size: 14px; color: var(--muted); }
+    .drawer h2 { margin: 0; font-size: 20px; }
+    .drawer main { padding: 8px 20px 48px; }
+    .filters { display: flex; gap: 8px; margin: 12px 0; }
+    .filters button, .drawer button { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: #243044; color: var(--ink); padding: 9px 14px; cursor: pointer; }
+    .filters button { border-radius: 999px; padding: 6px 12px; }
+    .filters button.on { background: #163526; border-color: #245c3d; color: var(--ok); }
+    .card { background: #161d26; border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 16px 0; }
+    .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+    .kind, .meta { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+    .badge { display: inline-block; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: #1d3a2c; color: var(--ok); }
+    .chips { margin: 10px 0 14px; }
+    .chip { display: inline-block; background: #3a2e14; color: var(--warn); border-radius: 999px; padding: 4px 10px; font-size: 13px; margin: 0 6px 6px 0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button.ok { background: #163526; border-color: #245c3d; color: var(--ok); }
+    button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
+    button.muted { background: #1a222c; color: var(--muted); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .inbox-flash { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: #163526; color: var(--ok); display: none; }
+    .inbox-flash.show { display: block; }
+    .inbox-flash.conflict { background: #3a2e14; color: var(--warn); }
+    details { margin-top: 12px; color: var(--muted); font-size: 13px; }
+    .sr-only, [hidden] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+    #reload { display: none; }
+    dialog { border: 1px solid var(--line); border-radius: 16px; background: #161d26; color: var(--ink); padding: 20px; max-width: 420px; }
+    dialog::backdrop { background: rgba(0,0,0,.45); }
+    dialog h3 { margin: 0 0 8px; }
+    dialog p, dialog label { color: var(--muted); font-size: 14px; }
+    dialog textarea { width: 100%; margin: 10px 0; }
+    .close { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; }
   </style>
 </head>
 <body>
-  <header>
+  <header class="top">
     <h1>AI 办公室</h1>
-    <a class="count" href="/inbox" id="count-link" data-testid="inbox-count">待办</a>
+    <button type="button" class="count" id="count-link" data-testid="open-inbox" aria-controls="inbox-drawer">
+      <span data-testid="inbox-count" id="inbox-count">待办</span>
+    </button>
   </header>
-  <main data-testid="office-shell">
-    <p class="lede">同事在工位上干活。你只在「待我拍板」出现时进来。</p>
-    <a class="cta" href="/inbox" data-testid="open-inbox"><span class="dot"></span>查看待我拍板</a>
-    <button type="button" class="weak" id="desks-toggle" data-testid="desks-entry">工位一览</button>
-    <div id="desks" class="desks" data-testid="desks-panel">
+  <div class="office" data-testid="office-shell">
+    <section class="panel" data-testid="goals-panel">
+      <h2>目标</h2>
+      <p class="lede">看见目标、谁在填、工位在忙什么。需要拍板时打开待办。</p>
+      <p class="flash" id="goal-flash" data-testid="goal-flash"></p>
+      <form class="goal-form" id="goal-form" data-testid="new-goal-form">
+        <label>名称 <input name="title" data-testid="goal-title-input" placeholder="给同事一个能读的名字" maxlength="80" required /></label>
+        <label>一句话要什么 <input name="intent" data-testid="goal-intent-input" placeholder="不要写步骤剧本" maxlength="200" /></label>
+        <button type="submit" data-testid="new-goal">新建目标</button>
+      </form>
+      <div id="goals" class="goal-list" data-testid="goal-list"></div>
+      <section class="empty" id="office-empty" data-testid="office-empty" hidden>
+        <h3>还没有目标。建一个，同事才会开工。</h3>
+      </section>
+    </section>
+    <aside class="panel" id="desks" data-testid="desks-panel">
+      <h2 data-testid="desks-entry">工位心跳</h2>
       <p class="desks-hint" data-testid="desks-hint">只读投影。开跑不依赖打开这一页或画布。</p>
       <div id="roster" class="roster" data-testid="roster" data-readonly="true" aria-readonly="true"></div>
+    </aside>
+  </div>
+
+  <button type="button" class="backdrop" id="drawer-backdrop" data-testid="inbox-backdrop" aria-label="关闭待办"></button>
+  <aside class="drawer" id="inbox-drawer" data-testid="inbox-drawer" aria-label="待我拍板">
+    <header>
+      <h2 id="heading" data-testid="inbox-heading">待办</h2>
+      <div>
+        <a href="/inbox">整页打开</a>
+        <button type="button" class="close" id="close-inbox" data-testid="close-inbox">关闭</button>
+      </div>
+    </header>
+    <main data-testid="gate-inbox">
+      <div class="filters">
+        <button type="button" class="on" data-filter="ready" data-testid="filter-ready">要你决定</button>
+        <button type="button" data-filter="decided" data-testid="filter-decided">已决定</button>
+      </div>
+      <p class="lede" id="lead">下面每张卡都过了硬门禁检查，可以拍板。</p>
+      <div id="flash" class="inbox-flash" data-testid="inbox-flash"></div>
+      <button id="reload" data-testid="reload-ready" tabindex="-1">刷新</button>
+      <div id="list" data-testid="gate-list"></div>
+    </main>
+  </aside>
+  <dialog id="pass-dialog">
+    <h3>确认通过？</h3>
+    <p>通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
+    <div class="row">
+      <button class="ok" id="pass-confirm" data-testid="decide-pass-confirm">确认通过</button>
+      <button class="muted" id="pass-cancel">取消</button>
     </div>
-    <section class="empty" data-testid="office-empty">
-      <h2 data-testid="inbox-empty">此刻没有待办。安静是正常的。</h2>
-    </section>
-  </main>
+  </dialog>
+  <dialog id="revise-dialog">
+    <h3>打回重做</h3>
+    <label><input type="radio" name="rev-mode" value="false" checked /> 让同一工位再跑一版</label><br />
+    <details>
+      <summary>这是结构问题，要换任务边界</summary>
+      <label><input type="radio" name="rev-mode" value="true" /> 这是结构问题，要换任务边界</label>
+    </details>
+    <textarea id="revise-note" rows="2" placeholder="想改的方向（可选）"></textarea>
+    <div class="row">
+      <button class="warn" id="revise-confirm" data-testid="decide-revise-confirm">确认打回</button>
+      <button class="muted" id="revise-cancel">取消</button>
+    </div>
+  </dialog>
   <script>
-    const headers = {
-      authorization: "Bearer decision_maker:you",
-      "x-harness-role": "decision_maker",
-      "x-harness-actor": "you",
-    };
-    document.getElementById("desks-toggle").onclick = () => {
-      document.getElementById("desks").classList.toggle("show");
-    };
+    /* G1 copy lock / R17–R25 — keep in sync with inbox.html (drawer is the same HITL). */
+    const ROLE = "decision_maker";
+    const ACTOR = "you";
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    function isHumanTitle(name) {
+      const raw = String(name ?? "").trim();
+      if (!raw || UUID_RE.test(raw) || /e2e/i.test(raw) || /\bg-[a-z0-9-]+/i.test(raw)) return false;
+      return true;
+    }
+    function sanitizeCardTitle(goalTitle, summary) {
+      for (const cand of [goalTitle, summary]) {
+        if (isHumanTitle(cand)) return String(cand).trim();
+      }
+      return "未命名目标";
+    }
+    function missingLabel(code) {
+      const raw = String(code ?? "");
+      if (/summary_md|summary$/.test(raw)) return "还差：结论摘要";
+      if (/artifact_uri|artifact$/.test(raw)) return "还差：可打开的产物";
+      if (/github_pr|is_draft/.test(raw)) return "还差：合并请求仍是草稿";
+      if (/checks|conclusion/.test(raw)) return "还差：检查未全部通过";
+      return "还差：" + raw;
+    }
+    function relativeTime(iso) {
+      if (!iso) return "";
+      const then = Date.parse(iso);
+      if (!Number.isFinite(then)) return iso;
+      const min = Math.floor(Math.max(0, Date.now() - then) / 60000);
+      if (min < 1) return "刚刚";
+      if (min < 60) return min + " 分钟前";
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return hr + " 小时前";
+      return Math.floor(hr / 24) + " 天前";
+    }
+    const headers = () => ({
+      "content-type": "application/json",
+      authorization: `Bearer ${ROLE}:${ACTOR}`,
+      "x-harness-role": ROLE,
+      "x-harness-actor": ACTOR,
+    });
     function esc(s) {
       return String(s ?? "").replace(/[&<>"']/g, (c) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
       }[c]));
     }
+    const $ = (id) => document.getElementById(id);
+    function setInboxCount(n) {
+      const label = n > 0 ? "待办 · " + n : "待办";
+      $("inbox-count").textContent = label;
+      $("count-link").dataset.count = String(n);
+      if ($("heading") && filter === "ready") $("heading").textContent = label;
+    }
+
+    /* —— Office home: goals + fill slots + roster (not a dispatch board) —— */
     function renderRoster(desks) {
-      const root = document.getElementById("roster");
+      const root = $("roster");
       const rows = (desks || []).map((d) => {
         const name = String(d.name || "同事");
         const status = String(d.status || "空闲");
@@ -84,21 +224,225 @@
       }).join("");
       root.innerHTML = `<ul class="desk-list" data-testid="desk-list">${rows}</ul>`;
     }
-    fetch("/v1/desks", { headers }).then((r) => r.json()).then((body) => {
-      renderRoster(body.desks || []);
-    }).catch(() => {
-      renderRoster([]);
+    function slotHtml(slot) {
+      const who = slot.empty ? "还没人填" : (slot.filler_kind === "human" ? "人填 · " : "Bot 填 · ") + (slot.filler || "同事");
+      const progress = slot.progress || "等同事填";
+      const what = slot.outcome && isHumanTitle(slot.outcome) ? slot.outcome : "";
+      const art = slot.artifact_uri
+        ? `<a data-testid="slot-artifact" href="${esc(slot.artifact_uri)}">产物</a>`
+        : `<span data-testid="slot-artifact">产物未交</span>`;
+      return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}">
+        <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
+        <span data-testid="slot-progress">${esc(progress)}</span>
+        ${art}
+      </li>`;
+    }
+    async function loadOffice() {
+      const [goalsRes, desksRes] = await Promise.all([
+        fetch("/v1/goals", { headers: headers() }),
+        fetch("/v1/desks", { headers: headers() }),
+      ]);
+      const goalsBody = await goalsRes.json();
+      const desksBody = await desksRes.json();
+      renderRoster(desksBody.desks || []);
+      const goals = goalsBody.goals || [];
+      $("office-empty").hidden = goals.length > 0;
+      if (!goals.length) {
+        $("goals").innerHTML = "";
+        return;
+      }
+      const slotSets = await Promise.all(goals.map((g) =>
+        fetch("/v1/goals/" + encodeURIComponent(g.id) + "/assignments", { headers: headers() })
+          .then((r) => r.json())
+          .catch(() => ({ slots: [] })),
+      ));
+      $("goals").innerHTML = goals.map((g, i) => {
+        const title = sanitizeCardTitle(g.title, g.intent);
+        const status = g.status_line || "等同事开工";
+        const slots = (slotSets[i] && slotSets[i].slots) || [{ empty: true, progress: "等同事填", outcome: g.intent }];
+        return `<article class="goal-card" data-testid="goal-card">
+          <h3 class="goal-name" data-testid="goal-title">${esc(title)}</h3>
+          <p class="goal-status" data-testid="goal-status">${esc(status)}</p>
+          <ul class="fill-board" data-testid="fill-board">${slots.map(slotHtml).join("")}</ul>
+        </article>`;
+      }).join("");
+    }
+    $("goal-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData($("goal-form"));
+      const title = String(fd.get("title") || "").trim();
+      const intent = String(fd.get("intent") || "").trim();
+      const flash = $("goal-flash");
+      const res = await fetch("/v1/goals", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ title, intent: intent || undefined }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        flash.textContent = "没建成功。名称写人话，不要写步骤。";
+        flash.className = "flash show bad";
+        return;
+      }
+      flash.textContent = "目标已建。同事会来填。";
+      flash.className = "flash show";
+      $("goal-form").reset();
+      await loadOffice();
+      void body;
+    };
+
+    /* —— Inbox drawer (same HITL queue as /inbox; not the home wall) —— */
+    let filter = "ready";
+    let pending = null;
+    function openDrawer() {
+      $("inbox-drawer").classList.add("open");
+      $("drawer-backdrop").classList.add("open");
+      loadInbox();
+    }
+    function closeDrawer() {
+      $("inbox-drawer").classList.remove("open");
+      $("drawer-backdrop").classList.remove("open");
+    }
+    $("count-link").onclick = openDrawer;
+    $("close-inbox").onclick = closeDrawer;
+    $("drawer-backdrop").onclick = closeDrawer;
+    if (location.hash === "#inbox") openDrawer();
+
+    function inboxFlash(msg, kind) {
+      $("flash").textContent = msg;
+      $("flash").classList.add("show");
+      $("flash").classList.toggle("conflict", kind === "conflict");
+    }
+    function emptyHtml() {
+      return `<section class="empty" data-testid="inbox-empty">此刻没有待办。安静是正常的。</section>`;
+    }
+    function missingHtml(missing) {
+      if (!missing.length) {
+        return `<p class="meta" data-testid="why-ready">证据已齐，等你拍板</p>
+          <span class="sr-only" data-testid="missing-empty" hidden>missing[] empty</span>`;
+      }
+      return `<div class="chips" data-testid="missing-list">
+        <p class="meta">还差</p>
+        <p class="meta">还不能过，先看缺什么</p>
+        ${missing.map((m) => `<span class="chip" data-testid="missing-item">${missingLabel(m)}<span class="sr-only"> ${m}</span></span>`).join("")}
+      </div>`;
+    }
+    function isAdvisory(g) {
+      const rr = g.ready_result || {};
+      return rr.advisory === true || rr.track === "advisory_hint" || g.track === "advisory_hint";
+    }
+    async function loadInbox() {
+      const status = filter === "decided" ? "decided" : "ready";
+      const res = await fetch(status === "ready" ? "/v1/gates?status=ready" : "/v1/gates?status=decided", { headers: headers() });
+      const body = await res.json();
+      const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
+      if (filter === "ready") setInboxCount(gates.length);
+      $("lead").hidden = filter !== "ready" || !gates.length;
+      $("list").innerHTML = gates.length ? gates.map((g) => {
+        const missing = (g.ready_result && g.ready_result.missing) || [];
+        const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
+        const pver = g.predicate_version ?? (g.ready_result && g.ready_result.predicate_version) ?? "";
+        const title = sanitizeCardTitle(g.goal_title, g.goal_summary);
+        const rel = relativeTime(g.ready_at);
+        const canPass = filter === "ready" && missing.length === 0;
+        const actions = filter === "ready" ? `<div class="row">
+            <button class="ok" data-act="pass-open" data-testid="decide-pass" ${canPass ? "" : "disabled"}>通过</button>
+            <button class="warn" data-act="revise-open" data-testid="decide-revise">打回重做</button>
+            <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
+          </div>` : "";
+        return `<article class="card" data-testid="gate-card" data-id="${g.id}" data-version="${g.version}">
+          <h2 class="title" data-testid="gate-title">${title}</h2>
+          <p class="meta"><span class="badge" data-testid="gate-status" data-status="${g.status}">待你决定</span></p>
+          <p class="kind">规则：交付验收</p>
+          <p class="meta">${rel ? "就绪 · " + rel : ""}</p>
+          ${filter === "ready" ? missingHtml(missing) : ""}
+          ${filter === "ready" && !missing.length ? `<p class="meta">同事已交：摘要 / 产物链接</p>` : ""}
+          ${actions}
+          <details>
+            <summary>工程详情</summary>
+            <p>编号 <span data-testid="gate-id">${g.id}</span></p>
+            <p>目标 ID ${g.goal_id || ""}</p>
+            <p data-testid="predicate-id">predicate_id ${pred}</p>
+            <p data-testid="predicate-version">predicate_version ${pver}</p>
+            <p data-testid="ready-at">ready_at ${g.ready_at || ""}</p>
+          </details>
+        </article>`;
+      }).join("") : emptyHtml();
+    }
+    async function refreshCount() {
+      const res = await fetch("/v1/gates?status=ready", { headers: headers() });
+      const body = await res.json();
+      const n = (body.gates || []).filter((g) => g.status === "ready" && !isAdvisory(g)).length;
+      setInboxCount(n);
+    }
+    async function decide(id, version, decision, extra) {
+      const res = await fetch(`/v1/gates/${id}/decide`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ decision, version, structural_change: false, ...extra }),
+      });
+      const body = await res.json();
+      const code = (body && body.code) || (body.error && body.error.code);
+      if (!res.ok) {
+        if (res.status === 409 || code === "optimistic_lock") {
+          inboxFlash("别人刚处理过这张，已帮你刷新。", "conflict");
+          await loadInbox();
+          return;
+        }
+        inboxFlash("处理失败，请再试一次");
+        return;
+      }
+      if (decision === "pass") inboxFlash("已通过。");
+      else if (decision === "revise") inboxFlash("已打回，同事会再交一版。");
+      else inboxFlash("已搁下，需要时还会出现。");
+      await loadInbox();
+    }
+    $("list").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn || btn.disabled) return;
+      const card = btn.closest(".card");
+      const id = card.dataset.id;
+      const version = Number(card.dataset.version);
+      const act = btn.dataset.act;
+      if (act === "pass-open") {
+        pending = { id, version };
+        $("pass-dialog").showModal();
+        return;
+      }
+      if (act === "revise-open") {
+        pending = { id, version };
+        $("revise-dialog").showModal();
+        return;
+      }
+      if (act === "defer") await decide(id, version, "defer");
     });
-    fetch("/v1/gates?status=ready", { headers }).then((r) => r.json()).then((body) => {
-      const n = (body.gates || []).filter((g) => g.status === "ready" && !(g.ready_result && g.ready_result.advisory)).length;
-      const label = n > 0 ? "待办 · " + n : "待办";
-      const count = document.getElementById("count-link");
-      count.textContent = label;
-      count.dataset.count = String(n);
-      const cta = document.querySelector(".cta");
-      cta.classList.toggle("has-items", n > 0);
-      document.querySelector("[data-testid=office-empty]").hidden = n > 0;
-    }).catch(() => {});
+    $("pass-confirm").onclick = async () => {
+      $("pass-dialog").close();
+      if (pending) await decide(pending.id, pending.version, "pass");
+      pending = null;
+    };
+    $("pass-cancel").onclick = () => { $("pass-dialog").close(); pending = null; };
+    $("revise-confirm").onclick = async () => {
+      const structural = document.querySelector('input[name="rev-mode"]:checked')?.value === "true";
+      $("revise-dialog").close();
+      if (pending) await decide(pending.id, pending.version, "revise", { structural_change: structural, note: $("revise-note").value || undefined });
+      pending = null;
+    };
+    $("revise-cancel").onclick = () => { $("revise-dialog").close(); pending = null; };
+    document.querySelectorAll("[data-filter]").forEach((el) => {
+      el.onclick = () => {
+        filter = el.dataset.filter;
+        document.querySelectorAll("[data-filter]").forEach((b) => b.classList.toggle("on", b === el));
+        loadInbox();
+      };
+    });
+    $("reload").onclick = loadInbox;
+    loadOffice();
+    refreshCount();
+    try {
+      const es = new EventSource("/v1/events?role=" + encodeURIComponent(ROLE) + "&actor=" + encodeURIComponent(ACTOR));
+      es.addEventListener("gate.ready", () => { refreshCount(); if ($("inbox-drawer").classList.contains("open")) loadInbox(); });
+    } catch (_) { /* SSE optional */ }
   </script>
 </body>
 </html>

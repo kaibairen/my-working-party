@@ -1,0 +1,67 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { closeHarness, createHarness, type Harness } from "./db";
+import { createGoal, fillAssignment, listFillSlots, listGoals } from "./services";
+import type { Actor } from "./rbac";
+
+const dm: Actor = { id: "you", role: "decision_maker" };
+const coord: Actor = { id: "coord-1", role: "coordinator" };
+
+describe("office home goals + fill slots", () => {
+  let harness: Harness | undefined;
+  afterEach(() => {
+    if (harness) closeHarness(harness);
+    harness = undefined;
+  });
+
+  it("lets a decision_maker create a goal with title + intent only", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, dm, { title: "周报交付验收", intent: "写一份能读的周报" });
+    expect(goal.title).toBe("周报交付验收");
+    expect(goal.intent).toBe("写一份能读的周报");
+    expect(goal.mode).toBe("deliver");
+    expect(goal.coordinator_ref).toBe("coord-1");
+    const listed = listGoals(harness, dm);
+    expect(listed).toHaveLength(1);
+    expect(listed[0].status_line).toBe("等同事开工");
+    expect(listed[0].title).toBe("周报交付验收");
+  });
+
+  it("rejects Brief steps on goal create", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    expect(() =>
+      createGoal(harness!, dm, { title: "x", steps: ["nope"] } as never),
+    ).toThrow(/Brief steps|brief_forbidden_field/);
+  });
+
+  it("projects an empty fill slot until a colleague fills", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, dm, { title: "周报交付验收", intent: "写一份能读的周报" });
+    const { slots, readonly } = listFillSlots(harness, dm, goal.id);
+    expect(readonly).toBe(true);
+    expect(slots).toHaveLength(1);
+    expect(slots[0].empty).toBe(true);
+    expect(slots[0].progress).toBe("等同事填");
+    expect(slots[0].outcome).toBe("写一份能读的周报");
+    expect(JSON.stringify(slots)).not.toMatch(/指派给|开始跑|dispatch/);
+  });
+
+  it("projects who is filling after an assignment exists", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, coord, {
+      title: "周报交付验收",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+      intent: "写一份能读的周报",
+    });
+    fillAssignment(harness, coord, goal.id, {
+      pool_id: "pool_noop",
+      brief: { outcome: "写一份能读的周报", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    });
+    const { slots } = listFillSlots(harness, dm, goal.id);
+    expect(slots[0].empty).toBe(false);
+    expect(slots[0].filler).toBe("交付同事");
+    expect(slots[0].filler_kind).toBe("bot");
+    expect(slots[0].progress).toBe("在填");
+    expect(listGoals(harness, dm)[0].status_line).toBe("同事在填");
+  });
+});

@@ -1,5 +1,7 @@
 # Boundary Harness · 决策人点点用用 v1（体验权威稿）
 
+> **P0 home supersede:** 决策人默认 `/` 以 [OFFICE_HOME_IA_P0_v1.md](../../services/boundary-harness/docs/experience/OFFICE_HOME_IA_P0_v1.md) 为准（目标列表 + 填充槽 + 工位心跳；Inbox 降为抽屉）。下文 G1 卡面 / R17–R25 仍约束抽屉与 `/inbox`。
+
 **角色：** Harness体验（唯一产品体验负责人）  
 **日期：** 2026-09-19 Asia/Shanghai  
 **对齐：** 权威 PRD §5.5/§7 · 保留 `authority_gate` vs `advisory` · 禁画布作派发前置 · 禁口头 done  

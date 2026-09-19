@@ -46,6 +46,8 @@ export {
   getAssignment,
   getGoal,
   getRun,
+  listFillSlots,
+  listGoals,
   health,
   listAudit,
   listEventsAfter,
@@ -65,6 +67,7 @@ export {
   assertAdminNotFrozen,
   assertNoClientStatusWrite,
 } from "./services";
-export { listDesks, DESK_STATUS, type DeskPresence } from "./desks";
+export { listDesks, DESK_STATUS, humanDeskName, type DeskPresence } from "./desks";
+export type { FillSlot } from "./services";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
 export { AUTHORITY_ACTIONS, checkPolicy } from "@harness/policy";
