@@ -224,6 +224,63 @@ describe("P0 linkage contracts", () => {
     expect(live.body.desks.every((d: { source: string }) => d.source === "heartbeat")).toBe(true);
   });
 
+  it("fill_slots_pool_labels_not_colleague", async () => {
+    const { app } = setup();
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        title: "2048 可玩页",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        intent: "做一个能玩的 2048",
+      }),
+    });
+    await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "做一个能玩的 2048", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    const noop = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    expect(noop.body.slots[0].filler).toBe("执行池 · noop");
+    expect(noop.body.slots[0].filler).not.toMatch(/同事|Bot 填 ·/);
+    expect(JSON.stringify(noop.body.slots.map((s: { filler: string }) => s.filler))).not.toMatch(
+      /交付同事|Cursor 同事|Bot 填 ·/,
+    );
+
+    const cursorGoal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        title: "Cursor 池标签",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        intent: "池名不能像同事",
+      }),
+    });
+    await json(app, `/v1/goals/${cursorGoal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        brief: { outcome: "池名不能像同事", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    const cursor = await json(app, `/v1/goals/${cursorGoal.body.id}/assignments`, {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    expect(cursor.body.slots[0].filler).toBe("执行池 · Cursor");
+    expect(cursor.body.slots[0].filler).not.toMatch(/同事|Bot 填 ·/);
+    expect(JSON.stringify(cursor.body.slots.map((s: { filler: string }) => s.filler))).not.toMatch(
+      /交付同事|Cursor 同事|Bot 填 ·/,
+    );
+  });
+
   it("heartbeat_ttl_expiry_clears_row", async () => {
     let nowMs = Date.parse("2026-09-19T04:00:00.000Z");
     const { app } = setup(() => new Date(nowMs).toISOString());
