@@ -41,6 +41,7 @@ test.describe("Decision-maker shell", () => {
     expect(titleText.length).toBeGreaterThan(0);
     expect(titleText).not.toMatch(UUID_RE);
     await expect(page.getByTestId("gate-id")).toContainText(ready.gate!.id);
+    await expect(page.getByTestId("gate-id")).toBeHidden();
     await expect(page.getByTestId("card-face")).not.toContainText(ready.gate!.id);
     await expect(page.getByTestId("card-face")).not.toContainText(/predicate_id|predicate_version/);
     await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
@@ -63,10 +64,13 @@ test.describe("Decision-maker shell", () => {
     await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
     await expect(page.getByTestId("working-who")).toContainText(/工位/);
     await expect(page.getByTestId("working-who")).not.toHaveText(UUID_RE);
-    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办");
     await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");
     await expect(page.getByTestId("output-summary")).not.toContainText("{");
     await expect(page.getByTestId("output-summary")).not.toContainText("[");
+    await expect(page.getByTestId("gate-id")).toBeHidden();
+    await expect(page.getByTestId("predicate-id")).toBeHidden();
+    await expect(page.getByTestId("predicate-version")).toBeHidden();
     await expect(page.getByTestId("card-face")).not.toContainText(ready.gate!.id);
     await expect(page.getByTestId("card-face")).not.toContainText(ready.goal.id);
     await expect(page.getByTestId("card-face")).not.toContainText(/predicate_id|predicate_version/);
@@ -89,7 +93,11 @@ test.describe("Decision-maker shell", () => {
       await expect(missingCard.getByTestId("missing-item").filter({ hasText: entry })).toHaveCount(0);
       await expect(missingCard.getByTestId("card-face")).not.toContainText(entry);
     }
-    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 2");
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
+    await expect(missingCard.getByTestId("missing-code").first()).toBeHidden();
+    await missingCard.getByText("工程详情").click();
+    await expect(missingCard.getByTestId("gate-id")).toBeVisible();
+    await expect(missingCard.getByTestId("missing-code").first()).toBeVisible();
     await expect(page.getByTestId("gate-inbox")).toHaveCount(1);
     await expect(page.locator("body")).not.toContainText("决策抽屉");
     await expect(page.locator("body")).not.toContainText("材料齐全");
@@ -117,7 +125,7 @@ test.describe("Decision-maker shell", () => {
     const ready = await seedDeliverReady(baseURL!, "本周交付包");
     await page.reload();
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
-    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办");
     await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
     await expect(page.getByTestId("working-who")).toHaveText("交付工位 · 协调人");
     await expect(page.getByTestId("working-who")).not.toHaveText(UUID_RE);
@@ -171,7 +179,7 @@ test.describe("Decision-maker shell", () => {
     await expect(page.getByTestId("gate-title")).not.toHaveText(UUID_RE);
     await expect(page.getByTestId("working-who")).toHaveText("交付工位 · 协调人");
     await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");
-    await expect(page.getByTestId("todo-chip")).toHaveText("待办 · 1");
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办");
     await page.screenshot({ path: join(evidenceDir, "inbox_one_card_human.png"), fullPage: true });
     await page.screenshot({ path: join(shotDir, "inbox_one_card_human.png"), fullPage: true });
 

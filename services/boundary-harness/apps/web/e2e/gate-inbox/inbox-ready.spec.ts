@@ -30,6 +30,7 @@ test.describe("E2E ready list", () => {
 
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
     await expect(page.getByTestId("gate-id")).toContainText(ready.gate!.id);
+    await expect(page.getByTestId("gate-id")).toBeHidden();
     await expect(page.getByTestId("card-face")).not.toContainText(ready.gate!.id);
     await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
     await expect(page.getByTestId("gate-status")).not.toHaveText(/^ready$/i);
@@ -61,6 +62,8 @@ test.describe("E2E ready list", () => {
     await expect(page.getByTestId("predicate-id")).toContainText(String(ready.gate?.predicate_id ?? "deliver_ready_v1"));
     await expect(page.getByTestId("predicate-version")).toContainText(/predicate_version/);
     await expect(page.getByTestId("predicate-version")).toContainText(String(ready.gate?.predicate_version ?? 1));
+    await expect(page.getByTestId("predicate-id")).toBeHidden();
+    await expect(page.getByTestId("predicate-version")).toBeHidden();
     await expect(page.getByTestId("card-face")).not.toContainText(/predicate_id|predicate_version/);
     await expect(page.getByTestId("ready-at")).toContainText(/ready_at/);
     await expect(page.getByTestId("ready-at")).not.toHaveText(/ready_at\s*$/);

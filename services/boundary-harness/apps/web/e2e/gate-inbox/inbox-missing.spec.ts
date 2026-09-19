@@ -25,6 +25,7 @@ test.describe("E2E missing[]", () => {
     await expect(page.getByTestId("decide-pass")).toBeDisabled();
     for (const entry of missing) {
       await expect(page.getByTestId("missing-code").filter({ hasText: entry })).toHaveCount(1);
+      await expect(page.getByTestId("missing-code").filter({ hasText: entry })).toBeHidden();
       await expect(page.getByTestId("missing-item").filter({ hasText: entry })).toHaveCount(0);
       await expect(page.getByTestId("card-face")).not.toContainText(entry);
     }

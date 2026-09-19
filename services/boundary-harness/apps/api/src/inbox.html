@@ -129,11 +129,16 @@
       const raw = String(code ?? "");
       if (MISSING_ZH[raw]) return MISSING_ZH[raw];
       const auth = raw.match(/^authority_escalation:(.+)$/);
-      if (auth) return `还差：需要批准${ACTION_ZH[auth[1]] || auth[1]}`;
+      if (auth) return `还差：需要批准${ACTION_ZH[auth[1]] || "这项操作"}`;
       if (/github_pr:is_draft/.test(raw)) return "还差：合并请求仍是草稿";
       if (raw.startsWith("github_checks:")) return "还差：检查未全部通过";
-      if (raw.startsWith("evidence:")) return `还差：${raw.slice("evidence:".length)}`;
-      return `还差：${raw}`;
+      if (raw === "noop_or_offline_contract") return "还差：离线契约";
+      if (raw.startsWith("run_lifecycle:")) return "还差：运行还没结束";
+      if (raw.startsWith("evidence:")) {
+        const rest = raw.slice("evidence:".length);
+        return MISSING_ZH[rest] || "还差：一项材料";
+      }
+      return "还差：一项材料";
     }
     function isAdvisory(g) {
       const track = g.track || (g.ready_result && g.ready_result.track) || "";
@@ -192,8 +197,8 @@
       if (missing.length) return "材料还没齐，先看上面「还差」";
       return "同事已交：结论摘要、产物";
     }
-    function setCounts(queueN) {
-      $("todo-chip").textContent = queueN > 0 ? `待办 · ${queueN}` : "待办";
+    function setCounts(authorityN) {
+      $("todo-chip").textContent = authorityN > 0 ? `待办 · ${authorityN}` : "待办";
     }
     async function decide(card, act, structural, note) {
       const id = card.dataset.id;
@@ -229,8 +234,9 @@
       const body = await res.json();
       const gates = (body.gates || []).filter((g) => g.status === "ready" && !isAdvisory(g));
       await Promise.all(gates.map((g) => loadGoal(g.goal_id)));
-      setCounts(gates.length);
-      $("list").innerHTML = gates.length ? gates.map((g) => {
+      const authorityN = gates.filter((g) => isAuthority(g, (g.ready_result && g.ready_result.missing) || [])).length;
+      setCounts(authorityN);
+      $("list").innerHTML = gates.length ? gates.map((g, idx) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
         const pver = g.predicate_version ?? (g.ready_result && g.ready_result.predicate_version) ?? "";
@@ -272,10 +278,10 @@
             </div>
             <div class="revise-box" data-testid="revise-panel" hidden>
               <strong>打回重做</strong>
-              <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="same" checked /> 让同一工位再跑一版</label>
+              <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${idx}" value="same" checked /> 让同一工位再跑一版</label>
               <details>
                 <summary class="sub">这是结构问题，要换任务边界</summary>
-                <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="struct" /> 确认换任务边界</label>
+                <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${idx}" value="struct" /> 确认换任务边界</label>
               </details>
               <input data-testid="revise-note" placeholder="想改的方向（可选）" />
               <div class="row" style="margin-top:8px">
