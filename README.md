@@ -16,3 +16,11 @@ Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product 
 - [docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md](docs/engineering/BOUNDARY_HARNESS_TECH_IMPL_v1.md)
 - [docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md](docs/engineering/BOUNDARY_HARNESS_ENGINEERING.md)（supporting — historical engineering plan）
 - [docs/product/research/control-plane-as-harness-brief.md](docs/product/research/control-plane-as-harness-brief.md)（supporting — research）
+
+## Dogfood / Grok Bot 约束验证
+
+Dogfood 模式：在本仓 `services/boundary-harness` 上开发 / 使用 / 修。
+
+**核心目标：** 用 Harness MCP（Dial / Ready / Gate）约束 Grok Bot。Cursor Cloud Agents 只是执行池之一，不是替代。
+
+SOP：[docs/product/dogfood/GROKBOT_CONSTRAINT_VERIFY_AND_DOGFOOD_v1.md](docs/product/dogfood/GROKBOT_CONSTRAINT_VERIFY_AND_DOGFOOD_v1.md)
