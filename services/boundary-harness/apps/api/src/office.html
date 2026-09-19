@@ -288,7 +288,7 @@
       const fillBtn = slot.empty
         ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-dispatch-policy="${esc(goal.dispatch_policy || "coordinator_only")}" data-intent="${esc(goal.intent || goal.title || "")}">我来填</button>`
         : "";
-      return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}">
+      return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}" draggable="false">
         <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
         <span data-testid="slot-progress">${esc(progress)}</span>
         ${art}

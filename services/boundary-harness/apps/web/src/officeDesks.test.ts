@@ -10,7 +10,7 @@ const freshAt = "2026-09-19T12:59:30.000Z";
 const staleAt = "2026-09-19T12:50:00.000Z";
 
 describe("office desks main list", () => {
-  it("desks_hide_pool_seed_names", () => {
+  it("desks_no_pool_seed_fake_names", () => {
     expect(looksLikePoolSeedName("交付同事")).toBe(true);
     expect(looksLikePoolSeedName("Cursor 同事")).toBe(true);
     expect(looksLikePoolSeedName("Cursor同事")).toBe(true);
@@ -38,7 +38,7 @@ describe("office desks main list", () => {
     expect(shown.some((d) => /交付同事|Cursor 同事/.test(String(d.name)))).toBe(false);
   });
 
-  it("desks_show_only_fresh_heartbeat", () => {
+  it("desks_list_requires_fresh_heartbeat", () => {
     const shown = visibleOfficeDesks(
       [
         { id: "pool_noop", name: "交付同事", last_heartbeat: null, source: "pool_seed", presence: "busy" },

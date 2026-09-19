@@ -69,7 +69,7 @@ test.describe("E2E office home P0", () => {
     await expect(page.getByTestId("gate-card").first()).toBeVisible();
   });
 
-  test("desks_hide_pool_seed_names", async ({ page }) => {
+  test("desks_no_pool_seed_fake_names", async ({ page }) => {
     const desksReq = page.waitForRequest((req) => {
       if (req.method() !== "GET") return false;
       const url = new URL(req.url());
@@ -92,7 +92,15 @@ test.describe("E2E office home P0", () => {
     await expect(page.getByTestId("inbox-drawer")).not.toHaveClass(/open/);
   });
 
-  test("desks_show_only_fresh_heartbeat", async ({ page }) => {
+  test("desks_list_requires_fresh_heartbeat", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("desks-empty")).toHaveText("还没有同事上线");
+    await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    const emptyRoster = await page.getByTestId("roster").innerText();
+    expect(emptyRoster).not.toContain("在忙");
+    expect(emptyRoster).not.toContain("交付同事");
+    expect(emptyRoster).not.toContain("Cursor 同事");
+
     const now = new Date().toISOString();
     const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     await page.route("**/v1/desks**", async (route) => {
