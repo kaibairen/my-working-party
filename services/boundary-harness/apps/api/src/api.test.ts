@@ -7,6 +7,7 @@ const headers = (role: string, actor = role) => ({
   "content-type": "application/json",
   "x-harness-role": role,
   "x-harness-actor": actor,
+  "x-harness-entry": "mcp",
 });
 
 async function json(app: ReturnType<typeof createApp>, path: string, init?: RequestInit) {
@@ -307,6 +308,8 @@ describe("domain API", () => {
     const officeHtml = await office.text();
     expect(officeHtml).toContain("AI 办公室");
     expect(officeHtml).toContain("新建目标");
+    expect(officeHtml).toContain("我来填");
+    expect(officeHtml).toContain("exception-grants");
     expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
     expect(officeHtml).toContain("工位心跳");
     expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
@@ -360,10 +363,12 @@ describe("domain API", () => {
     expect(listed.res.status).toBe(200);
     expect(listed.body.readonly).toBe(true);
     expect(listed.body.hitl).toBe("待我拍板");
+    expect(listed.body.stub).toBe(true);
+    expect(listed.body.heartbeat_ttl_seconds).toBe(90);
     expect(listed.body.desks).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "交付同事", status: "空闲", presence: "idle" }),
-        expect.objectContaining({ name: "Cursor 同事", status: "空闲", presence: "idle" }),
+        expect.objectContaining({ name: "交付同事", status: "空闲", presence: "idle", source: "pool_seed" }),
+        expect.objectContaining({ name: "Cursor 同事", status: "空闲", presence: "idle", source: "pool_seed" }),
       ]),
     );
     const write = await app.request("/v1/desks", {

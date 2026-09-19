@@ -14,6 +14,7 @@ const headers = (role: string, actor = role) => ({
   "content-type": "application/json",
   "x-harness-role": role,
   "x-harness-actor": actor,
+  "x-harness-entry": "mcp",
 });
 
 async function json(app: ReturnType<typeof createApp>, path: string, init?: RequestInit) {

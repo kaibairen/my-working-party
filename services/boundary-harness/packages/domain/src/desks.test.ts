@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, type Harness } from "./db";
 import { createGoal, dispatchAssignment, fillAssignment } from "./services";
-import { listDesks } from "./desks";
+import { HEARTBEAT_TTL_SECONDS, listDesks, recordHeartbeat } from "./desks";
 import type { Actor } from "./rbac";
 
 const dm: Actor = { id: "you", role: "decision_maker" };
@@ -23,6 +23,26 @@ describe("listDesks presence projection", () => {
     expect(desks.every((d) => d.status === "空闲")).toBe(true);
     expect(desks.every((d) => d.presence === "idle")).toBe(true);
     expect(desks.find((d) => d.name === "交付同事")?.avatar).toBe("交");
+    expect(listDesks(harness, dm).stub).toBe(true);
+    expect(listDesks(harness, dm).heartbeat_ttl_seconds).toBe(HEARTBEAT_TTL_SECONDS);
+    expect(desks.every((d) => d.last_heartbeat === null && d.source === "pool_seed")).toBe(true);
+  });
+
+  it("overlays a live heartbeat and drops it after TTL", () => {
+    let nowMs = Date.parse("2026-09-19T05:00:00.000Z");
+    harness = createHarness({ databasePath: ":memory:", now: () => new Date(nowMs).toISOString() });
+    const bot: Actor = { id: "bot-1", role: "executor" };
+    recordHeartbeat(harness, bot, { display_name: "交付同事", pool_id: "pool_noop", ttl_seconds: 90 });
+    const live = listDesks(harness, dm);
+    expect(live.stub).toBe(false);
+    const noop = live.desks.find((d) => d.id === "pool_noop");
+    expect(noop?.source).toBe("heartbeat");
+    expect(noop?.last_heartbeat).toBe("2026-09-19T05:00:00.000Z");
+    nowMs += 91_000;
+    const expired = listDesks(harness, dm);
+    expect(expired.stub).toBe(true);
+    expect(expired.desks.find((d) => d.id === "pool_noop")?.source).toBe("pool_seed");
+    expect(expired.desks.find((d) => d.id === "pool_noop")?.last_heartbeat).toBeNull();
   });
 
   it("marks an accepted assignment as 在忙, not a dispatch UI", () => {

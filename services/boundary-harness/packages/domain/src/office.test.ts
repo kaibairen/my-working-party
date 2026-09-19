@@ -64,4 +64,23 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].progress).toBe("在填");
     expect(listGoals(harness, dm)[0].status_line).toBe("同事在填");
   });
+
+  it("marks a decision_maker fill as 人填 after human_allowed or grant", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const allowed = createGoal(harness, coord, {
+      title: "人填目标",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+      dispatch_policy: "human_allowed",
+      intent: "我来写结论",
+    });
+    fillAssignment(harness, dm, allowed.id, {
+      pool_id: "pool_noop",
+      brief: { outcome: "我来写结论", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    });
+    const { slots } = listFillSlots(harness, dm, allowed.id);
+    expect(slots[0].filler_kind).toBe("human");
+    expect(slots[0].filler).toBe("你");
+    expect(slots[0].empty).toBe(false);
+  });
 });

@@ -50,6 +50,12 @@ importers:
       '@harness/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@hono/node-server':
+        specifier: ^1.19.1
+        version: 1.19.17(hono@4.13.8)
+      hono:
+        specifier: ^4.9.6
+        version: 4.13.8
       tsx:
         specifier: ^4.20.5
         version: 4.23.13

@@ -36,6 +36,9 @@ test.describe("E2E office home P0", () => {
     await expect(card).toBeVisible();
     await expect(card.getByTestId("fill-slot")).toBeVisible();
     await expect(card.getByTestId("slot-progress")).toContainText(/等同事填|在填|等证据|已交产物/);
+    await expect(card.getByTestId("human-fill")).toHaveText("我来填");
+    await card.getByTestId("human-fill").click();
+    await expect(card.getByTestId("slot-filler")).toContainText("人填");
     await expect(card.getByRole("button", { name: /指派|开跑|dispatch/i })).toHaveCount(0);
 
     const roster = page.getByTestId("roster");

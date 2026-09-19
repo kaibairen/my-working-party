@@ -32,11 +32,11 @@ Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`)
 |------|------|
 | `services/boundary-harness/apps/api` | Domain HTTP + DM office `/` + Inbox `/inbox` + engineer `/ops` |
 | `services/boundary-harness/apps/worker` | Outbox → webhook (`WEBHOOK_URL`) |
-| `services/boundary-harness/apps/mcp-server` | 8-tool MCP stub |
+| `services/boundary-harness/apps/mcp-server` | stdio MCP + HTTP glove `:8787/mcp` (`pnpm dev:mcp-http`) |
 | `services/boundary-harness/packages/*` | domain, policy, ready, adapters-noop, adapters-cursor |
 | `services/boundary-harness/docker-compose.yml` | `docker compose up api` |
 
-**Decision-maker:** http://127.0.0.1:8080/ (**AI 办公室** — 目标列表 + 新建目标 + Bot 填充槽 + 只读 **工位心跳**). Inbox / 待我拍板 is a top-bar **drawer** (`待办 · n`); http://127.0.0.1:8080/inbox stays loadable. Roster is presence only (在忙 / 等证据 / 空闲) — not dispatch. Health / OpenAPI / outbox stay on http://127.0.0.1:8080/ops (403 for `decision_maker`). AUTHORITATIVE IA: [OFFICE_HOME_IA_P0_v1.md](services/boundary-harness/docs/experience/OFFICE_HOME_IA_P0_v1.md).
+**Decision-maker:** http://127.0.0.1:8080/ (**AI 办公室** — 目标列表 + 新建目标 + 填充槽含「我来填」+ 只读 **工位心跳**). Inbox / 待我拍板 is a top-bar **drawer** (`待办 · n`); http://127.0.0.1:8080/inbox stays loadable. Roster is presence only (在忙 / 等证据 / 空闲；心跳 TTL 90s) — not dispatch. Bot completion writes (dispatch / evidence) require `X-Harness-Entry: mcp` (MCP proxy injects it). Health / OpenAPI / outbox stay on http://127.0.0.1:8080/ops (403 for `decision_maker`). AUTHORITATIVE IA: [OFFICE_HOME_IA_P0_v1.md](services/boundary-harness/docs/experience/OFFICE_HOME_IA_P0_v1.md). Dogfood SOP: [DOGFOOD_GROKBOT_MCP_SOP.md](services/boundary-harness/docs/DOGFOOD_GROKBOT_MCP_SOP.md).
 
 M1: CursorAdapter (fixture / `CURSOR_API_STUB` / live `POST /v1/agents` with `repos[]` + `source.repository`), Dial freeze → **423** `dial_frozen`, BriefV1 422 on HTTP+MCP, dual external ids, FINISHED≠IDLE. Worker polls Cursor until `FINISHED`, writes `usage.cursor_lifecycle`, re-evals Ready. MCP aliases from PRD §8; no `cursor_raw_*` / `set_steps`. Live repo: `CURSOR_REPOSITORY` (default this GitHub repo).
 M3: outbox exactly-once attempts + HMAC-SHA256 outbound (`X-Harness-Signature` / `X-Harness-Timestamp`). SSE `/v1/events` replays from `Last-Event-ID`.
@@ -73,15 +73,16 @@ ASG=$(curl -sS -X POST http://127.0.0.1:8080/v1/goals/$(printf '%s' "$GOAL" | py
   -d '{"pool_id":"pool_noop","brief":{"outcome":"working M0","constraints":["no Cursor"],"evidence_shape":["summary_md","artifact_uri"]},"budget":{"max_runs":1}}')
 
 # 3) Dispatch → Noop run (dual external ids persisted; canvas is not required)
+# Completion writes require X-Harness-Entry: mcp (MCP proxy injects this).
 AID=$(printf '%s' "$ASG" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 RUN=$(curl -sS -X POST http://127.0.0.1:8080/v1/assignments/$AID/dispatch \
-  -H "$H" -H "$A" -H 'content-type: application/json' \
+  -H "$H" -H "$A" -H 'X-Harness-Entry: mcp' -H 'content-type: application/json' \
   -d '{"idempotency_key":"m0-1"}')
 
 # 4) Evidence (unique completion entry). run.succeeded alone does not make a Gate ready.
 RID=$(printf '%s' "$RUN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 curl -sS -X POST http://127.0.0.1:8080/v1/runs/$RID/evidence \
-  -H 'X-Harness-Role: executor' -H 'X-Harness-Actor: exec-1' -H 'content-type: application/json' \
+  -H 'X-Harness-Role: executor' -H 'X-Harness-Actor: exec-1' -H 'X-Harness-Entry: mcp' -H 'content-type: application/json' \
   -d '{"items":[{"kind":"summary_md","uri":"file://summary.md"},{"kind":"artifact_uri","uri":"file://out.tgz"}]}'
 
 # 5) Inbox: list ready GateInstance, then decide (decision_maker + version lock)

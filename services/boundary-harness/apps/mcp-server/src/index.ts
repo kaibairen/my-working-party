@@ -1,7 +1,23 @@
-import { MCP_TOOL_NAMES } from "@harness/domain";
+import { MCP_ENTRY_HEADER, MCP_ENTRY_VALUE, MCP_HTTP_TOOL_NAMES, MCP_TOOL_NAMES } from "@harness/domain";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const API = process.env.HARNESS_API_URL ?? "http://127.0.0.1:8080";
+const here = dirname(fileURLToPath(import.meta.url));
+const TOOLS_SCHEMA_PATH = join(here, "../tools.schema.json");
+
+type ToolSchemaFile = {
+  tools: Record<string, { description?: string; inputSchema?: Record<string, unknown> }>;
+};
+
+function loadToolSchemas(): ToolSchemaFile {
+  try {
+    return JSON.parse(readFileSync(TOOLS_SCHEMA_PATH, "utf8")) as ToolSchemaFile;
+  } catch {
+    return { tools: {} };
+  }
+}
 
 type ToolDef = {
   name: (typeof MCP_TOOL_NAMES)[number];
@@ -93,15 +109,23 @@ const TOOLS: ToolDef[] = [
     method: "POST",
     path: () => "/v1/policy/check",
   },
+  {
+    name: "harness_heartbeat",
+    description: "Report bot presence. Domain stores last_heartbeat + TTL for GET /v1/desks.",
+    method: "POST",
+    path: () => "/v1/agents/heartbeat",
+  },
 ];
 
 const FORBIDDEN = ["cursor_raw_", "set_steps", "mark_done", "cursor_launch"];
 
-export function listTools() {
-  return TOOLS.map((t) => ({
+export function listTools(opts?: { http?: boolean }) {
+  const schemas = loadToolSchemas().tools;
+  const names = opts?.http ? MCP_HTTP_TOOL_NAMES : MCP_TOOL_NAMES;
+  return TOOLS.filter((t) => (names as readonly string[]).includes(t.name)).map((t) => ({
     name: t.name,
-    description: t.description,
-    inputSchema: { type: "object", additionalProperties: true },
+    description: schemas[t.name]?.description ?? t.description,
+    inputSchema: schemas[t.name]?.inputSchema ?? { type: "object", additionalProperties: true },
   }));
 }
 
@@ -133,13 +157,16 @@ export async function callTool(
                   }
                 : args,
         );
+  const role = headers["x-harness-role"] ?? String(args.role ?? "coordinator");
+  const actor = headers["x-harness-actor"] ?? String(args.actor ?? "mcp");
   const res = await fetch(`${API}${path}`, {
     method: tool.method,
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${headers["x-harness-role"] ?? String(args.role ?? "coordinator")}:${headers["x-harness-actor"] ?? String(args.actor ?? "mcp")}`,
-      "x-harness-role": headers["x-harness-role"] ?? String(args.role ?? "coordinator"),
-      "x-harness-actor": headers["x-harness-actor"] ?? String(args.actor ?? "mcp"),
+      authorization: headers.authorization ?? `Bearer ${role}:${actor}`,
+      "x-harness-role": role,
+      "x-harness-actor": actor,
+      [MCP_ENTRY_HEADER]: MCP_ENTRY_VALUE,
     },
     body,
   });

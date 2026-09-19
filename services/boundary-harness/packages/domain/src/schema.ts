@@ -59,6 +59,10 @@ export const assignments = sqliteTable("assignments", {
   risk: text("risk"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+  /** Actor who filled the slot. Optional extra (applyCompat). */
+  createdBy: text("created_by"),
+  /** `bot` | `human` — office fill-board projection. Optional extra (applyCompat). */
+  fillerKind: text("filler_kind"),
 });
 
 export const runs = sqliteTable("runs", {
@@ -167,6 +171,14 @@ export const freezeState = sqliteTable("freeze_state", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const agentHeartbeats = sqliteTable("agent_heartbeats", {
+  actorId: text("actor_id").primaryKey(),
+  displayName: text("display_name"),
+  poolId: text("pool_id"),
+  lastSeenAt: text("last_seen_at").notNull(),
+  ttlSeconds: integer("ttl_seconds").notNull(),
+});
+
 export const outbox = sqliteTable("outbox", {
   id: text("id").primaryKey(),
   type: text("type").notNull(),
@@ -195,4 +207,5 @@ export const schema = {
   auditLog,
   freezeState,
   outbox,
+  agentHeartbeats,
 };

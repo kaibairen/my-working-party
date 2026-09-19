@@ -228,4 +228,45 @@ export const MCP_TOOL_NAMES = [
   "harness_list_ready_gates",
   "harness_decide_gate",
   "harness_policy_check",
+  "harness_heartbeat",
 ] as const;
+
+/** Canonical HTTP MCP glove (aliases stay on stdio only). */
+export const MCP_HTTP_TOOL_NAMES = [
+  "harness_create_goal",
+  "harness_fill_assignment",
+  "harness_dispatch",
+  "harness_attach_evidence",
+  "harness_get_run",
+  "harness_list_gates",
+  "harness_decide_gate",
+  "harness_policy_check",
+  "harness_heartbeat",
+] as const;
+
+/** CONTRACT_MCP_ENTRY_DENY_v0 option A — MCP proxy injects this on Domain writes. */
+export const MCP_ENTRY_HEADER = "x-harness-entry";
+export const MCP_ENTRY_VALUE = "mcp";
+
+export function isBotCompletionWritePath(method: string, path: string): boolean {
+  if (method.toUpperCase() !== "POST") return false;
+  return /\/assignments\/[^/]+\/dispatch\/?$/.test(path) || /\/runs\/[^/]+\/evidence\/?$/.test(path);
+}
+
+function completionWriteTemplatePath(path: string): string {
+  if (/\/assignments\/[^/]+\/dispatch/.test(path)) return "/v1/assignments/{id}/dispatch";
+  if (/\/runs\/[^/]+\/evidence/.test(path)) return "/v1/runs/{id}/evidence";
+  return path;
+}
+
+/**
+ * Bot completion writes (dispatch / attach_evidence) must come through the MCP glove.
+ * Coordinators hitting Domain HTTP without the header are treated as a bypass.
+ */
+export function assertMcpEntry(entry: string | undefined, path: string): void {
+  if (entry?.trim().toLowerCase() !== MCP_ENTRY_VALUE) {
+    throw new HarnessError("mcp_entry_required", "write requires MCP entry", 403, {
+      path: completionWriteTemplatePath(path),
+    });
+  }
+}

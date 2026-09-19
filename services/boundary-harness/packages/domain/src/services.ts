@@ -445,6 +445,7 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
 
   const id = h.newId();
   const ts = h.now();
+  const fillerKind = actor.role === "decision_maker" ? "human" : "bot";
   h.db.insert(assignments).values({
     id,
     goalId,
@@ -455,6 +456,8 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
     risk: null,
     createdAt: ts,
     updatedAt: ts,
+    createdBy: actor.id,
+    fillerKind,
   }).run();
   audit(h, actor, status === "proposed" ? "propose_assignment" : "fill_assignment", "assignment", id);
   return getAssignment(h, id);
@@ -508,10 +511,18 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
     const brief = parseJson<{ outcome?: string }>(asg.briefJson);
     const rawOutcome = brief?.outcome?.trim() || null;
     const outcome = rawOutcome && /^(pending|presence|demo|chat) only$/i.test(rawOutcome) ? null : rawOutcome;
-    const filler = pool ? humanDeskName(pool.id, pool.kind) : "同事";
-    const filler_kind: FillSlot["filler_kind"] = pool?.kind === "bot_group" || pool?.kind === "cursor_account" || pool?.kind === "noop"
-      ? "bot"
-      : "human";
+    const storedKind = asg.fillerKind === "human" || asg.fillerKind === "bot" ? asg.fillerKind : null;
+    const filler_kind: FillSlot["filler_kind"] =
+      storedKind ??
+      (pool?.kind === "bot_group" || pool?.kind === "cursor_account" || pool?.kind === "noop" ? "bot" : "human");
+    const filler =
+      filler_kind === "human"
+        ? asg.createdBy === "you"
+          ? "你"
+          : asg.createdBy || "人"
+        : pool
+          ? humanDeskName(pool.id, pool.kind)
+          : "同事";
     return {
       assignment_id: asg.id,
       empty: false,

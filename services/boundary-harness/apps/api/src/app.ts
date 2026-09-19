@@ -33,6 +33,8 @@ import {
   parseBearer,
   parseRole,
   policyCheck,
+  recordHeartbeat,
+  assertMcpEntry,
   recordGithubSnapshot,
   requireRole,
   setAdminFreeze,
@@ -175,6 +177,22 @@ export function createApp(harness: Harness) {
     return c.json(listDesks(c.get("harness"), c.get("actor")));
   });
 
+  v1.post("/agents/heartbeat", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      display_name?: string;
+      pool_id?: string;
+      ttl_seconds?: number;
+    };
+    return c.json(
+      recordHeartbeat(c.get("harness"), c.get("actor"), {
+        display_name: body.display_name,
+        pool_id: body.pool_id,
+        ttl_seconds: body.ttl_seconds,
+      }),
+      200,
+    );
+  });
+
   v1.post("/pools", async (c) => {
     const body = (await c.req.json()) as { id?: string; kind?: string; secret_ref?: string };
     assertNoPlaintextCredentials(body);
@@ -260,6 +278,7 @@ export function createApp(harness: Harness) {
   v1.get("/assignments/:id", (c) => c.json(getAssignment(c.get("harness"), c.req.param("id"))));
 
   v1.post("/assignments/:id/dispatch", async (c) => {
+    assertMcpEntry(c.req.header("x-harness-entry"), c.req.path);
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const key = String(body.idempotency_key ?? c.req.header("idempotency-key") ?? "");
     const result = await dispatchAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), key);
@@ -270,6 +289,7 @@ export function createApp(harness: Harness) {
   v1.get("/runs/:id", (c) => c.json(getRun(c.get("harness"), c.req.param("id"))));
 
   v1.post("/runs/:id/evidence", async (c) => {
+    assertMcpEntry(c.req.header("x-harness-entry"), c.req.path);
     const body = (await c.req.json()) as { items?: unknown };
     return c.json(
       attachEvidence(c.get("harness"), c.get("actor"), c.req.param("id"), (body.items ?? []) as never),
