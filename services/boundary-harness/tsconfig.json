@@ -12,6 +12,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "vitest.config.ts"],
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "examples/**/*.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist", "data", "packages/domain/drizzle.config.ts", "tests/e2e/**", "apps/web/e2e/**", "playwright.config.ts"]
 }

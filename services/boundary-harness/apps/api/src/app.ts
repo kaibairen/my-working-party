@@ -57,6 +57,7 @@ const inboxHtml = readFileSync(join(here, "inbox.html"), "utf8");
 const officeHtml = readFileSync(join(here, "office.html"), "utf8");
 const opsHtml = readFileSync(join(here, "ops.html"), "utf8");
 const openapiPath = join(here, "../../../openapi/openapi.yaml");
+const example2048Dir = join(here, "../../../examples/2048");
 
 function readActor(c: {
   req: { header: (name: string) => string | undefined; query: (name: string) => string | undefined };
@@ -123,6 +124,20 @@ export function createApp(harness: Harness) {
     }
     return c.html(opsHtml);
   });
+  app.get("/examples/2048", (c) => c.redirect("/examples/2048/"));
+  app.get("/examples/2048/", (c) => {
+    return c.html(readFileSync(join(example2048Dir, "index.html"), "utf8"));
+  });
+  app.get("/examples/2048/board.js", (c) => {
+    return c.body(readFileSync(join(example2048Dir, "board.js"), "utf8"), 200, {
+      "content-type": "text/javascript; charset=utf-8",
+    });
+  });
+  app.get("/examples/2048/README.md", (c) => {
+    return c.body(readFileSync(join(example2048Dir, "README.md"), "utf8"), 200, {
+      "content-type": "text/markdown; charset=utf-8",
+    });
+  });
   app.get("/health", (c) => c.json(health(c.get("harness"))));
   app.get("/openapi.yaml", (c) => {
     const yaml = readFileSync(openapiPath, "utf8");
@@ -187,6 +202,8 @@ export function createApp(harness: Harness) {
       name?: string;
       pool_id?: string;
       ttl_seconds?: number;
+      group?: string;
+      section?: string;
     };
     return c.json(
       recordHeartbeat(c.get("harness"), c.get("actor"), {
@@ -194,6 +211,8 @@ export function createApp(harness: Harness) {
         name: body.name,
         pool_id: body.pool_id,
         ttl_seconds: body.ttl_seconds,
+        group: body.group,
+        section: body.section,
       }),
       200,
     );

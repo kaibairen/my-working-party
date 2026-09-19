@@ -139,10 +139,14 @@ function applyCompat(sqlite: Database.Database): void {
         actor_id TEXT PRIMARY KEY,
         display_name TEXT,
         pool_id TEXT,
+        group_name TEXT,
         last_seen_at TEXT NOT NULL,
         ttl_seconds INTEGER NOT NULL
       )
     `);
+  } else {
+    const cols = columnNames(sqlite, "agent_heartbeats");
+    if (!cols.includes("group_name")) sqlite.exec("ALTER TABLE agent_heartbeats ADD COLUMN group_name TEXT");
   }
   if (tableExists(sqlite, "schema_meta") && columnNames(sqlite, "schema_meta").includes("schema_version") && !columnNames(sqlite, "schema_meta").includes("key")) {
     sqlite.exec(`

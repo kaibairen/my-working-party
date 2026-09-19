@@ -175,6 +175,7 @@ export const agentHeartbeats = sqliteTable("agent_heartbeats", {
   actorId: text("actor_id").primaryKey(),
   displayName: text("display_name"),
   poolId: text("pool_id"),
+  groupName: text("group_name"),
   lastSeenAt: text("last_seen_at").notNull(),
   ttlSeconds: integer("ttl_seconds").notNull(),
 });

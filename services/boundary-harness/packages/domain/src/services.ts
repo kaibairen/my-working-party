@@ -6,7 +6,7 @@ import { HarnessError } from "./errors";
 import { signHarnessWebhook } from "./hmac";
 import type { Actor, Dial, Role } from "./rbac";
 import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
-import { humanDeskName } from "./desks";
+import { executionPoolName } from "./desks";
 import type { Harness } from "./db";
 import {
   freezeState,
@@ -521,8 +521,8 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
           ? "你"
           : asg.createdBy || "人"
         : pool
-          ? humanDeskName(pool.id, pool.kind)
-          : "同事";
+          ? executionPoolName(pool.id, pool.kind)
+          : "执行池";
     return {
       assignment_id: asg.id,
       empty: false,

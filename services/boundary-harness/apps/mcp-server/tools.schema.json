@@ -139,6 +139,8 @@
           "display_name": { "type": "string" },
           "name": { "type": "string", "description": "Alias for display_name" },
           "pool_id": { "type": "string" },
+          "group": { "type": "string", "description": "Self-reported roster group (harness开发 / 2048工作组 / 其他)" },
+          "section": { "type": "string", "description": "Alias for group" },
           "ttl_seconds": { "type": "integer", "minimum": 15, "maximum": 3600 },
           "role": { "type": "string" },
           "actor": { "type": "string" }

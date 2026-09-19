@@ -95,11 +95,13 @@ test.describe("E2E decision-maker shell", () => {
     const emptyText = await roster.innerText();
     expect(emptyText).not.toMatch(/交付同事|Cursor 同事/);
 
-    await seedHeartbeat(baseURL!, { actor: "bot-deliver", display_name: "周报 Bot", pool_id: "pool_noop" });
-    await seedHeartbeat(baseURL!, { actor: "bot-cursor", display_name: "调研 Bot", pool_id: "pool_cursor" });
+    await seedHeartbeat(baseURL!, { actor: "bot-deliver", display_name: "周报 Bot", pool_id: "pool_noop", group: "harness" });
+    await seedHeartbeat(baseURL!, { actor: "bot-cursor", display_name: "调研 Bot", pool_id: "pool_cursor", group: "2048" });
     await page.reload();
     const rows = page.getByTestId("desk-row");
     await expect(rows).toHaveCount(2);
+    await expect(page.getByTestId("desk-group")).toHaveCount(2);
+    await expect(page.getByTestId("desk-group-title")).toHaveText(["harness开发", "2048工作组"]);
     await expect(page.getByTestId("desk-name")).toHaveText(["周报 Bot", "调研 Bot"]);
     await expect(page.getByTestId("desk-status")).toHaveText([/在忙|等证据|空闲/, /在忙|等证据|空闲/]);
     await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "在忙" }) })).toHaveCount(1);

@@ -47,6 +47,9 @@ describe("office anti-dispatch regressions", () => {
     }
     expect(officeHtml).toContain("还没有 Bot 报心跳");
     expect(officeHtml).toContain("不是侧栏同步");
+    expect(officeHtml).toContain("desk-group");
+    expect(officeHtml).not.toContain("Bot 填 ·");
+    expect(officeHtml).not.toContain("交付同事");
     const assign = await app.request("/v1/desks/pool_noop/assign", {
       method: "POST",
       headers: headers("decision_maker", "you"),

@@ -210,7 +210,7 @@ export async function seedAuthorityReady(baseURL: string, action = "destructive_
 /** Bot self-report so the office roster shows a real name (not a seed pool). */
 export async function seedHeartbeat(
   baseURL: string,
-  opts: { actor?: string; display_name: string; pool_id?: string; ttl_seconds?: number },
+  opts: { actor?: string; display_name: string; pool_id?: string; ttl_seconds?: number; group?: string; section?: string },
 ) {
   const actor = opts.actor ?? "bot-1";
   return requireOk(
@@ -222,6 +222,8 @@ export async function seedHeartbeat(
         display_name: opts.display_name,
         pool_id: opts.pool_id,
         ttl_seconds: opts.ttl_seconds,
+        group: opts.group,
+        section: opts.section,
       }),
     }),
   );
