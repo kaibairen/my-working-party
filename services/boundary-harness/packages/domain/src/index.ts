@@ -62,5 +62,6 @@ export {
   assertAdminNotFrozen,
   assertNoClientStatusWrite,
 } from "./services";
+export { listDesks, DESK_STATUS, type DeskPresence } from "./desks";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
 export { AUTHORITY_ACTIONS, checkPolicy } from "@harness/policy";

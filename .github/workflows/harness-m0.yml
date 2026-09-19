@@ -54,6 +54,7 @@ jobs:
             packages/ready \
             apps/api \
             apps/mcp-server \
+            apps/web \
             --passWithNoTests=false
       - name: vitest ready-anti
         run: pnpm exec vitest run apps/api/tests/ready-anti

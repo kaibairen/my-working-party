@@ -25,6 +25,7 @@ import {
   listEventsAfter,
   listGateInstances,
   listGithubSnapshots,
+  listDesks,
   listOutbox,
   listPools,
   parseBearer,
@@ -167,6 +168,10 @@ export function createApp(harness: Harness) {
   v1.get("/events/stream", sseEvents as never);
 
   v1.get("/pools", (c) => c.json({ pools: listPools(c.get("harness")) }));
+
+  v1.get("/desks", (c) => {
+    return c.json(listDesks(c.get("harness"), c.get("actor")));
+  });
 
   v1.post("/pools", async (c) => {
     const body = (await c.req.json()) as { id?: string; kind?: string; secret_ref?: string };

@@ -307,9 +307,16 @@ describe("domain API", () => {
     const officeHtml = await office.text();
     expect(officeHtml).toContain("AI 办公室");
     expect(officeHtml).toContain("查看待我拍板");
+    expect(officeHtml).toContain("工位一览");
+    expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
+    expect(officeHtml).toContain('data-testid="roster"');
+    expect(officeHtml).toContain('data-readonly="true"');
+    expect(officeHtml).toContain("/v1/desks");
     expect(officeHtml).toContain("此刻没有待办。安静是正常的。");
     expect(officeHtml).not.toContain("OpenAPI");
     expect(officeHtml).not.toContain('href="/ops"');
+    expect(officeHtml).not.toContain("派活");
+    expect(officeHtml).not.toContain("draggable=\"true\"");
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);
     const html = await inbox.text();
@@ -321,6 +328,10 @@ describe("domain API", () => {
     expect(html).toContain('data-testid="decide-revise"');
     expect(html).toContain('data-testid="decide-defer"');
     expect(html).toContain("/v1/gates?status=ready");
+    expect(html).toContain("sanitizeCardTitle");
+    expect(html).toContain("/e2e/i");
+    expect(html).toContain("g-[a-z0-9-]+");
+    expect(html).toContain("未命名目标");
     expect(html).not.toContain('href="/ops"');
     expect(html).not.toContain("OpenAPI");
     expect(html).not.toContain("标记完成");
@@ -334,5 +345,25 @@ describe("domain API", () => {
     expect(opsHtml).toContain("OpenAPI");
     expect(opsHtml).toContain("Outbox");
     expect(opsHtml).toContain("data-testid=\"outbox-table\"");
+  });
+
+  it("projects read-only desks for the office roster", async () => {
+    const { app } = setup();
+    const listed = await json(app, "/v1/desks", { headers: headers("decision_maker", "you") });
+    expect(listed.res.status).toBe(200);
+    expect(listed.body.readonly).toBe(true);
+    expect(listed.body.hitl).toBe("待我拍板");
+    expect(listed.body.desks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "交付同事", status: "空闲", presence: "idle" }),
+        expect.objectContaining({ name: "Cursor 同事", status: "空闲", presence: "idle" }),
+      ]),
+    );
+    const write = await app.request("/v1/desks", {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ pool_id: "pool_noop" }),
+    });
+    expect(write.status).toBe(404);
   });
 });

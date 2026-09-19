@@ -91,14 +91,14 @@ export async function drainReadyGates(baseURL: string) {
   }
 }
 
-export async function seedDeliverPending(baseURL: string) {
+export async function seedDeliverPending(baseURL: string, title = HUMAN_GOAL.deliver) {
   const goal = await requireOk(
     "create goal",
     await api<{ id: string; title: string }>(baseURL, "/v1/goals", {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: HUMAN_GOAL.deliver,
+        title,
         mode: "deliver",
         coordinator_ref: "coord-1",
       }),
@@ -135,8 +135,8 @@ export async function seedDeliverPending(baseURL: string) {
   return { goal, assignment: asg, run, gate };
 }
 
-export async function seedDeliverReady(baseURL: string) {
-  const seeded = await seedDeliverPending(baseURL);
+export async function seedDeliverReady(baseURL: string, title = HUMAN_GOAL.deliver) {
+  const seeded = await seedDeliverPending(baseURL, title);
   await requireOk(
     "attach evidence",
     await api(baseURL, `/v1/runs/${seeded.run.id}/evidence`, {
@@ -204,6 +204,34 @@ export async function seedAuthorityReady(baseURL: string, action = "destructive_
     }),
   );
   return { goal, gate: check.gate_instance };
+}
+
+/** Fill an assignment without dispatch so the desk projects 在忙. */
+export async function seedBusyDesk(baseURL: string, poolId = "pool_cursor") {
+  const goal = await requireOk(
+    "create busy-desk goal",
+    await api<{ id: string }>(baseURL, "/v1/goals", {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        title: HUMAN_GOAL.explore,
+        mode: "explore",
+        coordinator_ref: "coord-1",
+      }),
+    }),
+  );
+  const asg = await requireOk(
+    "fill busy desk",
+    await api<{ id: string; status: string }>(baseURL, `/v1/goals/${goal.id}/assignments`, {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        pool_id: poolId,
+        brief: { outcome: "presence only", constraints: [], evidence_shape: ["summary_md"] },
+      }),
+    }),
+  );
+  return { goal, assignment: asg };
 }
 
 export async function seedExploreNoGate(baseURL: string) {

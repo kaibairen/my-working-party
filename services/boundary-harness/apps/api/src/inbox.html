@@ -86,6 +86,18 @@
     const ROLE = "decision_maker";
     const ACTOR = "you";
     const KIND = { deliver_ready_v1: "交付验收", safety_only_v1: "安全审批" };
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    function isHumanTitle(name) {
+      const raw = String(name ?? "").trim();
+      if (!raw || UUID_RE.test(raw) || /e2e/i.test(raw) || /\bg-[a-z0-9-]+/i.test(raw)) return false;
+      return true;
+    }
+    function sanitizeCardTitle(goalTitle, summary) {
+      for (const cand of [goalTitle, summary]) {
+        if (isHumanTitle(cand)) return String(cand).trim();
+      }
+      return "未命名目标";
+    }
     function missingLabel(code) {
       const raw = String(code ?? "");
       if (/summary_md|summary$/.test(raw)) return "还差：结论摘要";
@@ -152,7 +164,7 @@
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
         const pver = g.predicate_version ?? (g.ready_result && g.ready_result.predicate_version) ?? "";
-        const title = g.goal_title || "未命名目标";
+        const title = sanitizeCardTitle(g.goal_title, g.goal_summary);
         const rel = relativeTime(g.ready_at);
         const canPass = filter === "ready" && missing.length === 0;
         const actions = filter === "ready" ? `<div class="row">

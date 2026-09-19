@@ -1,5 +1,17 @@
 import { join } from "node:path";
-import { confirmPass, drainReadyGates, evidenceDir, expect, HUMAN_GOAL, JUNK_TITLE_RE, seedDeliverReady, shotDir, test } from "./helpers";
+import {
+  confirmPass,
+  drainReadyGates,
+  evidenceDir,
+  expect,
+  HUMAN_GOAL,
+  JUNK_TITLE_RE,
+  seedBusyDesk,
+  seedDeliverPending,
+  seedDeliverReady,
+  shotDir,
+  test,
+} from "./helpers";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPS_CHROME_RE = /OpenAPI|Health|Outbox|decision_maker|GateInstances|status=ready|M2-preview/i;
@@ -60,6 +72,48 @@ test.describe("E2E decision-maker shell", () => {
     expect(title).toBe((ready.goal as { title?: string }).title);
     await expect(page.getByTestId("gate-id")).toHaveText(ready.gate!.id);
     await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
+  });
+
+  test("roster_is_read_only_presence", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedDeliverPending(baseURL!);
+    await seedBusyDesk(baseURL!);
+    await page.goto("/");
+    await expect(page.locator("h1")).toHaveText("AI 办公室");
+    await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
+    await page.getByTestId("desks-entry").click();
+    const roster = page.getByTestId("roster");
+    await expect(roster).toBeVisible();
+    await expect(roster).toHaveAttribute("data-readonly", "true");
+    await expect(page.getByTestId("desks-hint")).toContainText("只读投影");
+    await expect(page.getByTestId("desks-hint")).not.toContainText(/打开画布才能开工|去 Roster|派活|指派/);
+    const rows = page.getByTestId("desk-row");
+    await expect(rows).toHaveCount(2);
+    await expect(page.getByTestId("desk-name")).toHaveText(["交付同事", "Cursor 同事"]);
+    await expect(page.getByTestId("desk-status")).toContainText(/在忙|等证据|空闲/);
+    await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "在忙" }) })).toHaveCount(1);
+    await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "等证据" }) })).toHaveCount(1);
+    await expect(roster.getByRole("button")).toHaveCount(0);
+    await expect(roster.getByRole("link")).toHaveCount(0);
+    await expect(roster.locator("[draggable='true']")).toHaveCount(0);
+    await expect(roster.getByRole("textbox")).toHaveCount(0);
+    const rosterText = await roster.innerText();
+    expect(rosterText).not.toMatch(/派活|指派|dispatch|assign|drag|OpenAPI|Health/i);
+    expect(rosterText).not.toMatch(JUNK_TITLE_RE);
+    assertNoOpsChrome(await page.locator("body").innerText());
+    await page.screenshot({ path: join(shotDir, "office_with_roster_min.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "office_with_roster_min.png"), fullPage: true });
+  });
+
+  test("inbox_card_title_rejects_seed_ids", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedDeliverReady(baseURL!, "e2e pending g-1789786901848-a5tcbi");
+    await page.goto("/inbox");
+    const title = page.getByTestId("gate-title");
+    await expect(title).toHaveText("未命名目标");
+    await expect(title).not.toHaveText(JUNK_TITLE_RE);
+    await expect(title).not.toHaveText(UUID_RE);
+    assertNoOpsChrome(await page.locator("body").innerText());
   });
 
   test("ops_routes_forbidden_for_dm", async ({ request }) => {
