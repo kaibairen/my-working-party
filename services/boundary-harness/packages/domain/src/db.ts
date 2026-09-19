@@ -168,11 +168,7 @@ export function createHarness(opts?: {
     sqlite,
     adapters: {
       noop: opts?.adapters?.noop ?? createNoopAdapter(),
-      cursor: opts?.adapters?.cursor ?? createCursorAdapter(
-        process.env.VITEST && process.env.CURSOR_ADAPTER_LIVE !== "1"
-          ? { apiKey: "" }
-          : {},
-      ),
+      cursor: opts?.adapters?.cursor ?? createCursorAdapter(),
     },
     bus: new EventEmitter(),
     webhookUrl: opts?.webhookUrl ?? process.env.WEBHOOK_URL,

@@ -212,7 +212,7 @@ describe("M1 Cursor + Dial + Brief + MCP", () => {
     expect(run.body.external_run_id).toBe("run-live");
     expect(run.body.external_agent_id).not.toBe(run.body.external_run_id);
     expect(run.body.status).toBe("dispatched");
-    expect(run.body.usage.cursor_lifecycle).toBe("RUNNING");
+    expect(run.body.usage.cursor_lifecycle).toBe("DISPATCHED");
 
     await json(app, `/v1/runs/${run.body.id}/evidence`, {
       method: "POST",
@@ -229,9 +229,9 @@ describe("M1 Cursor + Dial + Brief + MCP", () => {
     });
     expect(before.body.gates).toEqual([]);
 
-    expect(await syncCursorAgentRuns(harness)).toEqual({ polled: 1, finished: 0 });
+    expect(await syncCursorAgentRuns(harness)).toBe(0);
     remoteStatus = "FINISHED";
-    expect(await syncCursorAgentRuns(harness)).toEqual({ polled: 1, finished: 1 });
+    expect(await syncCursorAgentRuns(harness)).toBe(1);
     const refreshed = await json(app, `/v1/runs/${run.body.id}`, { headers: headers("coordinator", "c1") });
     expect(refreshed.body.usage.cursor_lifecycle).toBe("FINISHED");
     expect(refreshed.body.status).toBe("succeeded");

@@ -423,12 +423,9 @@ function collectReadyContext(h: Harness, goalId: string): ReadyContext {
   };
   const noopOrOfflineContract = runRows.some((r) => {
     const usage = parseJson<{ noop_or_offline_contract?: boolean; cursor_lifecycle?: string }>(r.usageJson);
-    if (!finished(r)) return false;
-    // noop: local contract flag
-    if (r.adapter === "noop") return usage?.noop_or_offline_contract === true;
-    // cursor: worker-confirmed FINISHED (never hand-edit DB) unlocks artifact branch
-    if (r.adapter === "cursor") return usage?.cursor_lifecycle === "FINISHED";
-    return false;
+    if (usage?.cursor_lifecycle === "IDLE" || r.status === "idle") return false;
+    if (finished(r) && r.adapter === "cursor" && usage?.cursor_lifecycle === "FINISHED") return true;
+    return finished(r) && r.adapter === "noop" && usage?.noop_or_offline_contract === true;
   });
   return {
     evidence: ev.map((e) => ({ kind: e.kind, uri: e.uri, shadow: e.shadow })),
@@ -1097,6 +1094,82 @@ export function health(h: Harness) {
   };
 }
 
+const OPEN_CURSOR_STATUSES = new Set(["dispatched", "queued", "running", "idle", "creating"]);
+const FAILED_CURSOR_STATUSES = new Set(["ERROR", "CANCELLED", "EXPIRED", "FAILED"]);
+
+/**
+ * Poll live Cursor runs until FINISHED, persist usage.cursor_lifecycle, re-eval Ready.
+ * FakeCursor / fixture never needs this — dispatch already writes FINISHED.
+ */
+export async function syncCursorAgentRuns(h: Harness): Promise<number> {
+  const open = h.db
+    .select()
+    .from(runs)
+    .all()
+    .filter(
+      (row) =>
+        row.adapter === "cursor" &&
+        Boolean(row.externalAgentId) &&
+        Boolean(row.externalRunId) &&
+        OPEN_CURSOR_STATUSES.has(row.status),
+    );
+  let finished = 0;
+  for (const row of open) {
+    const usage = parseJson<Record<string, unknown>>(row.usageJson) ?? {};
+    if (usage.cursor_lifecycle === "FINISHED") continue;
+    const poll = h.adapters.cursor.poll;
+    if (!poll) continue;
+    const snap = await poll({
+      external_agent_id: row.externalAgentId!,
+      external_run_id: row.externalRunId!,
+    });
+    const remote = String(snap.cursor_lifecycle || snap.status || "").toUpperCase();
+    if (FAILED_CURSOR_STATUSES.has(remote)) {
+      h.db
+        .update(runs)
+        .set({
+          status: "failed",
+          usageJson: JSON.stringify({ ...usage, cursor_lifecycle: remote, polled: true }),
+          error: `cursor_${remote.toLowerCase()}`,
+          updatedAt: h.now(),
+        })
+        .where(eq(runs.id, row.id))
+        .run();
+      continue;
+    }
+    if (remote !== "FINISHED") continue;
+    h.db
+      .update(runs)
+      .set({
+        status: "succeeded",
+        usageJson: JSON.stringify({ ...usage, cursor_lifecycle: "FINISHED", polled: true }),
+        updatedAt: h.now(),
+      })
+      .where(eq(runs.id, row.id))
+      .run();
+    const assignment = h.db.select().from(assignments).where(eq(assignments.id, row.assignmentId)).get();
+    if (assignment) {
+      h.db
+        .update(assignments)
+        .set({ status: "succeeded", updatedAt: h.now() })
+        .where(eq(assignments.id, assignment.id))
+        .run();
+      evaluatePendingDeliverGates(h, assignment.goalId);
+    }
+    finished += 1;
+  }
+  return finished;
+}
+
+/** @deprecated use syncCursorAgentRuns */
+export const reconcileCursorRuns = syncCursorAgentRuns;
+
+export async function workerTick(h: Harness): Promise<{ synced: number; reconciled: number; published: number }> {
+  const synced = await syncCursorAgentRuns(h);
+  const published = await publishOutbox(h);
+  return { synced, reconciled: synced, published };
+}
+
 export function assertNoClientStatusWrite(_role: Role, body: Record<string, unknown>): void {
   if ("status" in body) {
     throw new HarnessError(
@@ -1105,118 +1178,4 @@ export function assertNoClientStatusWrite(_role: Role, body: Record<string, unkn
       422,
     );
   }
-}
-
-
-/**
- * Worker: poll Cursor until FINISHED, persist lifecycle via Domain, then re-eval Ready.
- * Forbidden: hand-editing runs.status / usage_json in SQLite.
- */
-export async function syncCursorAgentRuns(h: Harness): Promise<{ polled: number; finished: number }> {
-  const open = h.db
-    .select()
-    .from(runs)
-    .all()
-    .filter((r) => {
-      if (r.adapter !== "cursor") return false;
-      if (!r.externalAgentId) return false;
-      if (r.status === "failed" || r.status === "succeeded") {
-        const usage = parseJson<{ cursor_lifecycle?: string }>(r.usageJson);
-        // still allow poll if marked succeeded but lifecycle not FINISHED (should not happen)
-        return usage?.cursor_lifecycle !== "FINISHED";
-      }
-      return r.status === "dispatched" || r.status === "queued" || r.status === "running" || r.status === "idle";
-    });
-
-  const cursor = h.adapters.cursor as {
-    poll?: (input: {
-      external_agent_id: string;
-      external_run_id?: string | null;
-    }) => Promise<{
-      finished: boolean;
-      lifecycle: string;
-      remote_status: string;
-      external_run_id?: string;
-      raw?: unknown;
-    }>;
-  };
-  if (typeof cursor.poll !== "function") {
-    return { polled: 0, finished: 0 };
-  }
-
-  let finishedCount = 0;
-  for (const run of open) {
-    try {
-      const poll = await cursor.poll({
-        external_agent_id: run.externalAgentId!,
-        external_run_id: run.externalRunId,
-      });
-      const prev = parseJson<Record<string, unknown>>(run.usageJson) ?? {};
-      const nextUsage = {
-        ...prev,
-        cursor_lifecycle: poll.lifecycle,
-        cursor_remote_status: poll.remote_status,
-        cursor_polled_at: h.now(),
-      };
-      const patch: {
-        usageJson: string;
-        updatedAt: string;
-        status?: string;
-        externalRunId?: string;
-      } = {
-        usageJson: JSON.stringify(nextUsage),
-        updatedAt: h.now(),
-      };
-      if (poll.external_run_id && poll.external_run_id !== run.externalRunId) {
-        patch.externalRunId = poll.external_run_id;
-      }
-      if (poll.finished) {
-        patch.status = "succeeded";
-        finishedCount += 1;
-      } else if (poll.lifecycle === "IDLE") {
-        patch.status = "idle";
-      } else if (poll.lifecycle === "ERROR") {
-        patch.status = "failed";
-      }
-      h.db.update(runs).set(patch).where(eq(runs.id, run.id)).run();
-      const assignment = h.db.select().from(assignments).where(eq(assignments.id, run.assignmentId)).get();
-      if (assignment) {
-        evaluatePendingDeliverGates(h, assignment.goalId);
-      }
-    } catch (err) {
-      const prev = parseJson<Record<string, unknown>>(run.usageJson) ?? {};
-      h.db
-        .update(runs)
-        .set({
-          usageJson: JSON.stringify({
-            ...prev,
-            cursor_poll_error: String(err instanceof Error ? err.message : err),
-            cursor_polled_at: h.now(),
-          }),
-          updatedAt: h.now(),
-        })
-        .where(eq(runs.id, run.id))
-        .run();
-    }
-  }
-  return { polled: open.length, finished: finishedCount };
-}
-
-/** Worker / API loop: poll Cursor then publish outbox. */
-export async function workerTick(h: Harness): Promise<{
-  synced: number;
-  reconciled: number;
-  published: number;
-  polled: number;
-  finished: number;
-}> {
-  const sync = await syncCursorAgentRuns(h);
-  const published = await publishOutbox(h);
-  return {
-    synced: sync.finished,
-    reconciled: sync.finished,
-    published,
-    polled: sync.polled,
-    finished: sync.finished,
-  };
 }
