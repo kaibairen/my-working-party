@@ -30,7 +30,9 @@ test.describe("E2E ready list", () => {
 
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
     await expect(page.getByTestId("gate-id")).toContainText(ready.gate!.id);
+    await expect(page.getByTestId("card-face")).not.toContainText(ready.gate!.id);
     await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
+    await expect(page.getByTestId("gate-status")).not.toHaveText(/^ready$/i);
     await expect(page.getByTestId("gate-status")).toHaveAttribute("data-status", "ready");
     await expect(page.locator(`[data-testid="gate-card"][data-id="${pending.gate!.id}"]`)).toHaveCount(0);
     await page.screenshot({ path: join(shotDir, "e2e01_inbox_lists_only_ready.png"), fullPage: true });
@@ -59,6 +61,7 @@ test.describe("E2E ready list", () => {
     await expect(page.getByTestId("predicate-id")).toContainText(String(ready.gate?.predicate_id ?? "deliver_ready_v1"));
     await expect(page.getByTestId("predicate-version")).toContainText(/predicate_version/);
     await expect(page.getByTestId("predicate-version")).toContainText(String(ready.gate?.predicate_version ?? 1));
+    await expect(page.getByTestId("card-face")).not.toContainText(/predicate_id|predicate_version/);
     await expect(page.getByTestId("ready-at")).toContainText(/ready_at/);
     await expect(page.getByTestId("ready-at")).not.toHaveText(/ready_at\s*$/);
     await page.screenshot({ path: join(shotDir, "e2e03_inbox_card_predicate_meta.png"), fullPage: true });

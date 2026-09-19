@@ -41,7 +41,57 @@ test.describe("Decision-maker shell", () => {
     expect(titleText.length).toBeGreaterThan(0);
     expect(titleText).not.toMatch(UUID_RE);
     await expect(page.getByTestId("gate-id")).toContainText(ready.gate!.id);
+    await expect(page.getByTestId("card-face")).not.toContainText(ready.gate!.id);
+    await expect(page.getByTestId("card-face")).not.toContainText(/predicate_id|predicate_version/);
+    await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
     await page.screenshot({ path: join(shotDir, "inbox_card_title_not_uuid.png"), fullPage: true });
+  });
+
+  test("inbox_r17_r25_copy_field_map", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await page.goto("/");
+    await expect(page.getByTestId("inbox-empty")).toHaveText("此刻没有待办。安静是正常的。");
+    await expect(page.getByTestId("todo-chip")).toHaveText("待办");
+    const top = await page.getByTestId("dm-topbar").innerText();
+    expect(top).toMatch(/^AI 办公室/);
+    expect(top).toContain("待办");
+    expect(top).not.toMatch(/Health|OpenAPI|Reload ready|decision_maker/i);
+    await expect(page.getByRole("button", { name: "刷新" })).toBeVisible();
+
+    const ready = await seedDeliverReady(baseURL!, "本周交付包");
+    await page.goto("/inbox");
+    await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
+    await expect(page.getByTestId("working-who")).toContainText(/工位/);
+    await expect(page.getByTestId("working-who")).not.toHaveText(UUID_RE);
+    await expect(page.getByTestId("output-summary")).toContainText("同事已交");
+    await expect(page.getByTestId("output-summary")).not.toContainText("{");
+    await expect(page.getByTestId("card-face")).not.toContainText(ready.gate!.id);
+    await expect(page.getByTestId("card-face")).not.toContainText(ready.goal.id);
+    await expect(page.getByTestId("card-face")).not.toContainText(/predicate_id|predicate_version/);
+    await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
+    await expect(page.getByTestId("gate-status")).not.toHaveText(/^ready$/i);
+    await expect(page.getByTestId("missing-block")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "通过" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "打回重做" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "稍后处理" })).toBeVisible();
+
+    const auth = await seedAuthorityReady(baseURL!);
+    const missing = auth.gate?.ready_result?.missing ?? [];
+    expect(missing.length).toBeGreaterThan(0);
+    await page.getByTestId("reload-ready").click();
+    const missingCard = page.locator("[data-testid=gate-card]").filter({ has: page.getByTestId("missing-block") });
+    await expect(missingCard).toHaveCount(1);
+    await expect(missingCard.getByTestId("missing-title")).toHaveText("还差");
+    await expect(missingCard.getByTestId("decide-pass")).toBeDisabled();
+    for (const entry of missing) {
+      await expect(missingCard.getByTestId("missing-item").filter({ hasText: entry })).toHaveCount(0);
+      await expect(missingCard.getByTestId("card-face")).not.toContainText(entry);
+    }
+    await expect(page.getByTestId("todo-chip")).toHaveText(/^待办 · /);
+    await expect(page.locator("body")).not.toContainText("材料齐全");
+    await expect(page.locator("body")).not.toContainText("还缺这些");
+    await expect(page.locator("body")).not.toContainText("已打回重做");
+    await expect(page.locator("body")).not.toContainText("已稍后处理");
   });
 
   test("ops_routes_forbidden_for_dm", async ({ page }) => {

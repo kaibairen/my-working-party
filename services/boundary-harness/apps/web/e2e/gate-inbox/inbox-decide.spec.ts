@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { api, clickPass, clickRevise, drainReadyGates, expect, headers, seedDeliverReady, shotDir, test } from "./helpers";
+import { api, clickDefer, clickPass, clickRevise, drainReadyGates, expect, headers, seedDeliverReady, shotDir, test } from "./helpers";
 
 test.describe("E2E decide", () => {
   test("decide_pass_uses_version", async ({ page, baseURL }) => {
@@ -21,7 +21,7 @@ test.describe("E2E decide", () => {
     expect(body).not.toHaveProperty("expected_version");
     expect(typeof body.version).toBe("number");
 
-    await expect(page.getByTestId("inbox-flash")).toContainText(/已通过/);
+    await expect(page.getByTestId("inbox-flash")).toHaveText("已通过。");
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
     await page.screenshot({ path: join(shotDir, "e2e10_decide_pass_uses_version.png"), fullPage: true });
   });
@@ -48,9 +48,18 @@ test.describe("E2E decide", () => {
     const json = (await (await decideRes).json()) as { follow_up?: { assignment_id?: string } };
     expect(json.follow_up?.assignment_id ?? assignmentId).toBe(assignmentId);
 
-    await expect(page.getByTestId("inbox-flash")).toContainText(/已打回，同事会再交一版/);
+    await expect(page.getByTestId("inbox-flash")).toHaveText("已打回，同事会再交一版。");
     await expect(page.locator(`[data-testid="gate-card"][data-id="${ready.gate!.id}"]`)).toHaveCount(0);
     await page.screenshot({ path: join(shotDir, "e2e11_decide_revise_same_assignment.png"), fullPage: true });
+  });
+
+  test("decide_defer_toast_exact", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedDeliverReady(baseURL!);
+    await page.goto("/inbox");
+    await clickDefer(page);
+    await expect(page.getByTestId("inbox-flash")).toHaveText("已搁下，需要时还会出现。");
+    await expect(page.getByTestId("gate-card")).toHaveCount(0);
   });
 
   test("decide_optimistic_lock_409_refresh", async ({ page, baseURL }) => {
@@ -75,7 +84,7 @@ test.describe("E2E decide", () => {
     expect(conflict.status).toBe(200);
 
     await clickPass(page);
-    await expect(page.getByTestId("inbox-flash")).toContainText("别人刚处理过这张，已帮你刷新。");
+    await expect(page.getByTestId("inbox-flash")).toHaveText("别人刚处理过这张，已帮你刷新。");
     await expect(page.getByTestId("inbox-flash")).toHaveClass(/conflict/);
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
 

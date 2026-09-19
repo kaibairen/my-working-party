@@ -166,7 +166,8 @@
     }
     function missingHtml(missing) {
       if (!missing.length) return "";
-      return `<div class="missing" data-testid="missing-block">还差：
+      return `<div class="missing" data-testid="missing-block">
+        <strong data-testid="missing-title">还差</strong>
         <ul class="missing-list">${missing.map((m) => `<li data-testid="missing-item">${esc(missingLabel(m))}</li>`).join("")}</ul>
       </div>`;
     }
@@ -241,40 +242,45 @@
         const why = missing.length
           ? `<p class="sub" data-testid="why-line">还不能过，先看缺什么</p>`
           : `<p class="sub" data-testid="why-line">证据已齐，等你拍板</p>`;
+        const output = missing.length
+          ? `目标：${esc(title)}`
+          : `目标：${esc(title)} · 同事已交：摘要 / 产物链接`;
         return `<article class="card" data-testid="gate-card" data-id="${esc(g.id)}" data-version="${esc(g.version)}">
-          <div class="row">
-            <strong class="title" data-testid="gate-title">${esc(title)}</strong>
-            ${hard ? `<span class="badge" data-testid="hard-gate-badge">硬门禁</span>` : ""}
-            <span class="badge" data-testid="gate-status" data-status="${esc(g.status)}">待你决定</span>
-          </div>
-          ${rule ? `<p class="sub" data-testid="rule-human">规则：${esc(rule)}</p>` : ""}
-          <p class="sub" data-testid="working-who">${esc(station)} · ${esc(who)}</p>
-          <p class="sub" data-testid="output-summary">目标：${esc(title)} · 同事已交：摘要 / 产物链接</p>
-          ${why}
-          <p class="sub" data-testid="ready-at"><span class="sr-only">ready_at</span> 就绪 · <time datetime="${esc(g.ready_at || "")}">${esc(rel)}</time></p>
-          ${missingHtml(missing)}
-          <div class="row">
-            <button class="ok" data-act="pass" data-testid="decide-pass"${passDisabled ? " disabled" : ""}>通过</button>
-            <button class="warn" data-act="revise" data-testid="decide-revise">打回重做</button>
-            <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
-          </div>
-          <div class="confirm" data-testid="pass-confirm-strip" hidden>
-            <strong>确认通过？</strong>
-            <p class="sub">通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
-            <button type="button" class="ok" data-testid="decide-pass-confirm">确认通过</button>
-            <button type="button" class="muted" data-cancel>取消</button>
-          </div>
-          <div class="revise-box" data-testid="revise-panel" hidden>
-            <strong>打回重做</strong>
-            <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="same" checked /> 让同一工位再跑一版</label>
-            <details>
-              <summary class="sub">这是结构问题，要换任务边界</summary>
-              <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="struct" /> 确认换任务边界</label>
-            </details>
-            <input data-testid="revise-note" placeholder="想改的方向（可选）" />
-            <div class="row" style="margin-top:8px">
-              <button type="button" class="warn" data-testid="decide-revise-confirm">确认打回</button>
-              <button type="button" class="muted" data-revise-cancel>取消</button>
+          <div data-testid="card-face">
+            <div class="row">
+              <strong class="title" data-testid="gate-title">${esc(title)}</strong>
+              ${hard ? `<span class="badge" data-testid="hard-gate-badge">硬门禁</span>` : ""}
+              <span class="badge" data-testid="gate-status" data-status="${esc(g.status)}">待你决定</span>
+            </div>
+            ${rule ? `<p class="sub" data-testid="rule-human">规则：${esc(rule)}</p>` : ""}
+            <p class="sub" data-testid="working-who">${esc(station)} · ${esc(who)}</p>
+            ${why}
+            ${missingHtml(missing)}
+            <p class="sub" data-testid="output-summary">${output}</p>
+            <p class="sub" data-testid="ready-at"><span class="sr-only">ready_at</span> 就绪 · <time datetime="${esc(g.ready_at || "")}">${esc(rel)}</time></p>
+            <div class="row">
+              <button class="ok" data-act="pass" data-testid="decide-pass"${passDisabled ? " disabled" : ""}>通过</button>
+              <button class="warn" data-act="revise" data-testid="decide-revise">打回重做</button>
+              <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
+            </div>
+            <div class="confirm" data-testid="pass-confirm-strip" hidden>
+              <strong>确认通过？</strong>
+              <p class="sub">通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
+              <button type="button" class="ok" data-testid="decide-pass-confirm">确认通过</button>
+              <button type="button" class="muted" data-cancel>取消</button>
+            </div>
+            <div class="revise-box" data-testid="revise-panel" hidden>
+              <strong>打回重做</strong>
+              <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="same" checked /> 让同一工位再跑一版</label>
+              <details>
+                <summary class="sub">这是结构问题，要换任务边界</summary>
+                <label class="sub" style="display:block;margin:8px 0"><input type="radio" name="rev-${esc(g.id)}" value="struct" /> 确认换任务边界</label>
+              </details>
+              <input data-testid="revise-note" placeholder="想改的方向（可选）" />
+              <div class="row" style="margin-top:8px">
+                <button type="button" class="warn" data-testid="decide-revise-confirm">确认打回</button>
+                <button type="button" class="muted" data-revise-cancel>取消</button>
+              </div>
             </div>
           </div>
           <details class="meta-box">
