@@ -131,7 +131,7 @@
     }
     async function load() {
       const status = filter === "decided" ? "decided" : "ready";
-      const res = await fetch("/v1/gates?status=" + status, { headers: headers() });
+      const res = await fetch(status === "ready" ? "/v1/gates?status=ready" : "/v1/gates?status=decided", { headers: headers() });
       const body = await res.json();
       const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
       if (filter === "ready") $("count-link").textContent = "待我拍板 · " + gates.length;
