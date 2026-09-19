@@ -370,7 +370,10 @@ describe("domain API", () => {
     expect(listed.body.include_pools).toBe(false);
     expect(listed.body.desks).toEqual([]);
     expect(JSON.stringify(listed.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
-    const ops = await json(app, "/v1/desks?include_pools=1", { headers: headers("decision_maker", "you") });
+    const dmFlag = await json(app, "/v1/desks?include_pools=1", { headers: headers("decision_maker", "you") });
+    expect(dmFlag.body.include_pools).toBe(false);
+    expect(dmFlag.body.desks).toEqual([]);
+    const ops = await json(app, "/v1/desks?include_pools=1", { headers: headers("coordinator", "coord-1") });
     expect(ops.body.include_pools).toBe(true);
     expect(ops.body.desks).toEqual(
       expect.arrayContaining([

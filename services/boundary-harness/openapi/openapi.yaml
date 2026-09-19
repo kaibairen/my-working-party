@@ -195,14 +195,15 @@ paths:
         Default office roster is live `POST /v1/agents/heartbeat` rows within TTL
         only (default 90s, advertised as `heartbeat_ttl_seconds`), named from
         heartbeat `display_name`. Seed execution pools are not Bot colleagues.
-        Pass `include_pools=1` for an ops overlay labeled 「执行池 · …」.
-        Expired heartbeats are omitted. Clients MUST NOT POST this path.
+        Pass `include_pools=1` for a **non-DM** ops overlay labeled 「执行池 · …」.
+        Decision-maker requests ignore the flag — seed pools never occupy the
+        primary roster. Expired heartbeats are omitted. Clients MUST NOT POST this path.
       parameters:
         - name: include_pools
           in: query
           required: false
           schema: { type: string, enum: ["1", "true"] }
-          description: Ops overlay. Include execution-pool rows labeled 执行池, never 同事.
+          description: Non-DM ops overlay. Ignored for decision_maker. Pools labeled 执行池, never 同事.
       responses:
         "200":
           description: OK

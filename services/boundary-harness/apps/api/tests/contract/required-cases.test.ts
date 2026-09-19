@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ACCEPTANCE_CASE_NAMES, FORBIDDEN_ERROR_ALIASES } from "./required-cases";
+import { ACCEPTANCE_CASE_NAMES, FORBIDDEN_ERROR_ALIASES, OFFICE_ROSTER_MERGE_GATES } from "./required-cases";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const acceptanceSrc = readFileSync(join(here, "acceptance.test.ts"), "utf8");
+const p0Src = readFileSync(join(here, "p0-linkage.test.ts"), "utf8");
 const harnessRoot = join(here, "../../../../");
 
 describe("Security acceptance case registry", () => {
@@ -13,6 +14,13 @@ describe("Security acceptance case registry", () => {
     for (const name of ACCEPTANCE_CASE_NAMES) {
       expect(acceptanceSrc, `missing it("${name}")`).toContain(`it("${name}"`);
     }
+  });
+
+  it("registers TechLead office roster merge gates", () => {
+    for (const name of OFFICE_ROSTER_MERGE_GATES) {
+      expect(p0Src, `missing it("${name}") in p0-linkage.test.ts`).toContain(`it("${name}"`);
+    }
+    expect(OFFICE_ROSTER_MERGE_GATES).toHaveLength(2);
   });
 
   it("does not use forbidden error-code aliases", () => {

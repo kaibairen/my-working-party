@@ -9,6 +9,12 @@ export const ACCEPTANCE_CASE_NAMES = [
   "dial_whitelist_not_overbroad",
 ] as const;
 
+/** TechLead office roster lock (2026-09-19) — missing either name is merge-red. */
+export const OFFICE_ROSTER_MERGE_GATES = [
+  "office_no_fake_name_wall",
+  "heartbeat_ttl_expiry_clears_row",
+] as const;
+
 export const FORBIDDEN_ERROR_ALIASES = [
   "webhook_timestamp_skew",
   "webhook_signature_invalid",

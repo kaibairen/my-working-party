@@ -38,7 +38,7 @@ Stdio 备选（Cursor/`mcp.json`，仍是本机配置，不是账号目录）：
 
 ## 4. 工位 TTL
 
-`GET /v1/desks` 只读，**默认只返回 TTL 内的心跳 Bot**（`display_name`）。种子 `pool_noop` / `pool_cursor` **不会**当成「交付同事 / Cursor 同事」出现。运维可加 `?include_pools=1`，池行只标「执行池 · noop / Cursor」。
+`GET /v1/desks` 只读，**默认只返回 TTL 内的心跳 Bot**（`display_name` / actor）。种子 `pool_noop` / `pool_cursor` **不会**当成「交付同事 / Cursor 同事」出现，也**不得占用决策人主花名册**。运维（非 decision_maker）可加 `?include_pools=1`，池行只标「执行池 · noop / Cursor」；决策人带该参数仍只见心跳。
 
 - **必须调用 `harness_heartbeat`（或 `POST /v1/agents/heartbeat`）才会出现在工位。**  
 - **默认 TTL：90 秒**（可在心跳体里设 `ttl_seconds`，夹在 15–3600）。  

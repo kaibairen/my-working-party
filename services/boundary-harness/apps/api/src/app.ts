@@ -175,8 +175,10 @@ export function createApp(harness: Harness) {
 
   v1.get("/desks", (c) => {
     const flag = (c.req.query("include_pools") ?? "").trim().toLowerCase();
-    const includePools = flag === "1" || flag === "true" || flag === "yes";
-    return c.json(listDesks(c.get("harness"), c.get("actor"), { includePools }));
+    const requested = flag === "1" || flag === "true" || flag === "yes";
+    const actor = c.get("actor");
+    const includePools = requested && actor.role !== "decision_maker";
+    return c.json(listDesks(c.get("harness"), actor, { includePools }));
   });
 
   v1.post("/agents/heartbeat", async (c) => {

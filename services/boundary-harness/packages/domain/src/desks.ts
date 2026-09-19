@@ -77,7 +77,7 @@ export type HeartbeatInput = {
 };
 
 export type ListDesksOptions = {
-  /** Ops flag. Default office roster is heartbeat agents only. */
+  /** Ops overlay. Ignored for decision_maker — pool seeds never occupy the DM roster. */
   includePools?: boolean;
 };
 
@@ -171,13 +171,15 @@ function presenceForPool(
  *
  * Default: live `agent_heartbeats` within TTL only, named from heartbeat
  * `display_name`. Seed execution pools are not Bot colleagues.
- * `include_pools` is an ops overlay that labels pools as 「执行池 · …」.
+ * `include_pools` is a non-DM ops overlay labeled 「执行池 · …」.
+ * Decision-maker always gets heartbeat agents only — seed 同事 never occupy
+ * the primary roster, even if the query flag is set.
  * Expired heartbeats are omitted (no pool_seed fallback on the office roster).
  */
 export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {}) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
   const now = h.now();
-  const includePools = Boolean(opts.includePools);
+  const includePools = Boolean(opts.includePools) && actor.role !== "decision_maker";
   const assignmentRows = h.db.select().from(assignments).all();
   const runRows = h.db.select().from(runs).all();
   const gateRows = h.db.select().from(gateInstances).all();

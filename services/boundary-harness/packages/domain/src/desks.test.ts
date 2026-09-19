@@ -57,9 +57,12 @@ describe("listDesks presence projection", () => {
     expect(listed.desks.find((d) => d.id === "agent:sidebar-bot")?.name).toBe("侧栏真名");
   });
 
-  it("optionally lists execution pools as 执行池, never 同事", () => {
+  it("optionally lists execution pools as 执行池 for non-DM only, never 同事", () => {
     harness = createHarness({ databasePath: ":memory:" });
-    const { desks, include_pools } = listDesks(harness, dm, { includePools: true });
+    const dmFlag = listDesks(harness, dm, { includePools: true });
+    expect(dmFlag.include_pools).toBe(false);
+    expect(dmFlag.desks).toEqual([]);
+    const { desks, include_pools } = listDesks(harness, coord, { includePools: true });
     expect(include_pools).toBe(true);
     expect(desks.map((d) => d.name).sort()).toEqual(["执行池 · Cursor", "执行池 · noop"]);
     expect(desks.every((d) => d.source === "pool_seed" && d.last_heartbeat === null)).toBe(true);
@@ -87,10 +90,11 @@ describe("listDesks presence projection", () => {
     expect(agent?.name).toBe("调研 Bot");
     expect(agent?.status).toBe("在忙");
     expect(agent?.presence).toBe("busy");
-    const ops = listDesks(harness, dm, { includePools: true });
+    const ops = listDesks(harness, coord, { includePools: true });
     expect(ops.desks.find((d) => d.id === "pool_cursor")?.status).toBe("在忙");
     expect(ops.desks.find((d) => d.id === "pool_noop")?.status).toBe("空闲");
     expect(ops.desks.find((d) => d.id === "pool_cursor")?.name).toBe("执行池 · Cursor");
+    expect(listDesks(harness, dm, { includePools: true }).desks.every((d) => d.source === "heartbeat")).toBe(true);
   });
 
   it("marks a pending deliver gate as 等证据 on the heartbeat desk", async () => {

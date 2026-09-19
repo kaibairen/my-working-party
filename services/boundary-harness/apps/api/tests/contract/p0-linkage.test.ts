@@ -173,6 +173,49 @@ describe("P0 linkage contracts", () => {
     expect(listTools({ http: true }).some((t) => t.name.includes("cursor_raw"))).toBe(false);
   });
 
+  it("office_no_fake_name_wall", async () => {
+    const { app } = setup();
+    const dm = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(dm.body.readonly).toBe(true);
+    expect(dm.body.desks).toEqual([]);
+    expect(JSON.stringify(dm.body)).not.toMatch(/交付同事|Cursor 同事/);
+    const dmFlag = await json(app, "/v1/desks?include_pools=1", { headers: mcpHeaders("decision_maker", "you") });
+    expect(dmFlag.body.include_pools).toBe(false);
+    expect(dmFlag.body.desks).toEqual([]);
+    expect(JSON.stringify(dmFlag.body)).not.toMatch(/交付同事|Cursor 同事/);
+    expect(dmFlag.body.desks.some((d: { source: string }) => d.source === "pool_seed")).toBe(false);
+
+    const beat = await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-deliver"),
+      body: JSON.stringify({ display_name: "周报 Bot" }),
+    });
+    expect(beat.res.status).toBe(200);
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(live.body.desks).toHaveLength(1);
+    expect(live.body.desks[0].name).toBe("周报 Bot");
+    expect(live.body.desks[0].id).toBe("agent:bot-deliver");
+    expect(live.body.desks[0].source).toBe("heartbeat");
+    expect(JSON.stringify(live.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
+  });
+
+  it("heartbeat_ttl_expiry_clears_row", async () => {
+    let nowMs = Date.parse("2026-09-19T04:00:00.000Z");
+    const { app } = setup(() => new Date(nowMs).toISOString());
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-deliver"),
+      body: JSON.stringify({ display_name: "周报 Bot", ttl_seconds: HEARTBEAT_TTL_SECONDS }),
+    });
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(live.body.desks.map((d: { id: string }) => d.id)).toEqual(["agent:bot-deliver"]);
+    nowMs += (HEARTBEAT_TTL_SECONDS + 1) * 1000;
+    const expired = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(expired.body.desks).toEqual([]);
+    expect(expired.body.stub).toBe(true);
+    expect(expired.body.desks.some((d: { source: string }) => d.source === "pool_seed")).toBe(false);
+  });
+
   it("harness_heartbeat_desks_ttl_readonly", async () => {
     let nowMs = Date.parse("2026-09-19T04:00:00.000Z");
     const { app } = setup(() => new Date(nowMs).toISOString());
