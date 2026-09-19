@@ -1,4 +1,6 @@
-# Office Home P0 — Frontend smoke (slice ③)
+# Office Home P0 — Frontend polish smoke (TTL + 我来填 form)
+
+GO ③「我来填」already landed in #15. This file is polish-only (TTL paint + thin form UX). It is not a P0 Done redo.
 
 Base: `http://127.0.0.1:8080`
 
