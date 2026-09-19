@@ -7,6 +7,7 @@ import {
   MCP_TOOL_NAMES,
   parseBriefV1,
   publishOutbox,
+  reconcileCursorRuns,
   type Harness,
 } from "@harness/domain";
 import { listTools } from "../../../mcp-server/src/index";
@@ -152,6 +153,103 @@ describe("M1 Cursor + Dial + Brief + MCP", () => {
     });
     expect(blocked.res.status).toBe(423);
     expect(blocked.body.code).toBe("dial_frozen");
+  });
+
+  it("live_cursor_launch_has_repository_and_poll_makes_gate_ready", async () => {
+    const repository = "https://github.com/kaibairen/my-working-party";
+    let remoteStatus = "CREATING";
+    const posts: Array<Record<string, unknown>> = [];
+    const adapter = createCursorAdapter({
+      apiKey: "live-key",
+      baseUrl: "https://cursor.example",
+      repository,
+      fetchImpl: (async (url, init) => {
+        const href = String(url);
+        if ((init?.method ?? "GET") === "POST" && href.endsWith("/v1/agents")) {
+          const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+          posts.push(body);
+          return new Response(
+            JSON.stringify({
+              agent: { id: "bc-live", latestRunId: "run-live" },
+              run: { id: "run-live", agentId: "bc-live", status: "CREATING" },
+            }),
+            { status: 200 },
+          );
+        }
+        if (href.includes("/v1/agents/bc-live/runs/run-live")) {
+          return new Response(JSON.stringify({ id: "run-live", agentId: "bc-live", status: remoteStatus }), {
+            status: 200,
+          });
+        }
+        throw new Error(`unexpected cursor url ${href}`);
+      }) as typeof fetch,
+    });
+    harness = createHarness({ databasePath: ":memory:", adapters: { cursor: adapter } });
+    const app = createApp(harness);
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        brief: { outcome: "x", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    const run = await json(app, `/v1/assignments/${asg.body.id}/dispatch`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ idempotency_key: "live-1" }),
+    });
+    expect(run.res.status).toBe(201);
+    expect(posts).toHaveLength(1);
+    expect(posts[0].source).toEqual({ repository, ref: "main" });
+    expect(posts[0].repos).toEqual([{ url: repository, startingRef: "main" }]);
+    expect(run.body.external_agent_id).toBe("bc-live");
+    expect(run.body.external_run_id).toBe("run-live");
+    expect(run.body.external_agent_id).not.toBe(run.body.external_run_id);
+    expect(run.body.status).toBe("dispatched");
+    expect(run.body.usage.cursor_lifecycle).toBe("DISPATCHED");
+
+    await json(app, `/v1/runs/${run.body.id}/evidence`, {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({
+        items: [
+          { kind: "summary_md", uri: "file://s.md" },
+          { kind: "artifact_uri", uri: "file://a.tgz" },
+        ],
+      }),
+    });
+    await json(app, "/v1/github-snapshots", {
+      method: "POST",
+      headers: headers("service", "svc"),
+      body: JSON.stringify({
+        goal_id: goal.body.id,
+        assignment_id: asg.body.id,
+        is_draft: false,
+        checks_conclusion: "success",
+        raw_hash: "live",
+      }),
+    });
+    const before = await json(app, `/v1/gates?status=ready&goal_id=${goal.body.id}`, {
+      headers: headers("decision_maker", "dm"),
+    });
+    expect(before.body.gates).toEqual([]);
+
+    expect(await reconcileCursorRuns(harness)).toBe(0);
+    remoteStatus = "FINISHED";
+    expect(await reconcileCursorRuns(harness)).toBe(1);
+    const refreshed = await json(app, `/v1/runs/${run.body.id}`, { headers: headers("coordinator", "c1") });
+    expect(refreshed.body.usage.cursor_lifecycle).toBe("FINISHED");
+    expect(refreshed.body.status).toBe("succeeded");
+    const ready = await json(app, `/v1/gates?status=ready&goal_id=${goal.body.id}`, {
+      headers: headers("decision_maker", "dm"),
+    });
+    expect(ready.body.gates).toHaveLength(1);
   });
 
   it("mcp_surface_denylist", () => {

@@ -38,7 +38,7 @@ Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`)
 
 **Decision-maker:** http://127.0.0.1:8080/ (AI 办公室 + 只读 **工位一览**) → http://127.0.0.1:8080/inbox (待我拍板, sole HITL). Roster is presence only (在忙 / 等证据 / 空闲) — not dispatch. Health / OpenAPI / outbox stay on http://127.0.0.1:8080/ops (403 for `decision_maker`).
 
-M1: CursorAdapter (fixture / `CURSOR_API_STUB` / live), Dial freeze → **423** `dial_frozen`, BriefV1 422 on HTTP+MCP, dual external ids, FINISHED≠IDLE. MCP aliases from PRD §8; no `cursor_raw_*` / `set_steps`.
+M1: CursorAdapter (fixture / `CURSOR_API_STUB` / live `POST /v1/agents` with `repos[]` + `source.repository`), Dial freeze → **423** `dial_frozen`, BriefV1 422 on HTTP+MCP, dual external ids, FINISHED≠IDLE. Worker polls Cursor until `FINISHED`, writes `usage.cursor_lifecycle`, re-evals Ready. MCP aliases from PRD §8; no `cursor_raw_*` / `set_steps`. Live repo: `CURSOR_REPOSITORY` (default this GitHub repo).
 M3: outbox exactly-once attempts + HMAC-SHA256 outbound (`X-Harness-Signature` / `X-Harness-Timestamp`). SSE `/v1/events` replays from `Last-Event-ID`.
 
 ```bash

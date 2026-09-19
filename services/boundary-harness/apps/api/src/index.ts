@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { createHarness, publishOutbox } from "@harness/domain";
+import { createHarness, workerTick } from "@harness/domain";
 import { createApp } from "./app";
 
 const mode = process.env.HARNESS_MODE ?? "api";
@@ -27,9 +27,10 @@ if (mode === "worker" || mode === "all") {
   const interval = Number(process.env.WORKER_INTERVAL_MS ?? 500);
   console.log(`harness worker loop ${interval}ms`);
   setInterval(() => {
-    void publishOutbox(harness)
-      .then((n) => {
-        if (n > 0) console.log(`published ${n} outbox events`);
+    void workerTick(harness)
+      .then(({ reconciled, published }) => {
+        if (reconciled > 0) console.log(`reconciled ${reconciled} cursor runs`);
+        if (published > 0) console.log(`published ${published} outbox events`);
       })
       .catch((err) => console.error("worker tick failed", err));
   }, interval);

@@ -590,10 +590,12 @@ export async function dispatchAssignment(
     .where(eq(runs.id, runId))
     .run();
 
+  const assignmentStatus =
+    result.status === "failed" ? "failed" : result.status === "succeeded" ? "succeeded" : "in_progress";
   h.db
     .update(assignments)
     .set({
-      status: result.status === "failed" ? "failed" : "succeeded",
+      status: assignmentStatus,
       updatedAt: doneAt,
     })
     .where(eq(assignments.id, assignmentId))
@@ -1088,6 +1090,76 @@ export function health(h: Harness) {
     openapi: "/openapi.yaml",
     outbox: outboxStats(h),
   };
+}
+
+const OPEN_CURSOR_STATUSES = new Set(["dispatched", "queued", "running", "idle", "creating"]);
+const FAILED_CURSOR_STATUSES = new Set(["ERROR", "CANCELLED", "EXPIRED", "FAILED"]);
+
+/**
+ * Poll live Cursor runs until FINISHED, persist usage.cursor_lifecycle, re-eval Ready.
+ * FakeCursor / fixture never needs this — dispatch already writes FINISHED.
+ */
+export async function reconcileCursorRuns(h: Harness): Promise<number> {
+  const open = h.db
+    .select()
+    .from(runs)
+    .all()
+    .filter(
+      (row) =>
+        row.adapter === "cursor" &&
+        Boolean(row.externalAgentId) &&
+        Boolean(row.externalRunId) &&
+        OPEN_CURSOR_STATUSES.has(row.status),
+    );
+  let finished = 0;
+  for (const row of open) {
+    const usage = parseJson<Record<string, unknown>>(row.usageJson) ?? {};
+    if (usage.cursor_lifecycle === "FINISHED") continue;
+    const poll = h.adapters.cursor.poll;
+    if (!poll) continue;
+    const snap = await poll(row.externalAgentId!, row.externalRunId!);
+    const remote = String(snap.cursor_lifecycle || snap.status || "").toUpperCase();
+    if (FAILED_CURSOR_STATUSES.has(remote)) {
+      h.db
+        .update(runs)
+        .set({
+          status: "failed",
+          usageJson: JSON.stringify({ ...usage, cursor_lifecycle: remote, polled: true }),
+          error: `cursor_${remote.toLowerCase()}`,
+          updatedAt: h.now(),
+        })
+        .where(eq(runs.id, row.id))
+        .run();
+      continue;
+    }
+    if (remote !== "FINISHED") continue;
+    h.db
+      .update(runs)
+      .set({
+        status: "succeeded",
+        usageJson: JSON.stringify({ ...usage, cursor_lifecycle: "FINISHED", polled: true }),
+        updatedAt: h.now(),
+      })
+      .where(eq(runs.id, row.id))
+      .run();
+    const assignment = h.db.select().from(assignments).where(eq(assignments.id, row.assignmentId)).get();
+    if (assignment) {
+      h.db
+        .update(assignments)
+        .set({ status: "succeeded", updatedAt: h.now() })
+        .where(eq(assignments.id, assignment.id))
+        .run();
+      evaluatePendingDeliverGates(h, assignment.goalId);
+    }
+    finished += 1;
+  }
+  return finished;
+}
+
+export async function workerTick(h: Harness): Promise<{ reconciled: number; published: number }> {
+  const reconciled = await reconcileCursorRuns(h);
+  const published = await publishOutbox(h);
+  return { reconciled, published };
 }
 
 export function assertNoClientStatusWrite(_role: Role, body: Record<string, unknown>): void {

@@ -52,6 +52,7 @@ jobs:
             packages/domain \
             packages/policy \
             packages/ready \
+            packages/adapters-cursor \
             apps/api \
             apps/mcp-server \
             apps/web \

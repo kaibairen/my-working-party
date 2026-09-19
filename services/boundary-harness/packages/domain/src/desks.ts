@@ -33,8 +33,12 @@ function presenceFor(input: {
   assignmentStatuses: string[];
   gateStatuses: string[];
 }): DeskPresence {
-  const liveRun = input.runStatuses.some((s) => s === "queued" || s === "running" || s === "in_progress");
-  const assigned = input.assignmentStatuses.some((s) => s === "accepted" || s === "proposed");
+  const liveRun = input.runStatuses.some(
+    (s) => s === "queued" || s === "running" || s === "in_progress" || s === "dispatched",
+  );
+  const assigned = input.assignmentStatuses.some(
+    (s) => s === "accepted" || s === "proposed" || s === "in_progress",
+  );
   if (liveRun || assigned) return "busy";
   if (input.gateStatuses.some((s) => s === "pending")) return "waiting_evidence";
   return "idle";

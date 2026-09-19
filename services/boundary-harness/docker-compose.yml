@@ -11,6 +11,8 @@ services:
       WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:-}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       CURSOR_API_STUB: ${CURSOR_API_STUB:-}
+      CURSOR_REPOSITORY: ${CURSOR_REPOSITORY:-https://github.com/kaibairen/my-working-party}
+      CURSOR_STARTING_REF: ${CURSOR_STARTING_REF:-main}
     ports:
       - "8080:8080"
     volumes:
@@ -30,6 +32,10 @@ services:
       DATABASE_PATH: /app/data/harness.db
       WORKER_INTERVAL_MS: "500"
       WEBHOOK_URL: ${WEBHOOK_URL:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      CURSOR_API_STUB: ${CURSOR_API_STUB:-}
+      CURSOR_REPOSITORY: ${CURSOR_REPOSITORY:-https://github.com/kaibairen/my-working-party}
+      CURSOR_STARTING_REF: ${CURSOR_STARTING_REF:-main}
     volumes:
       - harness-data:/app/data
     depends_on:
