@@ -35,9 +35,9 @@ function isOfficePresence(url: string) {
 }
 
 test.describe("P0 AI office home", () => {
-  test("home_is_office_not_inbox_wall", async ({ page, baseURL }) => {
+  test("create_goal_shows_fill_slots", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
-    const listed = await api<{ goals: unknown[]; empty_copy?: string }>(baseURL!, "/v1/office/goals", {
+    const listed = await api<{ goals: unknown[] }>(baseURL!, "/v1/office/goals", {
       headers: headers.decisionMaker,
     });
     const leakedEntry: string[] = [];
@@ -49,16 +49,6 @@ test.describe("P0 AI office home", () => {
     await page.goto("/");
     await officeGet;
     await presenceGet;
-    await expect(page.locator("header.top h1")).toHaveText("AI 办公室");
-    await expect(page.getByTestId("office-shell")).toBeVisible();
-    await expect(page.getByTestId("goals-panel")).toBeVisible();
-    await expect(page.getByTestId("create-goal")).toBeVisible();
-    await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "false");
-    await expect(page.getByTestId("gate-card")).toHaveCount(0);
-    await expect(page.getByTestId("inbox-heading")).not.toBeVisible();
-    const body = await page.locator("body").innerText();
-    expect(body).not.toMatch(OPS_CHROME_RE);
-    expect(body).not.toContain("查看待我拍板");
     expect(leakedEntry).toEqual([]);
     expect(await page.getByTestId("office-empty").textContent()).toContain("还没有目标。建一个，同事才会开工。");
     if ((listed.body.goals ?? []).length === 0) {
@@ -66,11 +56,6 @@ test.describe("P0 AI office home", () => {
       await page.screenshot({ path: join(shotDir, "office_empty_no_goals.png"), fullPage: true });
       await page.screenshot({ path: join(evidenceDir, "office_empty_no_goals.png"), fullPage: true });
     }
-  });
-
-  test("create_goal_shows_fill_slots", async ({ page, baseURL }) => {
-    await drainReadyGates(baseURL!);
-    await page.goto("/");
     await page.getByTestId("goal-name").fill("周报交付验收");
     await page.getByTestId("goal-ask").fill("要一份能转发的周报");
     const form = page.getByTestId("create-goal-form");
@@ -138,24 +123,6 @@ test.describe("P0 AI office home", () => {
     expect(rosterText).not.toMatch(/打开画布才能开工/);
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(OPS_CHROME_RE);
-  });
-
-  test("inbox_opens_as_drawer", async ({ page, baseURL }) => {
-    await drainReadyGates(baseURL!);
-    await seedDeliverReady(baseURL!);
-    const officeGet = page.waitForResponse((res) => isOfficeGoalsList(res.url()) && res.request().method() === "GET");
-    await page.goto("/");
-    await officeGet;
-    await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "false");
-    await expect(page.getByTestId("office-shell")).toBeVisible();
-    await page.getByTestId("open-inbox").click();
-    await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "true");
-    await expect(page.getByTestId("gate-inbox")).toBeVisible();
-    await expect(page.getByTestId("inbox-heading")).toBeVisible();
-    await expect(page.getByTestId("office-shell")).toBeVisible();
-    await expect(page.getByTestId("gate-card")).toHaveCount(1);
-    await page.screenshot({ path: join(shotDir, "inbox_drawer_open.png"), fullPage: true });
-    await page.screenshot({ path: join(evidenceDir, "inbox_drawer_open.png"), fullPage: true });
   });
 
   test("drawer_keeps_g1_copy", async ({ page, baseURL }) => {

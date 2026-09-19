@@ -1,10 +1,13 @@
+import { join } from "node:path";
 import {
   drainReadyGates,
+  evidenceDir,
   expect,
   HUMAN_GOAL,
   seedBusyDesk,
   seedDeliverPending,
   seedDeliverReady,
+  shotDir,
   test,
 } from "./helpers";
 
@@ -51,6 +54,8 @@ test.describe("P0 office anti (QA-frozen names)", () => {
     await expect(page.getByTestId("decide-revise")).toHaveText("打回重做");
     await expect(page.getByTestId("decide-defer")).toHaveText("稍后处理");
     await expect(page.getByTestId("gate-title")).toHaveText(HUMAN_GOAL.deliver);
+    await page.screenshot({ path: join(shotDir, "inbox_drawer_open.png"), fullPage: true });
+    await page.screenshot({ path: join(evidenceDir, "inbox_drawer_open.png"), fullPage: true });
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "true");
     await expect(page.getByTestId("office-shell")).toBeVisible();
