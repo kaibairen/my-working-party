@@ -18,7 +18,7 @@ describe("MCP M1 surface", () => {
   });
 
   it("rejects cursor_raw / set_steps calls", async () => {
-    await expect(callTool("cursor_raw_launch", {}, {})).rejects.toThrow(/not registered/);
-    await expect(callTool("set_steps", {}, {})).rejects.toThrow(/not registered/);
+    await expect(callTool("cursor_raw_launch", {}, {})).rejects.toThrow(/forbidden_tool/);
+    await expect(callTool("set_steps", {}, {})).rejects.toThrow(/forbidden_tool/);
   });
 });

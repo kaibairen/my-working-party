@@ -95,6 +95,7 @@
         <input id="goal-ask" name="ask" maxlength="160" required placeholder="一句话要什么" data-testid="goal-ask" />
         <button type="submit" class="ok" data-testid="create-goal">新建目标</button>
       </form>
+      <div id="office-flash" class="flash" data-testid="office-flash"></div>
       <section class="empty" data-testid="office-empty">
         <h2>还没有目标。建一个，同事才会开工。</h2>
       </section>
@@ -193,6 +194,21 @@
       "x-harness-role": ROLE,
       "x-harness-actor": ACTOR,
     });
+    function errCode(body) {
+      return String((body && body.code) || (body && body.error && body.error.code) || "");
+    }
+    function humanError(code) {
+      if (code === "office_write_forbidden") return "这里不能指派或开跑。同事通道才会开工。";
+      if (code === "mcp_entry_required") return "这条完成路径只能走同事通道，页面上过不去。";
+      if (code === "brief_forbidden_field") return "目标只要名称和一句话要什么，不要步骤或脚本。";
+      return "";
+    }
+    function officeFlash(msg, kind) {
+      const el = $("office-flash");
+      el.textContent = msg;
+      el.classList.add("show");
+      el.classList.toggle("conflict", kind === "conflict");
+    }
     const $ = (id) => document.getElementById(id);
     const drawer = $("inbox-drawer");
     function inboxShouldOpen() {
@@ -263,14 +279,25 @@
       </li>`;
     }
 
+    function slotFromApi(slot) {
+      const name = slot && slot.filled_by && slot.filled_by.name;
+      const first = slot && slot.artifacts && slot.artifacts[0];
+      return {
+        filler: name || "还没人填",
+        progress: (slot && slot.stage_label) || "等同事接手",
+        artifact: first ? { uri: first.href || first.uri, label: "产物" } : null,
+        empty: !name,
+      };
+    }
+
     function renderGoals(goals) {
       const list = $("goal-list");
       const empty = document.querySelector("[data-testid=office-empty]");
       const rows = goals || [];
       empty.hidden = rows.length > 0;
       list.innerHTML = rows.map((g) => {
-        const title = sanitizeCardTitle(g.title, g.summary);
-        const status = String(g.status_line || g.summary || "已建好，等同事接手");
+        const title = sanitizeCardTitle(g.title, g.intent);
+        const status = String(g.status_summary || g.intent || "已建好，等同事接手");
         const slots = (g.slots && g.slots.length) ? g.slots : [{ filler: "还没人填", progress: "等同事接手", empty: true }];
         return `<article class="goal-card" data-testid="goal-card">
           <h3 class="goal-title" data-testid="goal-title">${esc(title)}</h3>
@@ -283,17 +310,45 @@
 
     async function loadOffice() {
       try {
-        const desksRes = await fetch("/v1/desks", { headers: headers() });
+        const desksRes = await fetch("/v1/office/desks/presence", { headers: headers() });
         const desksBody = await desksRes.json();
-        renderRoster(desksBody.desks || []);
+        const deskCode = errCode(desksBody);
+        if (!desksRes.ok) {
+          const copy = humanError(deskCode);
+          if (copy) officeFlash(copy, "conflict");
+          renderRoster([]);
+        } else {
+          renderRoster(desksBody.desks || []);
+        }
       } catch (_) {
         renderRoster([]);
       }
       try {
-        const goalsRes = await fetch("/v1/goals", { headers: headers() });
-        if (!goalsRes.ok) throw new Error("goals missing");
+        const goalsRes = await fetch("/v1/office/goals", { headers: headers() });
         const goalsBody = await goalsRes.json();
-        renderGoals(goalsBody.goals || []);
+        const goalCode = errCode(goalsBody);
+        if (!goalsRes.ok) {
+          const copy = humanError(goalCode);
+          officeFlash(copy || "目标列表暂时读不到。", "conflict");
+          renderGoals([]);
+          return;
+        }
+        const goals = goalsBody.goals || [];
+        const withSlots = await Promise.all(goals.map(async (g) => {
+          try {
+            const slotsRes = await fetch("/v1/office/goals/" + g.id + "/fill_slots", { headers: headers() });
+            const slotsBody = await slotsRes.json();
+            if (!slotsRes.ok) {
+              const copy = humanError(errCode(slotsBody));
+              if (copy) officeFlash(copy, "conflict");
+              return { ...g, slots: [] };
+            }
+            return { ...g, slots: (slotsBody.slots || []).map(slotFromApi) };
+          } catch (_) {
+            return { ...g, slots: [] };
+          }
+        }));
+        renderGoals(withSlots);
       } catch (_) {
         renderGoals([]);
       }
@@ -304,13 +359,18 @@
       const title = $("goal-name").value.trim();
       const ask = $("goal-ask").value.trim();
       if (!title || !ask) return;
-      const payload = { title, summary: ask, mode: "deliver", coordinator_ref: "coord-1" };
-      const res = await fetch("/v1/goals", {
+      const payload = { title, intent: ask };
+      const res = await fetch("/v1/office/goals", {
         method: "POST",
         headers: headers(),
         body: JSON.stringify(payload),
       });
-      if (!res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      const code = errCode(body);
+      if (!res.ok) {
+        officeFlash(humanError(code) || "新建失败，请再试一次。", "conflict");
+        return;
+      }
       $("goal-name").value = "";
       $("goal-ask").value = "";
       await loadOffice();
@@ -392,7 +452,7 @@
         body: JSON.stringify({ decision, version, structural_change: false, ...extra }),
       });
       const body = await res.json();
-      const code = (body && body.code) || (body.error && body.error.code);
+      const code = errCode(body);
       if (!res.ok) {
         if (res.status === 409 || code === "optimistic_lock") {
           flash("别人刚处理过这张，已帮你刷新。", "conflict");
@@ -400,7 +460,8 @@
           await loadOffice();
           return;
         }
-        flash("处理失败，请再试一次");
+        const copy = humanError(code);
+        flash(copy || "处理失败，请再试一次", copy ? "conflict" : undefined);
         return;
       }
       if (decision === "pass") flash("已通过。");

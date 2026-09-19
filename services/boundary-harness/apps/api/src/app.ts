@@ -26,8 +26,14 @@ import {
   listGateInstances,
   listGithubSnapshots,
   listDesks,
-  listGoals,
+  listOfficeDeskPresence,
+  listOfficeGoals,
+  createOfficeGoal,
+  forbidOfficeWrite,
+  getOfficeFillSlots,
   listOutbox,
+  assertMcpEntry,
+  isBotCompletionWritePath,
   listPools,
   parseBearer,
   parseRole,
@@ -127,7 +133,18 @@ export function createApp(harness: Harness) {
 
   const v1 = new Hono<AppEnv>();
   v1.use("*", async (c, next) => {
-    c.set("actor", readActor(c));
+    try {
+      c.set("actor", readActor(c));
+    } catch (err) {
+      if (
+        isHarnessError(err) &&
+        err.status === 401 &&
+        isBotCompletionWritePath(c.req.method, c.req.path)
+      ) {
+        throw new HarnessError("unauthenticated", "missing Authorization Bearer", 401);
+      }
+      throw err;
+    }
     await next();
   });
 
@@ -173,6 +190,41 @@ export function createApp(harness: Harness) {
     return c.json(listDesks(c.get("harness"), c.get("actor")));
   });
 
+  v1.get("/office/goals", (c) => {
+    return c.json(listOfficeGoals(c.get("harness"), c.get("actor")));
+  });
+
+  v1.post("/office/goals", async (c) => {
+    const body = (await c.req.json()) as Record<string, unknown>;
+    assertNoPlaintextCredentials(body);
+    return c.json(createOfficeGoal(c.get("harness"), c.get("actor"), body), 201);
+  });
+
+  v1.get("/office/goals/:id/fill_slots", (c) => {
+    return c.json(getOfficeFillSlots(c.get("harness"), c.get("actor"), c.req.param("id")));
+  });
+
+  v1.get("/office/desks/presence", (c) => {
+    return c.json(listOfficeDeskPresence(c.get("harness"), c.get("actor")));
+  });
+
+  const denyOfficeOwnerDispatch = (action: string) => () => {
+    forbidOfficeWrite(action);
+  };
+  v1.post("/office/desks/presence", denyOfficeOwnerDispatch("desks.presence.write"));
+  v1.patch("/office/desks/presence", denyOfficeOwnerDispatch("desks.presence.write"));
+  v1.put("/office/desks/presence", denyOfficeOwnerDispatch("desks.presence.write"));
+  v1.delete("/office/desks/presence", denyOfficeOwnerDispatch("desks.presence.write"));
+  v1.post("/office/desks/:id", denyOfficeOwnerDispatch("desks.owner"));
+  v1.post("/office/desks/:id/assign", denyOfficeOwnerDispatch("desks.assign"));
+  v1.post("/office/desks/:id/dispatch", denyOfficeOwnerDispatch("desks.dispatch"));
+  v1.post("/office/goals/:id/assign", denyOfficeOwnerDispatch("goals.assign"));
+  v1.post("/office/goals/:id/assignments", denyOfficeOwnerDispatch("goals.assignments"));
+  v1.post("/office/goals/:id/dispatch", denyOfficeOwnerDispatch("goals.dispatch"));
+  v1.post("/office/goals/:id/fill_slots", denyOfficeOwnerDispatch("goals.fill_slots.write"));
+  v1.patch("/office/goals/:id", denyOfficeOwnerDispatch("goals.patch"));
+  v1.put("/office/goals/:id", denyOfficeOwnerDispatch("goals.put"));
+
   v1.post("/pools", async (c) => {
     const body = (await c.req.json()) as { id?: string; kind?: string; secret_ref?: string };
     assertNoPlaintextCredentials(body);
@@ -215,7 +267,7 @@ export function createApp(harness: Harness) {
   });
 
   v1.get("/goals", (c) => {
-    return c.json(listGoals(c.get("harness"), c.get("actor")));
+    return c.json(listOfficeGoals(c.get("harness"), c.get("actor")));
   });
 
   v1.post("/goals", async (c) => {
@@ -254,6 +306,7 @@ export function createApp(harness: Harness) {
   v1.get("/assignments/:id", (c) => c.json(getAssignment(c.get("harness"), c.req.param("id"))));
 
   v1.post("/assignments/:id/dispatch", async (c) => {
+    assertMcpEntry(c.req.header("x-harness-entry"), c.req.path);
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const key = String(body.idempotency_key ?? c.req.header("idempotency-key") ?? "");
     const result = await dispatchAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), key);
@@ -264,6 +317,7 @@ export function createApp(harness: Harness) {
   v1.get("/runs/:id", (c) => c.json(getRun(c.get("harness"), c.req.param("id"))));
 
   v1.post("/runs/:id/evidence", async (c) => {
+    assertMcpEntry(c.req.header("x-harness-entry"), c.req.path);
     const body = (await c.req.json()) as { items?: unknown };
     return c.json(
       attachEvidence(c.get("harness"), c.get("actor"), c.req.param("id"), (body.items ?? []) as never),

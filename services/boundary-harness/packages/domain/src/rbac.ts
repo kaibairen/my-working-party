@@ -153,6 +153,40 @@ export function requireRole(actor: Actor, allowed: readonly Role[]): void {
   }
 }
 
+/** Bot completion writes (dispatch / attach_evidence) must come through the MCP proxy. */
+export const MCP_ENTRY_HEADER = "x-harness-entry";
+export const MCP_ENTRY_VALUE = "mcp";
+
+export function isBotCompletionWritePath(method: string, path: string): boolean {
+  if (method.toUpperCase() !== "POST") return false;
+  return /\/assignments\/[^/]+\/dispatch\/?$/.test(path) || /\/runs\/[^/]+\/evidence\/?$/.test(path);
+}
+
+export function completionWriteTemplatePath(path: string): string {
+  if (/\/evidence\/?$/.test(path)) return "/v1/runs/{id}/evidence";
+  if (/\/dispatch\/?$/.test(path)) return "/v1/assignments/{id}/dispatch";
+  return path;
+}
+
+export function assertWriteAuthenticated(input: {
+  authorization?: string | undefined;
+  roleHeader?: string | undefined;
+}): void {
+  const hasBearer = Boolean(input.authorization && /^Bearer\s+\S+/i.test(input.authorization));
+  const hasRole = Boolean(input.roleHeader && input.roleHeader.trim());
+  if (!hasBearer && !hasRole) {
+    throw new HarnessError("unauthenticated", "missing Authorization Bearer", 401);
+  }
+}
+
+export function assertMcpEntry(entry: string | undefined, path: string): void {
+  if (entry?.trim().toLowerCase() !== MCP_ENTRY_VALUE) {
+    throw new HarnessError("mcp_entry_required", "write requires MCP entry", 403, {
+      path: completionWriteTemplatePath(path),
+    });
+  }
+}
+
 export function requirePoolAccess(actor: Actor, poolId: string): void {
   if (!actor.pool_ids) return;
   if (!actor.pool_ids.includes(poolId)) {

@@ -15,6 +15,7 @@ export const pools = sqliteTable("pools", {
 export const goals = sqliteTable("goals", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
+  intent: text("intent"),
   mode: text("mode").notNull(),
   dispatchPolicy: text("dispatch_policy").notNull(),
   coordinatorRef: text("coordinator_ref").notNull(),
@@ -24,7 +25,6 @@ export const goals = sqliteTable("goals", {
   createdBy: text("created_by").notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-  summary: text("summary"),
 });
 
 export const gateDefs = sqliteTable("gate_defs", {

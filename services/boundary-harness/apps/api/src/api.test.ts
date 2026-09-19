@@ -7,6 +7,7 @@ const headers = (role: string, actor = role) => ({
   "content-type": "application/json",
   "x-harness-role": role,
   "x-harness-actor": actor,
+  "x-harness-entry": "mcp",
 });
 
 async function json(app: ReturnType<typeof createApp>, path: string, init?: RequestInit) {
@@ -91,25 +92,28 @@ describe("domain API", () => {
 
   it("lists office goals with read-only fill slots", async () => {
     const { app } = setup();
-    await json(app, "/v1/goals", {
+    const created = await json(app, "/v1/office/goals", {
       method: "POST",
       headers: headers("decision_maker", "you"),
       body: JSON.stringify({
         title: "周报交付验收",
-        summary: "要一份能转发的周报",
-        mode: "deliver",
-        coordinator_ref: "coord-1",
+        intent: "要一份能转发的周报",
       }),
     });
-    const listed = await json(app, "/v1/goals", { headers: headers("decision_maker", "you") });
+    expect(created.res.status).toBe(201);
+    const listed = await json(app, "/v1/office/goals", { headers: headers("decision_maker", "you") });
     expect(listed.res.status).toBe(200);
     expect(listed.body.readonly).toBe(true);
+    expect(listed.body.empty_copy).toBe("还没有目标。建一个，同事才会开工。");
     expect(listed.body.goals).toHaveLength(1);
     expect(listed.body.goals[0].title).toBe("周报交付验收");
-    expect(listed.body.goals[0].summary).toBe("要一份能转发的周报");
-    expect(listed.body.goals[0].slots[0]).toEqual(
-      expect.objectContaining({ filler: "还没人填", empty: true, readonly: true }),
-    );
+    expect(listed.body.goals[0].intent).toBe("要一份能转发的周报");
+    const slots = await json(app, `/v1/office/goals/${created.body.id}/fill_slots`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(slots.res.status).toBe(200);
+    expect(slots.body.readonly).toBe(true);
+    expect(slots.body.slots).toEqual([]);
   });
 
   it("canvas_not_required_for_dispatch — goal → assignment → noop → evidence → gate", async () => {
@@ -337,8 +341,13 @@ describe("domain API", () => {
     expect(officeHtml).toContain('data-testid="roster"');
     expect(officeHtml).toContain('data-readonly="true"');
     expect(officeHtml).toContain('data-testid="inbox-drawer"');
-    expect(officeHtml).toContain("/v1/desks");
-    expect(officeHtml).toContain("/v1/goals");
+    expect(officeHtml).toContain("/v1/office/goals");
+    expect(officeHtml).toContain("/v1/office/goals/");
+    expect(officeHtml).toContain("/fill_slots");
+    expect(officeHtml).toContain("/v1/office/desks/presence");
+    expect(officeHtml).toContain("office_write_forbidden");
+    expect(officeHtml).toContain("mcp_entry_required");
+    expect(officeHtml).not.toContain('"x-harness-entry"');
     expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
     expect(officeHtml).toContain("此刻没有待办。安静是正常的。");
     expect(officeHtml).not.toContain("查看待我拍板");
@@ -381,7 +390,7 @@ describe("domain API", () => {
 
   it("projects read-only desks for the office roster", async () => {
     const { app } = setup();
-    const listed = await json(app, "/v1/desks", { headers: headers("decision_maker", "you") });
+    const listed = await json(app, "/v1/office/desks/presence", { headers: headers("decision_maker", "you") });
     expect(listed.res.status).toBe(200);
     expect(listed.body.readonly).toBe(true);
     expect(listed.body.hitl).toBe("待我拍板");
@@ -391,11 +400,11 @@ describe("domain API", () => {
         expect.objectContaining({ name: "Cursor 同事", status: "空闲", presence: "idle" }),
       ]),
     );
-    const write = await app.request("/v1/desks", {
+    const write = await app.request("/v1/office/desks/presence", {
       method: "POST",
       headers: headers("decision_maker", "you"),
       body: JSON.stringify({ pool_id: "pool_noop" }),
     });
-    expect(write.status).toBe(404);
+    expect(write.status).toBe(403);
   });
 });

@@ -49,6 +49,9 @@ export const zhDM = {
   reviseStructural: "这是结构问题，要换任务边界",
   reviseNote: "想改的方向（可选）",
   confirmRevise: "确认打回",
+  officeWriteForbidden: "这里不能指派或开跑。同事通道才会开工。",
+  mcpEntryRequired: "这条完成路径只能走同事通道，页面上过不去。",
+  briefForbiddenField: "目标只要名称和一句话要什么，不要步骤或脚本。",
 } as const;
 
 export const MISSING_ZH: Record<string, string> = {

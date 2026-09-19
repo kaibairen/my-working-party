@@ -4,6 +4,7 @@ export {
   BriefV1Schema,
   BudgetSchema,
   EVIDENCE_KINDS,
+  assertNoBriefForbiddenKeys,
   parseBriefOrThrow,
   parseBriefV1,
   parseBudget,
@@ -19,6 +20,12 @@ export {
   parseRole,
   requireRole,
   requirePoolAccess,
+  isBotCompletionWritePath,
+  completionWriteTemplatePath,
+  assertWriteAuthenticated,
+  assertMcpEntry,
+  MCP_ENTRY_HEADER,
+  MCP_ENTRY_VALUE,
   assertNoPlaintextCredentials,
   assertSecretRef,
   redactPayload,
@@ -65,7 +72,16 @@ export {
   assertAdminNotFrozen,
   assertNoClientStatusWrite,
 } from "./services";
-export { listDesks, DESK_STATUS, humanDeskName, type DeskPresence } from "./desks";
-export { listGoals, listOfficeGoals, type FillSlot, type OfficeGoal } from "./office";
+export { listDesks, DESK_STATUS, humanDeskName, UUID_RE, type DeskPresence } from "./desks";
+export {
+  listOfficeGoals,
+  createOfficeGoal,
+  getOfficeFillSlots,
+  listOfficeDeskPresence,
+  forbidOfficeWrite,
+  humanGoalTitle,
+  OFFICE_EMPTY_COPY,
+  type OfficeFillStage,
+} from "./office";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
 export { AUTHORITY_ACTIONS, checkPolicy } from "@harness/policy";

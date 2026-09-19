@@ -13,6 +13,7 @@ import { createApp } from "./app";
 const headers = (role: string, actor = role) => ({
   "content-type": "application/json",
   "x-harness-role": role,
+  "x-harness-entry": "mcp",
   "x-harness-actor": actor,
 });
 

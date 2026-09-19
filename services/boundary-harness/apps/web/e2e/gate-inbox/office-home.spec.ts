@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import {
+  api,
   drainReadyGates,
   expect,
   HUMAN_GOAL,
   JUNK_TITLE_RE,
+  headers,
   seedBusyDesk,
   seedDeliverPending,
   seedDeliverReady,
@@ -16,35 +18,54 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DISPATCH_UI_RE = /指派给|拖到工位|开始跑|派活|assign|drag-dispatch|dispatch/i;
 const OPS_CHROME_RE = /OpenAPI|Health|Outbox|decision_maker|GateInstances|status=ready|M2-preview/i;
 
+function officePath(url: string) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+function isOfficeGoalsList(url: string) {
+  return /\/v1\/office\/goals\/?$/.test(officePath(url));
+}
+
+function isOfficePresence(url: string) {
+  return /\/v1\/office\/desks\/presence\/?$/.test(officePath(url));
+}
+
 test.describe("P0 AI office home", () => {
   test("home_is_office_not_inbox_wall", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
-    await page.route("**/v1/goals", async (route) => {
-      if (route.request().method() === "GET") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ goals: [], readonly: true }),
-        });
-        return;
-      }
-      await route.continue();
+    const listed = await api<{ goals: unknown[]; empty_copy?: string }>(baseURL!, "/v1/office/goals", {
+      headers: headers.decisionMaker,
     });
+    const leakedEntry: string[] = [];
+    page.on("request", (req) => {
+      if (req.headers()["x-harness-entry"]) leakedEntry.push(req.url());
+    });
+    const officeGet = page.waitForResponse((res) => isOfficeGoalsList(res.url()) && res.request().method() === "GET");
+    const presenceGet = page.waitForResponse((res) => isOfficePresence(res.url()) && res.request().method() === "GET");
     await page.goto("/");
+    await officeGet;
+    await presenceGet;
     await expect(page.locator("header.top h1")).toHaveText("AI 办公室");
     await expect(page.getByTestId("office-shell")).toBeVisible();
     await expect(page.getByTestId("goals-panel")).toBeVisible();
     await expect(page.getByTestId("create-goal")).toBeVisible();
-    await expect(page.getByTestId("office-empty")).toBeVisible();
-    await expect(page.getByTestId("office-empty")).toContainText("还没有目标。建一个，同事才会开工。");
     await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "false");
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
     await expect(page.getByTestId("inbox-heading")).not.toBeVisible();
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(OPS_CHROME_RE);
     expect(body).not.toContain("查看待我拍板");
-    await page.screenshot({ path: join(shotDir, "office_empty_no_goals.png"), fullPage: true });
-    await page.screenshot({ path: join(evidenceDir, "office_empty_no_goals.png"), fullPage: true });
+    expect(leakedEntry).toEqual([]);
+    expect(await page.getByTestId("office-empty").textContent()).toContain("还没有目标。建一个，同事才会开工。");
+    if ((listed.body.goals ?? []).length === 0) {
+      await expect(page.getByTestId("office-empty")).toBeVisible();
+      await page.screenshot({ path: join(shotDir, "office_empty_no_goals.png"), fullPage: true });
+      await page.screenshot({ path: join(evidenceDir, "office_empty_no_goals.png"), fullPage: true });
+    }
   });
 
   test("create_goal_shows_fill_slots", async ({ page, baseURL }) => {
@@ -55,7 +76,15 @@ test.describe("P0 AI office home", () => {
     const form = page.getByTestId("create-goal-form");
     await expect(form.locator("[name=steps],[name=script],[name=playbook]")).toHaveCount(0);
     await expect(form.getByText(/指派给|拖到工位|开始跑/)).toHaveCount(0);
+    const created = page.waitForResponse(
+      (res) => isOfficeGoalsList(res.url()) && res.request().method() === "POST",
+    );
     await page.getByTestId("create-goal").click();
+    const createdRes = await created;
+    expect(createdRes.ok()).toBeTruthy();
+    const goal = (await createdRes.json()) as { id: string; title: string; intent: string };
+    expect(goal.title).toBe("周报交付验收");
+    expect(goal.intent).toBe("要一份能转发的周报");
     const card = page.getByTestId("goal-card").filter({ hasText: "周报交付验收" }).first();
     await expect(card).toBeVisible();
     await expect(card.getByTestId("goal-title")).toHaveText("周报交付验收");
@@ -66,38 +95,23 @@ test.describe("P0 AI office home", () => {
     await expect(card.getByTestId("slot-progress")).toBeVisible();
     const slotText = await card.getByTestId("fill-slots").innerText();
     expect(slotText).not.toMatch(DISPATCH_UI_RE);
-    await page.route("**/v1/goals", async (route) => {
-      if (route.request().method() === "GET") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            readonly: true,
-            goals: [
-              {
-                title: "周报交付验收",
-                summary: "要一份能转发的周报",
-                status_line: "同事在填",
-                slots: [
-                  {
-                    filler: "交付同事",
-                    progress: "同事在填",
-                    artifact: { label: "产物", uri: "file://out.tgz" },
-                    empty: false,
-                    readonly: true,
-                  },
-                ],
-              },
-            ],
-          }),
-        });
-        return;
-      }
-      await route.continue();
+
+    await api(baseURL!, `/v1/goals/${goal.id}/assignments`, {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "fill", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
     });
+    const fillGet = page.waitForResponse(
+      (res) => res.url().includes(`/v1/office/goals/${goal.id}/fill_slots`) && res.request().method() === "GET",
+    );
     await page.reload();
-    await expect(page.getByTestId("goal-card")).toHaveCount(1);
-    await expect(page.getByTestId("fill-slot")).toBeVisible();
+    await fillGet;
+    await expect(page.getByTestId("goal-card").filter({ hasText: "周报交付验收" }).first()).toBeVisible();
+    await expect(page.getByTestId("fill-slot").first()).toBeVisible();
+    await expect(page.getByTestId("slot-filler").first()).toContainText(/还没人填|交付同事|Cursor 同事/);
     await page.screenshot({ path: join(shotDir, "office_home_with_goals.png"), fullPage: true });
     await page.screenshot({ path: join(evidenceDir, "office_home_with_goals.png"), fullPage: true });
   });
@@ -106,7 +120,9 @@ test.describe("P0 AI office home", () => {
     await drainReadyGates(baseURL!);
     await seedDeliverPending(baseURL!);
     await seedBusyDesk(baseURL!);
+    const presenceGet = page.waitForResponse((res) => isOfficePresence(res.url()) && res.request().method() === "GET");
     await page.goto("/");
+    await presenceGet;
     const roster = page.getByTestId("roster");
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");
@@ -127,36 +143,9 @@ test.describe("P0 AI office home", () => {
   test("inbox_opens_as_drawer", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
     await seedDeliverReady(baseURL!);
-    await page.route("**/v1/goals", async (route) => {
-      if (route.request().method() === "GET") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            readonly: true,
-            goals: [
-              {
-                title: "周报交付验收",
-                summary: "要一份能转发的周报",
-                status_line: "有一张待你拍板",
-                slots: [
-                  {
-                    filler: "交付同事",
-                    progress: "填到：等拍板",
-                    artifact: { label: "产物", uri: "file://out.tgz" },
-                    empty: false,
-                    readonly: true,
-                  },
-                ],
-              },
-            ],
-          }),
-        });
-        return;
-      }
-      await route.continue();
-    });
+    const officeGet = page.waitForResponse((res) => isOfficeGoalsList(res.url()) && res.request().method() === "GET");
     await page.goto("/");
+    await officeGet;
     await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "false");
     await expect(page.getByTestId("office-shell")).toBeVisible();
     await page.getByTestId("open-inbox").click();

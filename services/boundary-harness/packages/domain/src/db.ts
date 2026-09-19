@@ -111,6 +111,9 @@ function applyCompat(sqlite: Database.Database): void {
   if (tableExists(sqlite, "goals") && !columnNames(sqlite, "goals").includes("summary")) {
     sqlite.exec("ALTER TABLE goals ADD COLUMN summary TEXT");
   }
+  if (tableExists(sqlite, "goals") && !columnNames(sqlite, "goals").includes("intent")) {
+    sqlite.exec("ALTER TABLE goals ADD COLUMN intent TEXT");
+  }
   if (tableExists(sqlite, "gate_instances") && !columnNames(sqlite, "gate_instances").includes("assignment_id")) {
     sqlite.exec("ALTER TABLE gate_instances ADD COLUMN assignment_id TEXT");
   }

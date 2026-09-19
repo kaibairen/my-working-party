@@ -20,7 +20,7 @@ export default defineConfig({
         timeout: 60_000,
       },
   projects: [
-    { name: "inbox-legacy", testDir: "./tests/e2e" },
     { name: "gate-inbox", testDir: "./apps/web/e2e/gate-inbox" },
+    { name: "inbox-legacy", testDir: "./tests/e2e" },
   ],
 });

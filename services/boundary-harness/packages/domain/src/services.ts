@@ -26,7 +26,7 @@ import {
 
 export type CreateGoalInput = {
   title: string;
-  /** One-line ask from 新建目标. Not a Brief / script field. */
+  intent?: string | null;
   summary?: string | null;
   ask?: string | null;
   mode: "explore" | "deliver";
@@ -83,11 +83,12 @@ function publicPool(row: typeof pools.$inferSelect) {
 }
 
 function publicGoal(row: typeof goals.$inferSelect) {
-  const summary = typeof row.summary === "string" && row.summary.trim() ? row.summary.trim() : null;
+  const intent = typeof row.intent === "string" && row.intent.trim() ? row.intent.trim() : null;
   return {
     id: row.id,
     title: row.title,
-    summary,
+    intent,
+    summary: intent,
     mode: row.mode,
     dispatch_policy: row.dispatchPolicy,
     coordinator_ref: row.coordinatorRef,
@@ -245,11 +246,11 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
 
   const id = h.newId();
   const ts = h.now();
-  const summary = String(input.summary ?? input.ask ?? "").trim() || null;
+  const intent = String(input.intent ?? input.summary ?? input.ask ?? "").trim() || null;
   h.db.insert(goals).values({
     id,
     title: input.title,
-    summary,
+    intent,
     mode: input.mode,
     dispatchPolicy: input.dispatch_policy ?? "coordinator_only",
     coordinatorRef: input.coordinator_ref,
@@ -773,7 +774,7 @@ export function policyCheck(
         }).run();
         h.bus.emit("gate.ready", payload);
         const inst = h.db.select().from(gateInstances).where(eq(gateInstances.id, instId)).get();
-        if (inst) gate_instance = publicGate(inst, safetyDef, goal.title, goal.summary);
+        if (inst) gate_instance = publicGate(inst, safetyDef, goal.title, goal.intent);
       }
     }
   }
@@ -794,7 +795,7 @@ export function listGateInstances(
   return rows.map((r) => {
     const def = h.db.select().from(gateDefs).where(eq(gateDefs.id, r.gateDefId)).get();
     const goal = h.db.select().from(goals).where(eq(goals.id, r.goalId)).get();
-    return publicGate(r, def, goal?.title, goal?.summary);
+    return publicGate(r, def, goal?.title, goal?.intent);
   });
 }
 
