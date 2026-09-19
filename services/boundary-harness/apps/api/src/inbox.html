@@ -197,8 +197,8 @@
       if (missing.length) return "材料还没齐，先看上面「还差」";
       return "同事已交：结论摘要、产物";
     }
-    function setCounts(authorityN) {
-      $("todo-chip").textContent = authorityN > 0 ? `待办 · ${authorityN}` : "待办";
+    function setCounts(n) {
+      $("todo-chip").textContent = n > 0 ? `待办 · ${n}` : "待办";
     }
     async function decide(card, act, structural, note) {
       const id = card.dataset.id;
@@ -234,8 +234,7 @@
       const body = await res.json();
       const gates = (body.gates || []).filter((g) => g.status === "ready" && !isAdvisory(g));
       await Promise.all(gates.map((g) => loadGoal(g.goal_id)));
-      const authorityN = gates.filter((g) => isAuthority(g, (g.ready_result && g.ready_result.missing) || [])).length;
-      setCounts(authorityN);
+      setCounts(gates.length);
       $("list").innerHTML = gates.length ? gates.map((g, idx) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";

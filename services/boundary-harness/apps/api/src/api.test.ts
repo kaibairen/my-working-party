@@ -329,7 +329,7 @@ describe("domain API", () => {
     expect(html).not.toContain("还缺这些");
     expect(html).toContain("/v1/gates?status=ready");
     expect(html).toContain("待办");
-    expect(html).toContain("authorityN > 0 ? `待办 · ${authorityN}`");
+    expect(html).toContain("n > 0 ? `待办 · ${n}`");
     expect(html).toContain("还差：一项材料");
     expect(html).not.toContain("M2-preview");
     expect(html).not.toContain('href="/ops">Health');
