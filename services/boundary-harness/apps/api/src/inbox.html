@@ -163,9 +163,16 @@
       if (raw === "coord-1" || raw.startsWith("coord")) return "协调人";
       return raw;
     }
+    function isHumanTitle(name) {
+      const raw = String(name || "").trim();
+      if (!raw || UUID_RE.test(raw)) return false;
+      if (/^e2e\b/i.test(raw)) return false;
+      if (/pending g-/i.test(raw)) return false;
+      return true;
+    }
     function cardTitle(g, goal) {
-      const name = String((goal && goal.title) || "").trim();
-      if (name && !UUID_RE.test(name)) return name;
+      const name = String((goal && (goal.title || goal.summary)) || "").trim();
+      if (isHumanTitle(name)) return name;
       const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
       return RULE_ZH[pred] || "未命名目标";
     }

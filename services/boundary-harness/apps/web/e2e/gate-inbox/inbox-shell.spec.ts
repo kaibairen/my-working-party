@@ -36,6 +36,8 @@ test.describe("Decision-maker shell", () => {
     const title = page.getByTestId("gate-title");
     await expect(title).toBeVisible();
     await expect(title).not.toHaveText(UUID_RE);
+    await expect(title).not.toHaveText(/e2e pending|pending g-/i);
+    await expect(title).toHaveText("本周交付包");
     await expect(title).not.toHaveText(ready.gate!.id);
     const titleText = (await title.innerText()).trim();
     expect(titleText.length).toBeGreaterThan(0);
@@ -176,6 +178,7 @@ test.describe("Decision-maker shell", () => {
     await seedDeliverReady(baseURL!, "本周交付包");
     await page.goto("/inbox");
     await expect(page.getByTestId("gate-title")).toHaveText("本周交付包");
+    await expect(page.getByTestId("gate-title")).not.toHaveText(/e2e pending|pending g-/i);
     await expect(page.getByTestId("gate-title")).not.toHaveText(UUID_RE);
     await expect(page.getByTestId("working-who")).toHaveText("交付工位 · 协调人");
     await expect(page.getByTestId("output-summary")).toHaveText("同事已交：结论摘要、产物");

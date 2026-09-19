@@ -86,7 +86,7 @@ export async function seedDeliverPending(baseURL: string, title?: string) {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: title ?? `e2e pending ${uniq("g")}`,
+        title: title ?? "本周交付包",
         mode: "deliver",
         coordinator_ref: "coord-1",
       }),
@@ -164,7 +164,7 @@ export async function seedAuthorityReady(baseURL: string, action = "destructive_
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: `e2e authority ${uniq("g")}`,
+        title: "安全确认",
         mode: "explore",
         coordinator_ref: "coord-1",
         gate_template_id: "safety_only_v1",
@@ -201,7 +201,7 @@ export async function seedExploreNoGate(baseURL: string) {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: `e2e explore ${uniq("g")}`,
+        title: "探索笔记",
         mode: "explore",
         coordinator_ref: "coord-1",
       }),
