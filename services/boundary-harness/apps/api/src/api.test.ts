@@ -89,6 +89,29 @@ describe("domain API", () => {
     expect(body.gate_defs[0].predicate_id).toBe("deliver_ready_v1");
   });
 
+  it("lists office goals with read-only fill slots", async () => {
+    const { app } = setup();
+    await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({
+        title: "周报交付验收",
+        summary: "要一份能转发的周报",
+        mode: "deliver",
+        coordinator_ref: "coord-1",
+      }),
+    });
+    const listed = await json(app, "/v1/goals", { headers: headers("decision_maker", "you") });
+    expect(listed.res.status).toBe(200);
+    expect(listed.body.readonly).toBe(true);
+    expect(listed.body.goals).toHaveLength(1);
+    expect(listed.body.goals[0].title).toBe("周报交付验收");
+    expect(listed.body.goals[0].summary).toBe("要一份能转发的周报");
+    expect(listed.body.goals[0].slots[0]).toEqual(
+      expect.objectContaining({ filler: "还没人填", empty: true, readonly: true }),
+    );
+  });
+
   it("canvas_not_required_for_dispatch — goal → assignment → noop → evidence → gate", async () => {
     const { app } = setup();
     const goal = await json(app, "/v1/goals", {
@@ -306,16 +329,25 @@ describe("domain API", () => {
     expect(office.status).toBe(200);
     const officeHtml = await office.text();
     expect(officeHtml).toContain("AI 办公室");
-    expect(officeHtml).toContain("查看待我拍板");
-    expect(officeHtml).toContain("工位一览");
+    expect(officeHtml).toContain("新建目标");
+    expect(officeHtml).toContain("一句话要什么");
+    expect(officeHtml).toContain("Bot 填充槽");
+    expect(officeHtml).toContain("工位心跳");
     expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
     expect(officeHtml).toContain('data-testid="roster"');
     expect(officeHtml).toContain('data-readonly="true"');
+    expect(officeHtml).toContain('data-testid="inbox-drawer"');
     expect(officeHtml).toContain("/v1/desks");
+    expect(officeHtml).toContain("/v1/goals");
+    expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
     expect(officeHtml).toContain("此刻没有待办。安静是正常的。");
+    expect(officeHtml).not.toContain("查看待我拍板");
     expect(officeHtml).not.toContain("OpenAPI");
     expect(officeHtml).not.toContain('href="/ops"');
     expect(officeHtml).not.toContain("派活");
+    expect(officeHtml).not.toContain("指派给");
+    expect(officeHtml).not.toContain("拖到工位");
+    expect(officeHtml).not.toContain("开始跑");
     expect(officeHtml).not.toContain("draggable=\"true\"");
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);

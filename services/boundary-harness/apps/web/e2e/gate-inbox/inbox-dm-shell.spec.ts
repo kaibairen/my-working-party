@@ -26,9 +26,12 @@ test.describe("E2E decision-maker shell", () => {
     await drainReadyGates(baseURL!);
     await page.goto("/");
     await expect(page.locator("h1")).toHaveText("AI 办公室");
-    await expect(page.getByTestId("open-inbox")).toHaveText(/查看待我拍板/);
-    await expect(page.getByTestId("office-empty")).toBeVisible();
-    await expect(page.getByTestId("office-empty")).toContainText("此刻没有待办。安静是正常的。");
+    await expect(page.getByTestId("open-inbox")).toHaveText(/待办/);
+    await expect(page.getByTestId("create-goal")).toBeVisible();
+    await expect(page.getByTestId("goal-name")).toBeVisible();
+    await expect(page.getByTestId("goal-ask")).toBeVisible();
+    await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "false");
+    await expect(page.getByTestId("office-shell")).toBeVisible();
     await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
     const officeHrefs = await page.locator("a[href]").evaluateAll((els) =>
       els.map((el) => (el as HTMLAnchorElement).getAttribute("href") || ""),
@@ -42,6 +45,7 @@ test.describe("E2E decision-maker shell", () => {
 
     await seedDeliverReady(baseURL!);
     await page.goto("/inbox");
+    await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "true");
     await expect(page.getByTestId("inbox-heading")).toHaveText(/待办/);
     await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
     const hrefs = await page.locator("a[href]").evaluateAll((els) =>
@@ -81,7 +85,7 @@ test.describe("E2E decision-maker shell", () => {
     await page.goto("/");
     await expect(page.locator("h1")).toHaveText("AI 办公室");
     await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
-    await page.getByTestId("desks-entry").click();
+    await expect(page.getByTestId("desks-entry")).toContainText("工位心跳");
     const roster = page.getByTestId("roster");
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");

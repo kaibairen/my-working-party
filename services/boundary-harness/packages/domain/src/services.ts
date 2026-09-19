@@ -26,6 +26,9 @@ import {
 
 export type CreateGoalInput = {
   title: string;
+  /** One-line ask from 新建目标. Not a Brief / script field. */
+  summary?: string | null;
+  ask?: string | null;
   mode: "explore" | "deliver";
   coordinator_ref?: string | null;
   dispatch_policy?: "coordinator_only" | "human_allowed";
@@ -80,9 +83,11 @@ function publicPool(row: typeof pools.$inferSelect) {
 }
 
 function publicGoal(row: typeof goals.$inferSelect) {
+  const summary = typeof row.summary === "string" && row.summary.trim() ? row.summary.trim() : null;
   return {
     id: row.id,
     title: row.title,
+    summary,
     mode: row.mode,
     dispatch_policy: row.dispatchPolicy,
     coordinator_ref: row.coordinatorRef,
@@ -131,6 +136,7 @@ function publicGate(
   row: typeof gateInstances.$inferSelect,
   def?: typeof gateDefs.$inferSelect | null,
   goalTitle?: string | null,
+  goalSummary?: string | null,
 ) {
   const ready = parseJson<{
     missing?: string[];
@@ -141,6 +147,7 @@ function publicGate(
     id: row.id,
     goal_id: row.goalId,
     goal_title: goalTitle ?? null,
+    goal_summary: goalSummary ?? null,
     gate_def_id: row.gateDefId,
     assignment_id: row.assignmentId,
     status: row.status,
@@ -238,9 +245,11 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
 
   const id = h.newId();
   const ts = h.now();
+  const summary = String(input.summary ?? input.ask ?? "").trim() || null;
   h.db.insert(goals).values({
     id,
     title: input.title,
+    summary,
     mode: input.mode,
     dispatchPolicy: input.dispatch_policy ?? "coordinator_only",
     coordinatorRef: input.coordinator_ref,
@@ -764,7 +773,7 @@ export function policyCheck(
         }).run();
         h.bus.emit("gate.ready", payload);
         const inst = h.db.select().from(gateInstances).where(eq(gateInstances.id, instId)).get();
-        if (inst) gate_instance = publicGate(inst, safetyDef, goal.title);
+        if (inst) gate_instance = publicGate(inst, safetyDef, goal.title, goal.summary);
       }
     }
   }
@@ -785,7 +794,7 @@ export function listGateInstances(
   return rows.map((r) => {
     const def = h.db.select().from(gateDefs).where(eq(gateDefs.id, r.gateDefId)).get();
     const goal = h.db.select().from(goals).where(eq(goals.id, r.goalId)).get();
-    return publicGate(r, def, goal?.title);
+    return publicGate(r, def, goal?.title, goal?.summary);
   });
 }
 
