@@ -40,7 +40,7 @@ test.describe("E2E ready list", () => {
     await seedDeliverPending(baseURL!);
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-empty")).toBeVisible();
-    await expect(page.getByTestId("inbox-empty")).toHaveText(/No ready gates/i);
+    await expect(page.getByTestId("inbox-empty")).toHaveText(/暂无待办|No ready gates/i);
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(CANVAS_CTA_RE);
