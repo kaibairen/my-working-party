@@ -56,14 +56,20 @@ export type CursorAdapterOpts = {
 
 export function defaultCursorRepository(): string {
   return (
-    process.env.CURSOR_REPOSITORY ??
     process.env.CURSOR_REPO_URL ??
+    process.env.CURSOR_REPOSITORY ??
     "https://github.com/kaibairen/my-working-party"
   );
 }
 
 export function defaultCursorStartingRef(): string {
-  return process.env.CURSOR_STARTING_REF ?? "main";
+  return process.env.CURSOR_REPO_REF ?? process.env.CURSOR_STARTING_REF ?? "main";
+}
+
+function resolveApiKey(opts: CursorAdapterOpts): string {
+  if (opts.apiKey !== undefined) return opts.apiKey;
+  if (process.env.VITEST && process.env.CURSOR_ADAPTER_LIVE !== "1") return "";
+  return process.env.CURSOR_API_KEY ?? "";
 }
 
 export function buildCursorLaunchPayload(input: {
@@ -89,8 +95,8 @@ function nest(body: Record<string, unknown>, key: string): Record<string, unknow
 function mapLiveIds(body: Record<string, unknown>): { agentId: string; runId: string; remoteStatus: string } {
   const agent = nest(body, "agent");
   const run = nest(body, "run");
-  const agentId = String(agent.id ?? body.id ?? body.agent_id ?? "");
-  const runId = String(run.id ?? agent.latestRunId ?? body.run_id ?? body.latest_run_id ?? body.latestRunId ?? "");
+  const agentId = String(agent.id ?? body.agent_id ?? body.id ?? "");
+  const runId = String(run.id ?? body.run_id ?? agent.latestRunId ?? body.latest_run_id ?? body.latestRunId ?? "");
   const remoteStatus = String(run.status ?? body.status ?? body.lifecycle ?? "CREATING").toUpperCase();
   return { agentId, runId, remoteStatus };
 }
@@ -103,7 +109,7 @@ function mapLiveIds(body: Record<string, unknown>): { agentId: string; runId: st
  * Dual external ids always persist (agent.id ≠ run.id). MCP MUST NOT expose this as cursor_raw_*.
  */
 export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
-  const apiKey = opts.apiKey ?? process.env.CURSOR_API_KEY ?? "";
+  const apiKey = resolveApiKey(opts);
   const stub = opts.stub ?? process.env.CURSOR_API_STUB === "1";
   const baseUrl = (opts.baseUrl ?? process.env.CURSOR_API_BASE ?? "https://api.cursor.com").replace(/\/$/, "");
   const fetchImpl = opts.fetchImpl ?? fetch;
@@ -197,7 +203,9 @@ export function createCursorAdapter(opts: CursorAdapterOpts = {}) {
         },
       };
     },
-    async poll(agentId: string, runId: string): Promise<CursorPollResult> {
+    async poll(input: { external_agent_id: string; external_run_id: string }): Promise<CursorPollResult> {
+      const agentId = input.external_agent_id;
+      const runId = input.external_run_id;
       if (mode === "fixture" || mode === "stub") {
         return { status: defaultLifecycle, cursor_lifecycle: defaultLifecycle };
       }

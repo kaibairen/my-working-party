@@ -422,7 +422,9 @@ function collectReadyContext(h: Harness, goalId: string): ReadyContext {
     return r.adapter === "noop" && usage?.noop_or_offline_contract === true;
   };
   const noopOrOfflineContract = runRows.some((r) => {
-    const usage = parseJson<{ noop_or_offline_contract?: boolean }>(r.usageJson);
+    const usage = parseJson<{ noop_or_offline_contract?: boolean; cursor_lifecycle?: string }>(r.usageJson);
+    if (usage?.cursor_lifecycle === "IDLE" || r.status === "idle") return false;
+    if (finished(r) && r.adapter === "cursor" && usage?.cursor_lifecycle === "FINISHED") return true;
     return finished(r) && r.adapter === "noop" && usage?.noop_or_offline_contract === true;
   });
   return {
@@ -1099,7 +1101,7 @@ const FAILED_CURSOR_STATUSES = new Set(["ERROR", "CANCELLED", "EXPIRED", "FAILED
  * Poll live Cursor runs until FINISHED, persist usage.cursor_lifecycle, re-eval Ready.
  * FakeCursor / fixture never needs this — dispatch already writes FINISHED.
  */
-export async function reconcileCursorRuns(h: Harness): Promise<number> {
+export async function syncCursorAgentRuns(h: Harness): Promise<number> {
   const open = h.db
     .select()
     .from(runs)
@@ -1117,7 +1119,10 @@ export async function reconcileCursorRuns(h: Harness): Promise<number> {
     if (usage.cursor_lifecycle === "FINISHED") continue;
     const poll = h.adapters.cursor.poll;
     if (!poll) continue;
-    const snap = await poll(row.externalAgentId!, row.externalRunId!);
+    const snap = await poll({
+      external_agent_id: row.externalAgentId!,
+      external_run_id: row.externalRunId!,
+    });
     const remote = String(snap.cursor_lifecycle || snap.status || "").toUpperCase();
     if (FAILED_CURSOR_STATUSES.has(remote)) {
       h.db
@@ -1156,10 +1161,13 @@ export async function reconcileCursorRuns(h: Harness): Promise<number> {
   return finished;
 }
 
-export async function workerTick(h: Harness): Promise<{ reconciled: number; published: number }> {
-  const reconciled = await reconcileCursorRuns(h);
+/** @deprecated use syncCursorAgentRuns */
+export const reconcileCursorRuns = syncCursorAgentRuns;
+
+export async function workerTick(h: Harness): Promise<{ synced: number; reconciled: number; published: number }> {
+  const synced = await syncCursorAgentRuns(h);
   const published = await publishOutbox(h);
-  return { reconciled, published };
+  return { synced, reconciled: synced, published };
 }
 
 export function assertNoClientStatusWrite(_role: Role, body: Record<string, unknown>): void {

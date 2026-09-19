@@ -97,8 +97,23 @@ describe("cursor adapter", () => {
         });
       }) as typeof fetch,
     });
-    const snap = await adapter.poll("bc-agent-1", "run-9");
+    const snap = await adapter.poll({ external_agent_id: "bc-agent-1", external_run_id: "run-9" });
     expect(snap.status).toBe("FINISHED");
     expect(snap.cursor_lifecycle).toBe("FINISHED");
+  });
+
+  it("ignores ambient CURSOR_API_KEY under Vitest unless CURSOR_ADAPTER_LIVE=1", async () => {
+    const prev = process.env.CURSOR_API_KEY;
+    process.env.CURSOR_API_KEY = "ambient-should-not-go-live";
+    try {
+      const adapter = createCursorAdapter();
+      expect(adapter.mode).toBe("fixture");
+      const result = await adapter.dispatch({ runId: "r1", assignmentId: "a1" });
+      expect(result.external_agent_id).toMatch(/^cursor-fixture-agent:/);
+      expect(result.external_run_id).toMatch(/^cursor-fixture-run:/);
+    } finally {
+      if (prev === undefined) delete process.env.CURSOR_API_KEY;
+      else process.env.CURSOR_API_KEY = prev;
+    }
   });
 });

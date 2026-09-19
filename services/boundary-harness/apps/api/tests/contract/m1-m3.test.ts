@@ -7,7 +7,7 @@ import {
   MCP_TOOL_NAMES,
   parseBriefV1,
   publishOutbox,
-  reconcileCursorRuns,
+  syncCursorAgentRuns,
   type Harness,
 } from "@harness/domain";
 import { listTools } from "../../../mcp-server/src/index";
@@ -224,25 +224,14 @@ describe("M1 Cursor + Dial + Brief + MCP", () => {
         ],
       }),
     });
-    await json(app, "/v1/github-snapshots", {
-      method: "POST",
-      headers: headers("service", "svc"),
-      body: JSON.stringify({
-        goal_id: goal.body.id,
-        assignment_id: asg.body.id,
-        is_draft: false,
-        checks_conclusion: "success",
-        raw_hash: "live",
-      }),
-    });
     const before = await json(app, `/v1/gates?status=ready&goal_id=${goal.body.id}`, {
       headers: headers("decision_maker", "dm"),
     });
     expect(before.body.gates).toEqual([]);
 
-    expect(await reconcileCursorRuns(harness)).toBe(0);
+    expect(await syncCursorAgentRuns(harness)).toBe(0);
     remoteStatus = "FINISHED";
-    expect(await reconcileCursorRuns(harness)).toBe(1);
+    expect(await syncCursorAgentRuns(harness)).toBe(1);
     const refreshed = await json(app, `/v1/runs/${run.body.id}`, { headers: headers("coordinator", "c1") });
     expect(refreshed.body.usage.cursor_lifecycle).toBe("FINISHED");
     expect(refreshed.body.status).toBe("succeeded");

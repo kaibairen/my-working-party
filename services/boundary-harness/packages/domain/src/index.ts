@@ -58,6 +58,7 @@ export {
   publishOutbox,
   reconcileCursorRuns,
   recordGithubSnapshot,
+  syncCursorAgentRuns,
   workerTick,
   setAdminFreeze,
   setGoalDial,

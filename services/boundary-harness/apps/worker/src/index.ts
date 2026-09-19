@@ -16,8 +16,8 @@ console.log(`harness worker listening db=${databasePath} interval=${interval}ms 
 
 setInterval(() => {
   void workerTick(harness)
-    .then(({ reconciled, published }) => {
-      if (reconciled > 0) console.log(`reconciled ${reconciled} cursor runs`);
+    .then(({ synced, published }) => {
+      if (synced > 0) console.log(`synced ${synced} cursor runs`);
       if (published > 0) console.log(`published ${published} outbox events`);
     })
     .catch((err) => console.error("worker tick failed", err));
