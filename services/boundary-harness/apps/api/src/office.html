@@ -111,7 +111,7 @@
     <div class="backdrop" data-testid="inbox-backdrop" data-close-inbox="true"></div>
     <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="heading" data-testid="gate-inbox">
       <header>
-        <h2 id="heading" data-testid="inbox-heading">待我拍板</h2>
+        <h2 id="heading" data-testid="inbox-heading">待办</h2>
         <button type="button" class="muted" data-testid="close-inbox" data-close-inbox="true">关闭</button>
       </header>
       <main>
@@ -351,7 +351,7 @@
         const label = gates.length ? "待办 · " + gates.length : "待办";
         countEl.textContent = label;
         countEl.dataset.count = String(gates.length);
-        $("heading").textContent = gates.length ? "待我拍板 · " + gates.length : "待我拍板";
+        $("heading").textContent = label;
       }
       $("lead").hidden = filter !== "ready" || !gates.length;
       $("list").innerHTML = gates.length ? gates.map((g) => {
