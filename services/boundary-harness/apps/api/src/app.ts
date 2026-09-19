@@ -14,6 +14,7 @@ import {
   decideGate,
   dispatchAssignment,
   fillAssignment,
+  humanFillSlot,
   getAdminFreeze,
   getAssignment,
   getGoal,
@@ -193,6 +194,18 @@ export function createApp(harness: Harness) {
     );
   });
 
+  v1.get("/office/desks/presence", (c) => {
+    return c.json(listDesks(c.get("harness"), c.get("actor")));
+  });
+
+  v1.get("/office/goals", (c) => {
+    return c.json({ goals: listGoals(c.get("harness"), c.get("actor")) });
+  });
+
+  v1.get("/office/goals/:id/fill_slots", (c) => {
+    return c.json(listFillSlots(c.get("harness"), c.get("actor"), c.req.param("id")));
+  });
+
   v1.post("/pools", async (c) => {
     const body = (await c.req.json()) as { id?: string; kind?: string; secret_ref?: string };
     assertNoPlaintextCredentials(body);
@@ -253,6 +266,19 @@ export function createApp(harness: Harness) {
 
   v1.get("/goals/:id/assignments", (c) => {
     return c.json(listFillSlots(c.get("harness"), c.get("actor"), c.req.param("id")));
+  });
+
+  v1.post("/goals/:id/human-fill", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { note?: string; artifact_uri?: string };
+    assertNoPlaintextCredentials(body);
+    assertNoClientStatusWrite(c.get("actor").role, body);
+    return c.json(
+      humanFillSlot(c.get("harness"), c.get("actor"), c.req.param("id"), {
+        note: body.note,
+        artifact_uri: body.artifact_uri,
+      }),
+      201,
+    );
   });
 
   v1.post("/goals/:id/assignments", async (c) => {

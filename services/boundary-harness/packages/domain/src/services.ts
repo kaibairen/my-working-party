@@ -218,15 +218,25 @@ export function getGoal(h: Harness, id: string) {
   return { ...publicGoal(row), gate_defs: defs };
 }
 
+const HUMAN_FILL_MARK = "human_fill";
+
+function isHumanFillEvidence(row: { assignmentId: string | null; sha256: string | null }): boolean {
+  return !row.assignmentId && row.sha256 === HUMAN_FILL_MARK;
+}
+
 function goalStatusLine(
   goal: typeof goals.$inferSelect,
   assignmentRows: Array<typeof assignments.$inferSelect>,
   gateRows: Array<typeof gateInstances.$inferSelect>,
+  evidenceRows: Array<typeof evidenceItems.$inferSelect>,
 ): string {
   const gates = gateRows.filter((g) => g.goalId === goal.id);
   if (gates.some((g) => g.status === "ready")) return "等你拍板";
   if (gates.some((g) => g.status === "pending")) return "等证据";
-  if (assignmentRows.some((a) => a.goalId === goal.id)) return "同事在填";
+  const mine = assignmentRows.filter((a) => a.goalId === goal.id);
+  const human = evidenceRows.some((e) => e.goalId === goal.id && isHumanFillEvidence(e));
+  if (mine.length === 0 && human) return "你在填";
+  if (mine.length > 0) return "同事在填";
   return "等同事开工";
 }
 
@@ -236,12 +246,13 @@ export function listGoals(h: Harness, actor: Actor) {
   const goalRows = h.db.select().from(goals).all();
   const assignmentRows = h.db.select().from(assignments).all();
   const gateRows = h.db.select().from(gateInstances).all();
+  const evidenceRows = h.db.select().from(evidenceItems).all();
   return goalRows
     .slice()
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
     .map((row) => ({
       ...publicGoal(row),
-      status_line: goalStatusLine(row, assignmentRows, gateRows),
+      status_line: goalStatusLine(row, assignmentRows, gateRows, evidenceRows),
     }));
 }
 
@@ -534,6 +545,22 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
     };
   });
 
+  const humanEv = evRows.filter(isHumanFillEvidence);
+  if (humanEv.length > 0) {
+    const noteRow = humanEv.find((e) => e.kind === "summary_md");
+    const artRow = humanEv.find((e) => e.kind === "artifact_uri");
+    const rawNote = noteRow?.uri?.replace(/^note:/, "") ?? null;
+    slots.push({
+      assignment_id: null,
+      empty: false,
+      filler: "你",
+      filler_kind: "human",
+      progress: artRow ? "已交产物" : "在填",
+      outcome: rawNote,
+      artifact_uri: artRow?.uri ?? null,
+    });
+  }
+
   if (slots.length === 0) {
     slots.push({
       assignment_id: null,
@@ -547,6 +574,72 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
   }
 
   return { slots, readonly: true as const };
+}
+
+export type HumanFillInput = {
+  note?: string;
+  artifact_uri?: string | null;
+};
+
+/**
+ * Decision-maker / coordinator human-fill. Records a fill-board slot
+ * (who / what / optional artifact) via the evidence path.
+ * Does not assign a bot desk, dispatch, or start a run.
+ */
+export function humanFillSlot(h: Harness, actor: Actor, goalId: string, input: HumanFillInput) {
+  requireRole(actor, ["decision_maker", "coordinator"]);
+  const goal = h.db.select().from(goals).where(eq(goals.id, goalId)).get();
+  if (!goal) throw new HarnessError("not_found", `goal ${goalId} not found`, 404);
+
+  const note = String(input.note ?? "").trim();
+  if (!note) {
+    throw new HarnessError("note_required", "human fill needs a free-text note", 422);
+  }
+  const artifact = String(input.artifact_uri ?? "").trim() || null;
+  const ts = h.now();
+
+  const prior = h.db
+    .select()
+    .from(evidenceItems)
+    .where(eq(evidenceItems.goalId, goalId))
+    .all()
+    .filter(isHumanFillEvidence);
+  for (const row of prior) {
+    h.db.delete(evidenceItems).where(eq(evidenceItems.id, row.id)).run();
+  }
+
+  h.db.insert(evidenceItems).values({
+    id: h.newId(),
+    runId: null,
+    goalId,
+    assignmentId: null,
+    kind: "summary_md",
+    uri: `note:${note}`,
+    sha256: HUMAN_FILL_MARK,
+    shadow: true,
+    createdAt: ts,
+  }).run();
+
+  if (artifact) {
+    h.db.insert(evidenceItems).values({
+      id: h.newId(),
+      runId: null,
+      goalId,
+      assignmentId: null,
+      kind: "artifact_uri",
+      uri: artifact,
+      sha256: HUMAN_FILL_MARK,
+      shadow: true,
+      createdAt: ts,
+    }).run();
+  }
+
+  audit(h, actor, "human_fill", "goal", goalId, {
+    note,
+    artifact_uri: artifact,
+    dispatched: false,
+  });
+  return listFillSlots(h, actor, goalId);
 }
 
 function collectReadyContext(h: Harness, goalId: string): ReadyContext {

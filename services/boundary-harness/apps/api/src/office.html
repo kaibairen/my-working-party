@@ -27,9 +27,10 @@
     .goal-status { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
     .fill-board { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
     .fill-slot { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
-    .fill-slot button.human-fill { font: inherit; font-size: 13px; font-weight: 600; border-radius: 999px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 5px 10px; cursor: pointer; }
     .fill-slot .who { color: var(--ink); font-weight: 600; }
     .fill-slot a { color: var(--accent); }
+    .human-fill { font: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 4px 10px; cursor: pointer; }
+    .human-fill:disabled { opacity: .45; cursor: not-allowed; }
     .empty { color: var(--muted); padding: 12px 4px 4px; }
     .empty h3 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--ink); }
     .desks-hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
@@ -37,7 +38,10 @@
     .desk-row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; }
     .desk-avatar { width: 36px; height: 36px; border-radius: 50%; background: #1d2a36; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 650; color: var(--ink); flex: 0 0 auto; }
     .desk-name { color: var(--ink); font-weight: 600; }
-    .desk-meta { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; color: var(--muted); }
+    .desk-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: auto; font-size: 13px; color: var(--muted); }
+    .desk-status-row { display: flex; align-items: center; gap: 8px; }
+    .desk-heartbeat { font-size: 12px; color: var(--muted); }
+    .desk-row[data-fresh="false"] .desk-heartbeat { color: var(--warn); }
     .desk-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7c8d; }
     .desk-row[data-presence="busy"] .desk-dot { background: var(--warn); }
     .desk-row[data-presence="waiting_evidence"] .desk-dot { background: var(--accent); }
@@ -78,7 +82,7 @@
     dialog::backdrop { background: rgba(0,0,0,.45); }
     dialog h3 { margin: 0 0 8px; }
     dialog p, dialog label { color: var(--muted); font-size: 14px; }
-    dialog textarea { width: 100%; margin: 10px 0; }
+    dialog textarea, dialog input { width: 100%; margin: 10px 0; font: inherit; color: var(--ink); background: #0f151c; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
     .close { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; }
   </style>
 </head>
@@ -112,7 +116,7 @@
   </div>
 
   <button type="button" class="backdrop" id="drawer-backdrop" data-testid="inbox-backdrop" aria-label="关闭待办"></button>
-  <aside class="drawer" id="inbox-drawer" data-testid="inbox-drawer" aria-label="待我拍板">
+  <aside class="drawer" id="inbox-drawer" data-testid="inbox-drawer" data-open="false" aria-label="待我拍板">
     <header>
       <h2 id="heading" data-testid="inbox-heading">待办</h2>
       <div>
@@ -131,6 +135,20 @@
       <div id="list" data-testid="gate-list"></div>
     </main>
   </aside>
+  <dialog id="human-fill-dialog" data-testid="human-fill-dialog">
+    <h3>我来填</h3>
+    <p data-testid="human-fill-goal-title" id="human-fill-goal-title"></p>
+    <label>备注
+      <textarea id="human-fill-note" data-testid="human-fill-note" rows="3" maxlength="400" placeholder="人话进度，不是步骤剧本" required></textarea>
+    </label>
+    <label>产物链接（可选）
+      <input id="human-fill-artifact" data-testid="human-fill-artifact" type="text" maxlength="400" placeholder="file:// 或 https://" />
+    </label>
+    <div class="row">
+      <button class="ok" id="human-fill-submit" data-testid="human-fill-submit">交上这份</button>
+      <button class="muted" id="human-fill-cancel" data-testid="human-fill-cancel">取消</button>
+    </div>
+  </dialog>
   <dialog id="pass-dialog">
     <h3>确认通过？</h3>
     <p>通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
@@ -207,24 +225,111 @@
     }
 
     /* —— Office home: goals + fill slots + roster (not a dispatch board) —— */
-    function renderRoster(desks) {
+    const DEFAULT_TTL = 90;
+    let deskPollTimer = 0;
+    let pendingHumanFill = null;
+    function lastSeenAt(d) {
+      const raw = d && (d.last_seen_at || d.last_heartbeat);
+      if (!raw) return null;
+      return Number.isFinite(Date.parse(raw)) ? raw : null;
+    }
+    function isHeartbeatStale(d, nowMs) {
+      const seen = lastSeenAt(d);
+      if (!seen) return false;
+      const ttl = Number(d && d.ttl_seconds);
+      const window = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL;
+      const age = ((nowMs || Date.now()) - Date.parse(seen)) / 1000;
+      return d.heartbeat_fresh === false || !Number.isFinite(age) || age > window;
+    }
+    function paintDeskPresence(d) {
+      const api = (d && (d.presence === "busy" || d.presence === "waiting_evidence" || d.presence === "idle"))
+        ? d.presence
+        : "idle";
+      const stale = isHeartbeatStale(d);
+      const ttl = Number(d && d.ttl_seconds);
+      const ttlSeconds = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL;
+      if (api === "busy" && stale) {
+        return { presence: "idle", status: "空闲", stale: true, fresh: false, last_seen_at: lastSeenAt(d), ttl_seconds: ttlSeconds };
+      }
+      const labels = { busy: "在忙", waiting_evidence: "等证据", idle: "空闲" };
+      return {
+        presence: api,
+        status: labels[api],
+        stale,
+        fresh: Boolean(lastSeenAt(d)) && !stale,
+        last_seen_at: lastSeenAt(d),
+        ttl_seconds: ttlSeconds,
+      };
+    }
+    function heartbeatLabel(painted) {
+      if (!painted.last_seen_at) return "尚无心跳";
+      const rel = relativeTime(painted.last_seen_at);
+      return (painted.stale || !painted.fresh) ? ("心跳过期 · " + rel) : ("心跳新鲜 · " + rel);
+    }
+    function pollIntervalMs(ttlSeconds) {
+      const ttl = Number(ttlSeconds);
+      const window = Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL;
+      return Math.max(5000, Math.min(window, DEFAULT_TTL) * 1000);
+    }
+    function scheduleDeskPoll(ttlSeconds) {
+      if (deskPollTimer) window.clearTimeout(deskPollTimer);
+      deskPollTimer = window.setTimeout(() => { loadOffice(); }, pollIntervalMs(ttlSeconds));
+    }
+    async function fetchFirstOk(paths, init) {
+      let last = { ok: false, body: {} };
+      for (const path of paths) {
+        try {
+          const res = await fetch(path, init);
+          const body = await res.json().catch(() => ({}));
+          if (res.ok) return { ok: true, body };
+          last = { ok: false, body };
+        } catch (_) { /* try next */ }
+      }
+      return last;
+    }
+    function renderRoster(desks, envelopeTtl) {
       const root = $("roster");
       const rows = (desks || []).map((d) => {
+        const painted = paintDeskPresence({ ...d, ttl_seconds: d.ttl_seconds || envelopeTtl || DEFAULT_TTL });
         const name = String(d.name || "同事");
-        const status = String(d.status || "空闲");
-        const presence = String(d.presence || "idle");
         const avatar = String(d.avatar || name.slice(0, 1));
-        return `<li class="desk-row" data-testid="desk-row" data-presence="${esc(presence)}" draggable="false">
+        return `<li class="desk-row" data-testid="desk-row" data-presence="${esc(painted.presence)}" data-fresh="${painted.fresh ? "true" : "false"}" data-ttl="${painted.ttl_seconds}" data-last-seen="${esc(painted.last_seen_at || "")}" draggable="false">
           <span class="desk-avatar" data-testid="desk-avatar" aria-hidden="true">${esc(avatar)}</span>
           <span class="desk-name" data-testid="desk-name">${esc(name)}</span>
           <span class="desk-meta">
-            <span class="desk-dot" data-testid="desk-dot" aria-hidden="true"></span>
-            <span data-testid="desk-status">${esc(status)}</span>
-            ${d.last_heartbeat ? `<span data-testid="desk-heartbeat">${esc(relativeTime(d.last_heartbeat))}</span>` : ""}
+            <span class="desk-status-row">
+              <span class="desk-dot" data-testid="desk-dot" aria-hidden="true"></span>
+              <span data-testid="desk-status">${esc(painted.status)}</span>
+            </span>
+            <span class="desk-heartbeat" data-testid="desk-heartbeat">${esc(heartbeatLabel(painted))}</span>
           </span>
         </li>`;
       }).join("");
       root.innerHTML = `<ul class="desk-list" data-testid="desk-list">${rows}</ul>`;
+    }
+    function normalizeSlot(slot, goal) {
+      if (!slot) {
+        return { empty: true, progress: "等同事填", outcome: goal && goal.intent, filler: null, filler_kind: null, artifact_uri: null };
+      }
+      if (slot.filled_by || slot.stage) {
+        const arts = slot.artifacts || [];
+        const art = arts.find((a) => a.kind === "artifact_uri") || arts[0];
+        const empty = !slot.assignment_id && !slot.filled_by;
+        return {
+          empty,
+          filler: slot.filled_by && slot.filled_by.name,
+          filler_kind: slot.filled_by && slot.filled_by.role,
+          progress: slot.stage_label || slot.stage || (empty ? "等同事填" : "在填"),
+          outcome: slot.outcome || (goal && goal.intent) || null,
+          artifact_uri: (art && (art.uri || art.href)) || null,
+        };
+      }
+      return slot;
+    }
+    function waitingHuman(slot) {
+      if (!slot || slot.empty) return true;
+      const progress = String(slot.progress || "");
+      return progress === "等同事填" && !slot.filler;
     }
     function slotHtml(slot, goal) {
       const who = slot.empty ? "还没人填" : (slot.filler_kind === "human" ? "人填 · " : "Bot 填 · ") + (slot.filler || "同事");
@@ -235,10 +340,10 @@
       const art = slot.artifact_uri
         ? `<a data-testid="slot-artifact" href="${esc(slot.artifact_uri)}">产物</a>`
         : `<span data-testid="slot-artifact">产物未交</span>`;
-      const fillBtn = slot.empty
-        ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-dispatch-policy="${esc(goal.dispatch_policy || "coordinator_only")}" data-intent="${esc(goal.intent || goal.title || "")}">我来填</button>`
+      const fillBtn = waitingHuman(slot)
+        ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-goal-title="${esc(sanitizeCardTitle(goal.title, goal.intent))}">我来填</button>`
         : "";
-      return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}">
+      return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}" draggable="false">
         <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
         <span data-testid="slot-progress">${esc(progress)}</span>
         ${art}
@@ -246,28 +351,30 @@
       </li>`;
     }
     async function loadOffice() {
-      const [goalsRes, desksRes] = await Promise.all([
-        fetch("/v1/goals", { headers: headers() }),
-        fetch("/v1/desks", { headers: headers() }),
+      const [goalsHit, desksHit] = await Promise.all([
+        fetchFirstOk(["/v1/office/goals", "/v1/goals"], { headers: headers() }),
+        fetchFirstOk(["/v1/office/desks/presence", "/v1/desks"], { headers: headers() }),
       ]);
-      const goalsBody = await goalsRes.json();
-      const desksBody = await desksRes.json();
-      renderRoster(desksBody.desks || []);
-      const goals = goalsBody.goals || [];
+      const desksBody = desksHit.body || {};
+      renderRoster(desksBody.desks || [], desksBody.ttl_seconds || desksBody.heartbeat_ttl_seconds);
+      scheduleDeskPoll(desksBody.ttl_seconds || desksBody.heartbeat_ttl_seconds || DEFAULT_TTL);
+      const goals = (goalsHit.body && goalsHit.body.goals) || [];
       $("office-empty").hidden = goals.length > 0;
       if (!goals.length) {
         $("goals").innerHTML = "";
         return;
       }
       const slotSets = await Promise.all(goals.map((g) =>
-        fetch("/v1/goals/" + encodeURIComponent(g.id) + "/assignments", { headers: headers() })
-          .then((r) => r.json())
-          .catch(() => ({ slots: [] })),
+        fetchFirstOk([
+          "/v1/office/goals/" + encodeURIComponent(g.id) + "/fill_slots",
+          "/v1/goals/" + encodeURIComponent(g.id) + "/assignments",
+        ], { headers: headers() }).then((hit) => hit.body || { slots: [] }),
       ));
       $("goals").innerHTML = goals.map((g, i) => {
         const title = sanitizeCardTitle(g.title, g.intent);
-        const status = g.status_line || "等同事开工";
-        const slots = (slotSets[i] && slotSets[i].slots) || [{ empty: true, progress: "等同事填", outcome: g.intent }];
+        const status = g.status_line || g.status_summary || "等同事开工";
+        const raw = (slotSets[i] && slotSets[i].slots) || [];
+        const slots = (raw.length ? raw : [{ empty: true, progress: "等同事填", outcome: g.intent }]).map((s) => normalizeSlot(s, g));
         return `<article class="goal-card" data-testid="goal-card">
           <h3 class="goal-name" data-testid="goal-title">${esc(title)}</h3>
           <p class="goal-status" data-testid="goal-status">${esc(status)}</p>
@@ -298,66 +405,65 @@
       await loadOffice();
       void body;
     };
-    $("goals").addEventListener("click", async (e) => {
+    function openHumanFill(goalId, goalTitle) {
+      pendingHumanFill = { goalId, goalTitle };
+      $("human-fill-goal-title").textContent = goalTitle || "未命名目标";
+      $("human-fill-note").value = "";
+      $("human-fill-artifact").value = "";
+      $("human-fill-dialog").showModal();
+      $("human-fill-note").focus();
+    }
+    $("goals").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-act='human-fill']");
       if (!btn) return;
-      const flash = $("goal-flash");
-      const goalId = btn.dataset.goalId;
-      const policy = btn.dataset.dispatchPolicy || "coordinator_only";
-      const intent = (btn.dataset.intent || "").trim();
-      btn.disabled = true;
-      try {
-        let grantId;
-        if (policy !== "human_allowed") {
-          const grantRes = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/exception-grants", {
-            method: "POST",
-            headers: headers(),
-            body: JSON.stringify({ grantee: ACTOR, scope: "fill_assignment", max_uses: 1, ttl_seconds: 3600 }),
-          });
-          const grantBody = await grantRes.json().catch(() => ({}));
-          if (!grantRes.ok) {
-            flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";
-            flash.className = "flash show bad";
-            return;
-          }
-          grantId = grantBody.id;
-        }
-        const res = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/assignments", {
-          method: "POST",
-          headers: headers(),
-          body: JSON.stringify({
-            pool_id: "pool_noop",
-            brief: {
-              outcome: intent || "人填",
-              constraints: [],
-              evidence_shape: ["summary_md", "artifact_uri"],
-            },
-            exception_grant_id: grantId,
-          }),
-        });
-        if (!res.ok) {
-          flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";
-          flash.className = "flash show bad";
-          return;
-        }
-        flash.textContent = "这格你填了。填充板还是进度，不是派工台。";
-        flash.className = "flash show";
-        await loadOffice();
-      } finally {
-        btn.disabled = false;
-      }
+      openHumanFill(btn.dataset.goalId, btn.dataset.goalTitle);
     });
+    $("human-fill-cancel").onclick = () => {
+      $("human-fill-dialog").close();
+      pendingHumanFill = null;
+    };
+    $("human-fill-submit").onclick = async () => {
+      if (!pendingHumanFill) return;
+      const flash = $("goal-flash");
+      const note = String($("human-fill-note").value || "").trim();
+      const artifact = String($("human-fill-artifact").value || "").trim();
+      if (!note) {
+        flash.textContent = "写一句备注再交。";
+        flash.className = "flash show bad";
+        $("human-fill-note").focus();
+        return;
+      }
+      const res = await fetch("/v1/goals/" + encodeURIComponent(pendingHumanFill.goalId) + "/human-fill", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ note, artifact_uri: artifact || undefined }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        flash.textContent = "没填成。备注用人工写，不要派工或开跑。";
+        flash.className = "flash show bad";
+        void body;
+        return;
+      }
+      $("human-fill-dialog").close();
+      pendingHumanFill = null;
+      flash.textContent = "这格你填了。填充板还是进度，不是派工台。";
+      flash.className = "flash show";
+      await loadOffice();
+    };
 
     /* —— Inbox drawer (same HITL queue as /inbox; not the home wall) —— */
     let filter = "ready";
     let pending = null;
     function openDrawer() {
       $("inbox-drawer").classList.add("open");
+      $("inbox-drawer").dataset.open = "true";
       $("drawer-backdrop").classList.add("open");
       loadInbox();
     }
     function closeDrawer() {
       $("inbox-drawer").classList.remove("open");
+      $("inbox-drawer").dataset.open = "false";
       $("drawer-backdrop").classList.remove("open");
     }
     $("count-link").onclick = openDrawer;
