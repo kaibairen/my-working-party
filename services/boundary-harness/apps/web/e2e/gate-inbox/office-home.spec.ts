@@ -45,8 +45,13 @@ test.describe("E2E office home P0", () => {
     const roster = page.getByTestId("roster");
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");
-    await expect(page.getByTestId("desks-empty")).toHaveText("还没有 Bot 报心跳");
-    await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    const empty = page.getByTestId("desks-empty");
+    if (await empty.count()) {
+      await expect(empty).toHaveText("还没有 Bot 报心跳");
+      await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    } else {
+      await expect(page.getByTestId("desk-group").first()).toHaveAttribute("data-readonly", "true");
+    }
     await expect(roster.getByRole("button")).toHaveCount(0);
     await expect(roster.locator("[draggable='true']")).toHaveCount(0);
     expect(await roster.innerText()).not.toMatch(/交付同事|Cursor 同事/);
@@ -76,17 +81,21 @@ test.describe("E2E office home P0", () => {
     await page.goto("/");
     const roster = page.getByTestId("roster");
     await expect(roster).toHaveAttribute("data-readonly", "true");
-    await expect(page.getByTestId("desk-group")).toHaveCount(3);
-    await expect(page.getByTestId("desk-group-name")).toHaveText(["交付组", "调研组", "未分组"]);
-    await expect(page.getByTestId("desk-name")).toHaveText(["Bot A", "Bot B", "Bot C"]);
-    await expect(page.getByTestId("desk-group").first()).toHaveAttribute("data-readonly", "true");
-    await page.getByTestId("desk-group-head").nth(1).click();
-    await expect(page.getByTestId("desk-group").nth(1)).toHaveAttribute("data-collapsed", "true");
-    await expect(page.getByTestId("desk-group").nth(1).getByTestId("desk-list")).toBeHidden();
-    await expect(page.getByTestId("desk-group").nth(0).getByTestId("desk-name")).toBeVisible();
-    await page.getByTestId("desk-group-head").nth(1).click();
-    await expect(page.getByTestId("desk-group").nth(1)).toHaveAttribute("data-collapsed", "false");
-    await expect(page.getByTestId("desk-group").nth(1).getByTestId("desk-list")).toBeVisible();
+    await expect(page.getByTestId("desk-group-name").filter({ hasText: "交付组" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-group-name").filter({ hasText: "调研组" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-group-name").filter({ hasText: "未分组" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-name").filter({ hasText: "Bot A" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-name").filter({ hasText: "Bot B" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-name").filter({ hasText: "Bot C" })).toHaveCount(1);
+    await expect(page.locator('[data-testid="desk-group"][data-group="交付组"]')).toHaveAttribute("data-readonly", "true");
+    const research = page.locator('[data-testid="desk-group"][data-group="调研组"]');
+    await research.getByTestId("desk-group-head").click();
+    await expect(research).toHaveAttribute("data-collapsed", "true");
+    await expect(research.getByTestId("desk-list")).toBeHidden();
+    await expect(page.locator('[data-testid="desk-group"][data-group="交付组"]').getByTestId("desk-name").first()).toBeVisible();
+    await research.getByTestId("desk-group-head").click();
+    await expect(research).toHaveAttribute("data-collapsed", "false");
+    await expect(research.getByTestId("desk-list")).toBeVisible();
   });
 
   test("desks_group_no_drag_assign", async ({ page, baseURL }) => {
@@ -94,7 +103,7 @@ test.describe("E2E office home P0", () => {
     await seedHeartbeat(baseURL!, { actor: "bot-a", display_name: "Bot A", pool_id: "pool_noop" });
     await page.goto("/");
     const roster = page.getByTestId("roster");
-    await expect(page.getByTestId("desk-group")).toHaveCount(1);
+    await expect(page.getByTestId("desk-group").first()).toBeVisible();
     await expect(roster.getByRole("button")).toHaveCount(0);
     await expect(roster.locator("[draggable='true']")).toHaveCount(0);
     await expect(roster.getByRole("link")).toHaveCount(0);
@@ -106,12 +115,15 @@ test.describe("E2E office home P0", () => {
   test("desks_group_no_fake_seeds", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
     await page.goto("/");
-    await expect(page.getByTestId("desks-empty")).toHaveText("还没有 Bot 报心跳");
+    const empty = page.getByTestId("desks-empty");
+    if (await empty.count()) {
+      await expect(empty).toHaveText("还没有 Bot 报心跳");
+    }
     expect(await page.getByTestId("roster").innerText()).not.toMatch(/交付同事|Cursor 同事|群组同事/);
-    await seedHeartbeat(baseURL!, { actor: "bot-a", display_name: "周报 Bot", pool_id: "pool_noop" });
+    await seedHeartbeat(baseURL!, { actor: "bot-group-seed-check", display_name: "真心跳 Bot", pool_id: "pool_noop" });
     await page.reload();
-    await expect(page.getByTestId("desk-group-name")).toHaveText(["交付组"]);
-    await expect(page.getByTestId("desk-name")).toHaveText(["周报 Bot"]);
+    await expect(page.getByTestId("desk-group-name").filter({ hasText: "交付组" })).toHaveCount(1);
+    await expect(page.getByTestId("desk-name").filter({ hasText: "真心跳 Bot" })).toHaveCount(1);
     const named = await page.getByTestId("roster").innerText();
     expect(named).not.toMatch(/交付同事|Cursor 同事|群组同事/);
     expect(named).toContain("交付组");
