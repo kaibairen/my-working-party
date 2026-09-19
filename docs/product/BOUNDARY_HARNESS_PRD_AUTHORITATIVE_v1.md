@@ -96,7 +96,7 @@
 
 ### MCP M1 最小集
 
-`harness_create_goal` · `harness_fill_assignment` / `harness_propose_assignment` · `harness_dispatch` / `harness_dispatch_assignment` · `harness_attach_evidence` · `harness_get_run` / `harness_get_status` · `harness_list_gates` / `harness_list_ready_gates` · `harness_decide_gate` · `harness_policy_check`  
+`harness_create_goal` · `harness_fill_assignment` / `harness_propose_assignment` · `harness_dispatch` / `harness_dispatch_assignment` · `harness_attach_evidence` · `harness_get_run` / `harness_get_status` · `harness_list_gates` / `harness_list_ready_gates` · `harness_decide_gate` · `harness_policy_check` · `harness_heartbeat`  
 
 不上线：画布写、聊天推进状态、set_steps、cursor_raw_*。  
 可延后：propose 队列、canvas projection。

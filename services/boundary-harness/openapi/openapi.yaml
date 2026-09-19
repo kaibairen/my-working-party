@@ -188,6 +188,60 @@ paths:
           description: unauthorized
         "403":
           description: forbidden
+  /v1/desks:
+    get:
+      summary: Read-only office roster (presence projection, not dispatch)
+      description: |
+        Pool seed desks plus live `POST /v1/agents/heartbeat` rows within TTL
+        (default 90s, advertised as `heartbeat_ttl_seconds`). Expired heartbeats
+        fall back to `source=pool_seed` / `last_heartbeat=null`. Clients MUST NOT
+        POST this path.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  desks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        presence: { type: string, enum: [busy, waiting_evidence, idle] }
+                        status: { type: string }
+                        last_heartbeat: { type: string, nullable: true }
+                        source: { type: string, enum: [pool_seed, heartbeat] }
+                  readonly: { type: boolean }
+                  stub: { type: boolean }
+                  heartbeat_ttl_seconds: { type: integer }
+        "403":
+          description: forbidden
+  /v1/agents/heartbeat:
+    post:
+      summary: Bot presence heartbeat (MCP tool harness_heartbeat)
+      description: |
+        Refresh last_heartbeat. Default TTL 90s (15–3600). Domain is SoT —
+        not unofficial sidebar roster APIs.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string }
+                pool_id: { type: string }
+                ttl_seconds: { type: integer, minimum: 15, maximum: 3600 }
+      responses:
+        "200":
+          description: Heartbeat accepted
+        "403":
+          description: forbidden
+        "422":
+          description: heartbeat_invalid
   /v1/goals:
     get:
       summary: List goals for the office home (human titles + status_line)
@@ -296,12 +350,14 @@ paths:
   /v1/assignments/{id}/dispatch:
     post:
       summary: Create Run; Idempotency-Key; blocked when freeze_active
+      description: Bot completion write. Missing X-Harness-Entry mcp → 403 mcp_entry_required.
       parameters:
         - $ref: "#/components/parameters/Id"
         - name: Idempotency-Key
           in: header
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/HarnessEntry"
       requestBody:
         required: true
         content:
@@ -321,7 +377,7 @@ paths:
         "200":
           description: Idempotent replay
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: forbidden | mcp_entry_required
         "423":
           description: freeze_active — reject new dispatch (incl MCP)
           content:
@@ -344,8 +400,10 @@ paths:
   /v1/runs/{id}/evidence:
     post:
       summary: Unique completion entry. shadow=true is Path B and cannot write Gate.
+      description: Bot completion write. Missing X-Harness-Entry mcp → 403 mcp_entry_required.
       parameters:
         - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/HarnessEntry"
       requestBody:
         required: true
         content:
@@ -356,7 +414,7 @@ paths:
         "201":
           description: Created
         "403":
-          description: forbidden
+          description: forbidden | mcp_entry_required
   /v1/policy/check:
     post:
       summary: Policy/Dial check. Authority whitelist is exactly five keys.
@@ -457,6 +515,14 @@ components:
         type: string
         pattern: "^sha256=[0-9a-f]+$"
       description: HMAC-SHA256 over `{timestamp}.{raw_body}`; secret WEBHOOK_SIGNING_SECRET
+    HarnessEntry:
+      name: X-Harness-Entry
+      in: header
+      required: false
+      schema:
+        type: string
+        enum: [mcp]
+      description: MCP proxy injects `mcp` on Domain writes. Missing on dispatch/evidence → 403 mcp_entry_required.
     HarnessTimestamp:
       name: X-Harness-Timestamp
       in: header

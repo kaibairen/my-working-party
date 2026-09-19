@@ -128,6 +128,22 @@ function applyCompat(sqlite: Database.Database): void {
     if (!cols.includes("action")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN action TEXT");
     if (!cols.includes("closed")) sqlite.exec("ALTER TABLE policy_events ADD COLUMN closed INTEGER NOT NULL DEFAULT 0");
   }
+  if (tableExists(sqlite, "assignments")) {
+    const cols = columnNames(sqlite, "assignments");
+    if (!cols.includes("created_by")) sqlite.exec("ALTER TABLE assignments ADD COLUMN created_by TEXT");
+    if (!cols.includes("filler_kind")) sqlite.exec("ALTER TABLE assignments ADD COLUMN filler_kind TEXT");
+  }
+  if (!tableExists(sqlite, "agent_heartbeats")) {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS agent_heartbeats (
+        actor_id TEXT PRIMARY KEY,
+        display_name TEXT,
+        pool_id TEXT,
+        last_seen_at TEXT NOT NULL,
+        ttl_seconds INTEGER NOT NULL
+      )
+    `);
+  }
   if (tableExists(sqlite, "schema_meta") && columnNames(sqlite, "schema_meta").includes("schema_version") && !columnNames(sqlite, "schema_meta").includes("key")) {
     sqlite.exec(`
       CREATE TABLE schema_meta_v2 (key TEXT PRIMARY KEY, value TEXT NOT NULL);

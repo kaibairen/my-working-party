@@ -21,9 +21,12 @@
 | `harness_list_gates` | `GET /gates?status=ready` | decision_maker \| coordinator | 返回 GateInstance + `ready_result_json.missing[]` |
 | `harness_decide_gate` | `POST /gates/{id}/decide` | **仅 decision_maker** | `pass\|revise\|defer` + version 乐观锁；409 冲突 |
 | `harness_policy_check` | `POST /policy/check` | executor \| service \| adapter | 返回 allow \| redirect_hint \| require_gate \| deny；**advisory 不阻塞** |
+| `harness_heartbeat` | `POST /agents/heartbeat` | coordinator \| executor \| service | 刷新 `last_heartbeat`；`GET /desks` 按 TTL（默认 90s）投影在线 |
 
 文档别名（不注册第二套工具）：  
 `propose_assignment`→`fill_assignment` · `dispatch_assignment`→`dispatch` · `get_status`→`get_run` · `list_ready_gates`→`list_gates`。
+
+HTTP 手套（`:8787/mcp`）只暴露规范名 + `harness_heartbeat`；stdio 仍带别名。完成写（dispatch / attach_evidence）须带 `x-harness-entry: mcp`（代理注入）。契约：[CONTRACT_MCP_ENTRY_DENY_v0](../../services/boundary-harness/docs/m4/CONTRACT_MCP_ENTRY_DENY_v0.md)。Dogfood：[DOGFOOD_GROKBOT_MCP_SOP](../../services/boundary-harness/docs/DOGFOOD_GROKBOT_MCP_SOP.md)。
 
 ---
 

@@ -31,6 +31,7 @@ const jsonHeaders = (role: string, actor: string) => ({
   authorization: `Bearer ${role}:${actor}`,
   "x-harness-role": role,
   "x-harness-actor": actor,
+  "x-harness-entry": "mcp",
 });
 
 export const headers = {

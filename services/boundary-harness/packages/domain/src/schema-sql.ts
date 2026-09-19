@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS assignments (
   risk TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  created_by TEXT,
+  filler_kind TEXT,
   FOREIGN KEY (goal_id) REFERENCES goals(id),
   FOREIGN KEY (pool_id) REFERENCES pools(id)
 );
@@ -186,5 +188,13 @@ CREATE TABLE IF NOT EXISTS outbox (
   payload TEXT NOT NULL,
   created_at TEXT NOT NULL,
   published_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_heartbeats (
+  actor_id TEXT PRIMARY KEY,
+  display_name TEXT,
+  pool_id TEXT,
+  last_seen_at TEXT NOT NULL,
+  ttl_seconds INTEGER NOT NULL
 );
 `;

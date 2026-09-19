@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "note": "HTTP MCP glove at :8787/mcp. Domain completion writes inject x-harness-entry: mcp.",
+  "tools": {
+    "harness_create_goal": {
+      "description": "Create a Goal. coordinator_ref is required.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string" },
+          "intent": { "type": "string" },
+          "mode": { "type": "string", "enum": ["explore", "deliver"] },
+          "coordinator_ref": { "type": "string" },
+          "dispatch_policy": { "type": "string", "enum": ["coordinator_only", "human_allowed"] },
+          "gate_template_id": { "type": ["string", "null"] },
+          "role": { "type": "string" },
+          "actor": { "type": "string" }
+        }
+      }
+    },
+    "harness_fill_assignment": {
+      "description": "Fill an Assignment with BriefV1. budget is stored on assignments.budget_json.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["goal_id", "pool_id", "brief"],
+        "properties": {
+          "goal_id": { "type": "string" },
+          "pool_id": { "type": "string" },
+          "brief": { "type": "object" },
+          "budget": { "type": "object" },
+          "exception_grant_id": { "type": "string" },
+          "role": { "type": "string" },
+          "actor": { "type": "string" }
+        }
+      }
+    },
+    "harness_propose_assignment": {
+      "description": "Propose/fill an Assignment (alias of harness_fill_assignment).",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "harness_dispatch": {
+      "description": "Dispatch an Assignment via adapter. Requires MCP entry on Domain.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assignment_id", "idempotency_key"],
+        "properties": {
+          "assignment_id": { "type": "string" },
+          "idempotency_key": { "type": "string" },
+          "role": { "type": "string" },
+          "actor": { "type": "string" }
+        }
+      }
+    },
+    "harness_dispatch_assignment": {
+      "description": "Alias of harness_dispatch.",
+      "inputSchema": { "type": "object", "additionalProperties": true }
+    },
+    "harness_attach_evidence": {
+      "description": "Attach evidence to a Run. Unique completion entry. Requires MCP entry.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run_id", "items"],
+        "properties": {
+          "run_id": { "type": "string" },
+          "items": { "type": "array" },
+          "role": { "type": "string" },
+          "actor": { "type": "string" }
+        }
+      }
+    },
+    "harness_get_run": {
+      "description": "Get a Run. Advisory only — never a Ready/Gate source.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["run_id"],
+        "properties": { "run_id": { "type": "string" } }
+      }
+    },
+    "harness_get_status": {
+      "description": "Alias of harness_get_run.",
+      "inputSchema": { "type": "object", "additionalProperties": true }
+    },
+    "harness_list_gates": {
+      "description": "List GateInstances, optionally status=ready.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "goal_id": { "type": "string" }
+        }
+      }
+    },
+    "harness_list_ready_gates": {
+      "description": "List ready GateInstances only.",
+      "inputSchema": { "type": "object", "additionalProperties": true }
+    },
+    "harness_decide_gate": {
+      "description": "Decide a ready GateInstance. decision_maker only.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["gate_instance_id", "decision", "version"],
+        "properties": {
+          "gate_instance_id": { "type": "string" },
+          "decision": { "type": "string", "enum": ["pass", "revise", "defer"] },
+          "version": { "type": "number" },
+          "note": { "type": "string" },
+          "structural_change": { "type": "boolean" }
+        }
+      }
+    },
+    "harness_policy_check": {
+      "description": "Policy/Dial check. advisory_hint never blocks.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": { "type": "string" },
+          "track": { "type": "string" },
+          "context": { "type": "object" },
+          "goal_id": { "type": "string" },
+          "assignment_id": { "type": "string" }
+        }
+      }
+    },
+    "harness_heartbeat": {
+      "description": "Report presence. GET /v1/desks reads last_heartbeat within TTL (default 90s).",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "display_name": { "type": "string" },
+          "pool_id": { "type": "string" },
+          "ttl_seconds": { "type": "integer", "minimum": 15, "maximum": 3600 },
+          "role": { "type": "string" },
+          "actor": { "type": "string" }
+        }
+      }
+    }
+  }
+}

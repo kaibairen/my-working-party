@@ -15,6 +15,11 @@ export {
   ROLES,
   DIALS,
   MCP_TOOL_NAMES,
+  MCP_HTTP_TOOL_NAMES,
+  MCP_ENTRY_HEADER,
+  MCP_ENTRY_VALUE,
+  isBotCompletionWritePath,
+  assertMcpEntry,
   parseBearer,
   parseRole,
   requireRole,
@@ -67,7 +72,17 @@ export {
   assertAdminNotFrozen,
   assertNoClientStatusWrite,
 } from "./services";
-export { listDesks, DESK_STATUS, humanDeskName, type DeskPresence } from "./desks";
+export {
+  listDesks,
+  recordHeartbeat,
+  DESK_STATUS,
+  HEARTBEAT_TTL_SECONDS,
+  HEARTBEAT_TTL_MIN,
+  HEARTBEAT_TTL_MAX,
+  humanDeskName,
+  type DeskPresence,
+  type HeartbeatInput,
+} from "./desks";
 export type { FillSlot } from "./services";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
 export { AUTHORITY_ACTIONS, checkPolicy } from "@harness/policy";

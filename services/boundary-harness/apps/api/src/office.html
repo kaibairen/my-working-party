@@ -26,7 +26,8 @@
     .goal-name { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
     .goal-status { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
     .fill-board { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-    .fill-slot { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
+    .fill-slot { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
+    .fill-slot button.human-fill { font: inherit; font-size: 13px; font-weight: 600; border-radius: 999px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 5px 10px; cursor: pointer; }
     .fill-slot .who { color: var(--ink); font-weight: 600; }
     .fill-slot a { color: var(--accent); }
     .empty { color: var(--muted); padding: 12px 4px 4px; }
@@ -91,7 +92,7 @@
   <div class="office" data-testid="office-shell">
     <section class="panel" data-testid="goals-panel">
       <h2>目标</h2>
-      <p class="lede">看见目标、谁在填、工位在忙什么。需要拍板时打开待办。</p>
+      <p class="lede">看见目标、谁在填、工位在忙什么。空槽可以点「我来填」——人也能填，不必等同事。需要拍板时打开待办。</p>
       <p class="flash" id="goal-flash" data-testid="goal-flash"></p>
       <form class="goal-form" id="goal-form" data-testid="new-goal-form">
         <label>名称 <input name="title" data-testid="goal-title-input" placeholder="给同事一个能读的名字" maxlength="80" required oninvalid="this.setCustomValidity('请填一个能读的名字')" oninput="this.setCustomValidity('')" /></label>
@@ -219,12 +220,13 @@
           <span class="desk-meta">
             <span class="desk-dot" data-testid="desk-dot" aria-hidden="true"></span>
             <span data-testid="desk-status">${esc(status)}</span>
+            ${d.last_heartbeat ? `<span data-testid="desk-heartbeat">${esc(relativeTime(d.last_heartbeat))}</span>` : ""}
           </span>
         </li>`;
       }).join("");
       root.innerHTML = `<ul class="desk-list" data-testid="desk-list">${rows}</ul>`;
     }
-    function slotHtml(slot) {
+    function slotHtml(slot, goal) {
       const who = slot.empty ? "还没人填" : (slot.filler_kind === "human" ? "人填 · " : "Bot 填 · ") + (slot.filler || "同事");
       const progress = slot.progress || "等同事填";
       const what = slot.outcome && isHumanTitle(slot.outcome) && !/^(pending|presence|demo|chat) only$/i.test(slot.outcome)
@@ -233,10 +235,14 @@
       const art = slot.artifact_uri
         ? `<a data-testid="slot-artifact" href="${esc(slot.artifact_uri)}">产物</a>`
         : `<span data-testid="slot-artifact">产物未交</span>`;
+      const fillBtn = slot.empty
+        ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-dispatch-policy="${esc(goal.dispatch_policy || "coordinator_only")}" data-intent="${esc(goal.intent || goal.title || "")}">我来填</button>`
+        : "";
       return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}">
         <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
         <span data-testid="slot-progress">${esc(progress)}</span>
         ${art}
+        ${fillBtn}
       </li>`;
     }
     async function loadOffice() {
@@ -265,7 +271,7 @@
         return `<article class="goal-card" data-testid="goal-card">
           <h3 class="goal-name" data-testid="goal-title">${esc(title)}</h3>
           <p class="goal-status" data-testid="goal-status">${esc(status)}</p>
-          <ul class="fill-board" data-testid="fill-board">${slots.map(slotHtml).join("")}</ul>
+          <ul class="fill-board" data-testid="fill-board">${slots.map((s) => slotHtml(s, g)).join("")}</ul>
         </article>`;
       }).join("");
     }
@@ -292,6 +298,55 @@
       await loadOffice();
       void body;
     };
+    $("goals").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-act='human-fill']");
+      if (!btn) return;
+      const flash = $("goal-flash");
+      const goalId = btn.dataset.goalId;
+      const policy = btn.dataset.dispatchPolicy || "coordinator_only";
+      const intent = (btn.dataset.intent || "").trim();
+      btn.disabled = true;
+      try {
+        let grantId;
+        if (policy !== "human_allowed") {
+          const grantRes = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/exception-grants", {
+            method: "POST",
+            headers: headers(),
+            body: JSON.stringify({ grantee: ACTOR, scope: "fill_assignment", max_uses: 1, ttl_seconds: 3600 }),
+          });
+          const grantBody = await grantRes.json().catch(() => ({}));
+          if (!grantRes.ok) {
+            flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";
+            flash.className = "flash show bad";
+            return;
+          }
+          grantId = grantBody.id;
+        }
+        const res = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/assignments", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            pool_id: "pool_noop",
+            brief: {
+              outcome: intent || "人填",
+              constraints: [],
+              evidence_shape: ["summary_md", "artifact_uri"],
+            },
+            exception_grant_id: grantId,
+          }),
+        });
+        if (!res.ok) {
+          flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";
+          flash.className = "flash show bad";
+          return;
+        }
+        flash.textContent = "这格你填了。填充板还是进度，不是派工台。";
+        flash.className = "flash show";
+        await loadOffice();
+      } finally {
+        btn.disabled = false;
+      }
+    });
 
     /* —— Inbox drawer (same HITL queue as /inbox; not the home wall) —— */
     let filter = "ready";

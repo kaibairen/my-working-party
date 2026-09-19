@@ -1,7 +1,9 @@
+import { eq } from "drizzle-orm";
 import type { Actor } from "./rbac";
 import { requireRole } from "./rbac";
 import type { Harness } from "./db";
-import { assignments, gateInstances, pools, runs } from "./schema";
+import { agentHeartbeats, assignments, gateInstances, pools, runs } from "./schema";
+import { HarnessError } from "./errors";
 
 export const DESK_STATUS = {
   busy: "在忙",
@@ -10,6 +12,11 @@ export const DESK_STATUS = {
 } as const;
 
 export type DeskPresence = keyof typeof DESK_STATUS;
+
+/** Default presence TTL. Fresh heartbeat = online; expired rows fall back to pool_seed. */
+export const HEARTBEAT_TTL_SECONDS = 90;
+export const HEARTBEAT_TTL_MIN = 15;
+export const HEARTBEAT_TTL_MAX = 3600;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -44,20 +51,106 @@ function presenceFor(input: {
   return "idle";
 }
 
+function isLiveHeartbeat(lastSeenAt: string, ttlSeconds: number, nowIso: string): boolean {
+  const seen = Date.parse(lastSeenAt);
+  const now = Date.parse(nowIso);
+  if (!Number.isFinite(seen) || !Number.isFinite(now)) return false;
+  return now - seen < ttlSeconds * 1000;
+}
+
+export type HeartbeatInput = {
+  display_name?: string;
+  pool_id?: string | null;
+  ttl_seconds?: number;
+};
+
+/**
+ * Bot self-report. Domain is SoT — not :1340 / agent-data files.
+ * TTL refreshes on each POST (Discord / Redis EXPIRE style).
+ */
+export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput = {}) {
+  requireRole(actor, ["coordinator", "executor", "service"]);
+  const ttlRaw = input.ttl_seconds ?? HEARTBEAT_TTL_SECONDS;
+  if (typeof ttlRaw !== "number" || !Number.isFinite(ttlRaw)) {
+    throw new HarnessError("heartbeat_invalid", "ttl_seconds must be a number", 422);
+  }
+  const ttl = Math.min(HEARTBEAT_TTL_MAX, Math.max(HEARTBEAT_TTL_MIN, Math.floor(ttlRaw)));
+  const poolId = input.pool_id?.trim() || null;
+  if (poolId) {
+    const pool = h.db.select().from(pools).where(eq(pools.id, poolId)).get();
+    if (!pool) throw new HarnessError("not_found", `pool ${poolId} not found`, 404);
+  }
+  const displayName = input.display_name?.trim() || actor.id;
+  const ts = h.now();
+  const existing = h.db.select().from(agentHeartbeats).where(eq(agentHeartbeats.actorId, actor.id)).get();
+  if (existing) {
+    h.db
+      .update(agentHeartbeats)
+      .set({
+        displayName,
+        poolId,
+        lastSeenAt: ts,
+        ttlSeconds: ttl,
+      })
+      .where(eq(agentHeartbeats.actorId, actor.id))
+      .run();
+  } else {
+    h.db.insert(agentHeartbeats).values({
+      actorId: actor.id,
+      displayName,
+      poolId,
+      lastSeenAt: ts,
+      ttlSeconds: ttl,
+    }).run();
+  }
+  return {
+    actor_id: actor.id,
+    display_name: displayName,
+    pool_id: poolId,
+    last_heartbeat: ts,
+    ttl_seconds: ttl,
+    expires_at: new Date(Date.parse(ts) + ttl * 1000).toISOString(),
+  };
+}
+
+function deskRow(input: {
+  id: string;
+  name: string;
+  presence: DeskPresence;
+  last_heartbeat: string | null;
+  source: "pool_seed" | "heartbeat";
+  ttl_seconds: number | null;
+}) {
+  return {
+    id: input.id,
+    name: input.name,
+    avatar: Array.from(input.name)[0] ?? "同",
+    presence: input.presence,
+    status: DESK_STATUS[input.presence],
+    last_heartbeat: input.last_heartbeat,
+    source: input.source,
+    ttl_seconds: input.ttl_seconds,
+  };
+}
+
 /**
  * Read-only office roster. Never a dispatch / assign surface.
  *
- * DEMO/STUB: default `pool_noop` / `pool_cursor` rows are the seeded presence
- * board until real bot heartbeats exist. Presence is derived from
- * assignment / run / gate rows, not a live heartbeat table.
+ * Pool seed rows stay as fallback. Live `agent_heartbeats` within TTL overlay
+ * `last_heartbeat` / `source=heartbeat` and may add extra agent desks.
+ * Expired heartbeats do not count as presence.
  */
 export function listDesks(h: Harness, actor: Actor) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
+  const now = h.now();
   const poolRows = h.db.select().from(pools).all();
   const assignmentRows = h.db.select().from(assignments).all();
   const runRows = h.db.select().from(runs).all();
   const gateRows = h.db.select().from(gateInstances).all();
+  const beats = h.db.select().from(agentHeartbeats).all();
+  const live = beats.filter((b) => isLiveHeartbeat(b.lastSeenAt, b.ttlSeconds, now));
 
+  const usedBeatActors = new Set<string>();
   const desks = poolRows.map((pool) => {
     const asgs = assignmentRows.filter((a) => a.poolId === pool.id);
     const asgIds = new Set(asgs.map((a) => a.id));
@@ -67,17 +160,38 @@ export function listDesks(h: Harness, actor: Actor) {
       gateStatuses: gateRows.filter((g) => g.assignmentId && asgIds.has(g.assignmentId)).map((g) => g.status),
     });
     const name = humanDeskName(pool.id, pool.kind);
-    return {
+    const beat = live.find((b) => b.poolId === pool.id);
+    if (beat) usedBeatActors.add(beat.actorId);
+    return deskRow({
       id: pool.id,
       name,
-      avatar: Array.from(name)[0] ?? "同",
       presence,
-      status: DESK_STATUS[presence],
-      // DEMO/STUB: no heartbeat timestamp until bots report presence.
-      last_heartbeat: null as string | null,
-      source: "pool_seed" as const,
-    };
+      last_heartbeat: beat?.lastSeenAt ?? null,
+      source: beat ? "heartbeat" : "pool_seed",
+      ttl_seconds: beat?.ttlSeconds ?? null,
+    });
   });
 
-  return { desks, readonly: true as const, hitl: "待我拍板" as const, stub: true as const };
+  for (const beat of live) {
+    if (usedBeatActors.has(beat.actorId)) continue;
+    const name = beat.displayName?.trim() || beat.actorId;
+    desks.push(
+      deskRow({
+        id: `agent:${beat.actorId}`,
+        name,
+        presence: "idle",
+        last_heartbeat: beat.lastSeenAt,
+        source: "heartbeat",
+        ttl_seconds: beat.ttlSeconds,
+      }),
+    );
+  }
+
+  return {
+    desks,
+    readonly: true as const,
+    hitl: "待我拍板" as const,
+    stub: live.length === 0,
+    heartbeat_ttl_seconds: HEARTBEAT_TTL_SECONDS,
+  };
 }
