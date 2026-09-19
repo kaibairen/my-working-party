@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, type Harness } from "./db";
-import { createGoal, fillAssignment, listFillSlots, listGoals } from "./services";
+import { createGoal, fillAssignment, humanFillSlot, listFillSlots, listGoals } from "./services";
+import { listDesks } from "./desks";
+import { runs } from "./schema";
 import type { Actor } from "./rbac";
 
 const dm: Actor = { id: "you", role: "decision_maker" };
@@ -82,5 +84,25 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].filler_kind).toBe("human");
     expect(slots[0].filler).toBe("你");
     expect(slots[0].empty).toBe(false);
+  });
+
+  it("lets a decision_maker human-fill an empty slot without dispatch", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, dm, { title: "周报交付验收", intent: "写一份能读的周报" });
+    const { slots } = humanFillSlot(harness, dm, goal.id, {
+      note: "我先写大纲",
+      artifact_uri: "file://outline.md",
+    });
+    expect(slots[0].empty).toBe(false);
+    expect(slots[0].filler_kind).toBe("human");
+    expect(slots[0].filler).toBe("你");
+    expect(slots[0].outcome).toBe("我先写大纲");
+    expect(slots[0].artifact_uri).toBe("file://outline.md");
+    expect(slots[0].progress).toBe("已交产物");
+    expect(listGoals(harness, dm)[0].status_line).toBe("你在填");
+    expect(JSON.stringify(slots)).not.toMatch(/指派给|开始跑|dispatch/);
+    const roster = listDesks(harness, dm);
+    expect(roster.desks.map((d) => d.name).sort()).toEqual(["Cursor 同事", "交付同事"]);
+    expect(harness.db.select().from(runs).all()).toHaveLength(0);
   });
 });

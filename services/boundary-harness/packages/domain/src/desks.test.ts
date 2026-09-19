@@ -22,9 +22,12 @@ describe("listDesks presence projection", () => {
     expect(desks.map((d) => d.name).sort()).toEqual(["Cursor 同事", "交付同事"]);
     expect(desks.every((d) => d.status === "空闲")).toBe(true);
     expect(desks.every((d) => d.presence === "idle")).toBe(true);
+    expect(desks.every((d) => d.last_seen_at === null)).toBe(true);
+    expect(desks.every((d) => d.heartbeat_fresh === false)).toBe(true);
     expect(desks.find((d) => d.name === "交付同事")?.avatar).toBe("交");
     expect(listDesks(harness, dm).stub).toBe(true);
     expect(listDesks(harness, dm).heartbeat_ttl_seconds).toBe(HEARTBEAT_TTL_SECONDS);
+    expect(listDesks(harness, dm).ttl_seconds).toBe(HEARTBEAT_TTL_SECONDS);
     expect(desks.every((d) => d.last_heartbeat === null && d.source === "pool_seed")).toBe(true);
   });
 
@@ -38,11 +41,15 @@ describe("listDesks presence projection", () => {
     const noop = live.desks.find((d) => d.id === "pool_noop");
     expect(noop?.source).toBe("heartbeat");
     expect(noop?.last_heartbeat).toBe("2026-09-19T05:00:00.000Z");
+    expect(noop?.last_seen_at).toBe("2026-09-19T05:00:00.000Z");
+    expect(noop?.last_heartbeat_at).toBe("2026-09-19T05:00:00.000Z");
+    expect(noop?.heartbeat_fresh).toBe(true);
     nowMs += 91_000;
     const expired = listDesks(harness, dm);
     expect(expired.stub).toBe(true);
     expect(expired.desks.find((d) => d.id === "pool_noop")?.source).toBe("pool_seed");
     expect(expired.desks.find((d) => d.id === "pool_noop")?.last_heartbeat).toBeNull();
+    expect(expired.desks.find((d) => d.id === "pool_noop")?.heartbeat_fresh).toBe(false);
   });
 
   it("marks an accepted assignment as 在忙, not a dispatch UI", () => {

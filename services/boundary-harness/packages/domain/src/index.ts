@@ -51,6 +51,7 @@ export {
   getAssignment,
   getGoal,
   getRun,
+  humanFillSlot,
   listFillSlots,
   listGoals,
   health,

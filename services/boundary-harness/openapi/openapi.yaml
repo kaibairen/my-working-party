@@ -214,10 +214,15 @@ paths:
                         presence: { type: string, enum: [busy, waiting_evidence, idle] }
                         status: { type: string }
                         last_heartbeat: { type: string, nullable: true }
+                        last_seen_at: { type: string, nullable: true }
+                        last_heartbeat_at: { type: string, nullable: true }
+                        heartbeat_fresh: { type: boolean }
                         source: { type: string, enum: [pool_seed, heartbeat] }
+                        ttl_seconds: { type: integer }
                   readonly: { type: boolean }
                   stub: { type: boolean }
                   heartbeat_ttl_seconds: { type: integer }
+                  ttl_seconds: { type: integer }
         "403":
           description: forbidden
   /v1/agents/heartbeat:
@@ -329,6 +334,39 @@ paths:
           description: RBAC / human fan-out without exception
         "422":
           description: brief_forbidden_field
+  /v1/goals/{id}/human-fill:
+    post:
+      summary: Human-fill an empty office slot (note + optional artifact). Not assign/dispatch.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              additionalProperties: false
+              properties:
+                note:
+                  type: string
+                artifact_uri:
+                  type: string
+      responses:
+        "201":
+          description: Fill-board projection after human fill
+        "403":
+          description: forbidden
+        "422":
+          description: note_required
+  /v1/office/desks/presence:
+    get:
+      summary: Read-only desk presence with TTL fields (same projection as GET /v1/desks)
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: forbidden
   /v1/goals/{id}/exception-grants:
     post:
       summary: Decision-maker scoped human fan-out grant

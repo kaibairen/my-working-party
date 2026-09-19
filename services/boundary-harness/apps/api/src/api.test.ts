@@ -309,7 +309,8 @@ describe("domain API", () => {
     expect(officeHtml).toContain("AI 办公室");
     expect(officeHtml).toContain("新建目标");
     expect(officeHtml).toContain("我来填");
-    expect(officeHtml).toContain("exception-grants");
+    expect(officeHtml).toContain("human-fill");
+    expect(officeHtml).not.toContain("开始跑");
     expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
     expect(officeHtml).toContain("工位心跳");
     expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
@@ -414,5 +415,54 @@ describe("domain API", () => {
     expect(slots.body.readonly).toBe(true);
     expect(slots.body.slots[0].progress).toBe("等同事填");
     expect(JSON.stringify(slots.body)).not.toMatch(/指派给|开始跑|dispatch/);
+  });
+
+  it("exposes desk TTL fields on office presence and desks", async () => {
+    const { app } = setup();
+    for (const path of ["/v1/office/desks/presence", "/v1/desks"]) {
+      const listed = await json(app, path, { headers: headers("decision_maker", "you") });
+      expect(listed.res.status).toBe(200);
+      expect(listed.body.readonly).toBe(true);
+      expect(listed.body.ttl_seconds).toBe(90);
+      expect(listed.body.desks[0]).toEqual(
+        expect.objectContaining({
+          presence: expect.stringMatching(/^(busy|waiting_evidence|idle)$/),
+          last_seen_at: null,
+          last_heartbeat_at: null,
+          heartbeat_fresh: false,
+          ttl_seconds: 90,
+        }),
+      );
+    }
+  });
+
+  it("accepts decision_maker human-fill without assign or dispatch", async () => {
+    const { app } = setup();
+    const created = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ title: "周报交付验收", intent: "写一份能读的周报" }),
+    });
+    const filled = await json(app, `/v1/goals/${created.body.id}/human-fill`, {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ note: "我先写大纲", artifact_uri: "file://outline.md" }),
+    });
+    expect(filled.res.status).toBe(201);
+    expect(filled.body.slots[0].filler_kind).toBe("human");
+    expect(filled.body.slots[0].filler).toBe("你");
+    expect(filled.body.slots[0].outcome).toBe("我先写大纲");
+    expect(filled.body.slots[0].artifact_uri).toBe("file://outline.md");
+    expect(JSON.stringify(filled.body)).not.toMatch(/指派给|开始跑|dispatch/);
+
+    const assign = await json(app, `/v1/goals/${created.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "nope", constraints: [], evidence_shape: ["summary_md"] },
+      }),
+    });
+    expect(assign.res.status).toBe(403);
   });
 });

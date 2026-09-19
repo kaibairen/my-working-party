@@ -128,8 +128,11 @@ function deskRow(input: {
     presence: input.presence,
     status: DESK_STATUS[input.presence],
     last_heartbeat: input.last_heartbeat,
+    last_seen_at: input.last_heartbeat,
+    last_heartbeat_at: input.last_heartbeat,
+    heartbeat_fresh: input.source === "heartbeat" && Boolean(input.last_heartbeat),
     source: input.source,
-    ttl_seconds: input.ttl_seconds,
+    ttl_seconds: input.ttl_seconds ?? HEARTBEAT_TTL_SECONDS,
   };
 }
 
@@ -168,7 +171,7 @@ export function listDesks(h: Harness, actor: Actor) {
       presence,
       last_heartbeat: beat?.lastSeenAt ?? null,
       source: beat ? "heartbeat" : "pool_seed",
-      ttl_seconds: beat?.ttlSeconds ?? null,
+      ttl_seconds: beat?.ttlSeconds ?? HEARTBEAT_TTL_SECONDS,
     });
   });
 
@@ -193,5 +196,6 @@ export function listDesks(h: Harness, actor: Actor) {
     hitl: "待我拍板" as const,
     stub: live.length === 0,
     heartbeat_ttl_seconds: HEARTBEAT_TTL_SECONDS,
+    ttl_seconds: HEARTBEAT_TTL_SECONDS,
   };
 }
