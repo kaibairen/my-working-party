@@ -1,8 +1,13 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { HEARTBEAT_TTL_SECONDS, closeHarness, createHarness, type Harness } from "@harness/domain";
 import { callTool, listTools } from "../../../mcp-server/src/index";
 import { createMcpHttpApp } from "../../../mcp-server/src/http-proxy";
 import { createApp } from "../../src/app";
+
+const sopPath = join(dirname(fileURLToPath(import.meta.url)), "../../../../docs/DOGFOOD_GROKBOT_MCP_SOP.md");
 
 const mcpHeaders = (role: string, actor = role) => ({
   "content-type": "application/json",
@@ -74,15 +79,28 @@ describe("P0 linkage contracts", () => {
 
   it("completion_writes_missing_mcp_entry_403", async () => {
     const { app } = setup();
-    const { assignment } = await seedDeliverRun(app);
-    const denied = await json(app, `/v1/assignments/${assignment.id}/dispatch`, {
+    const { assignment, run } = await seedDeliverRun(app);
+    const deniedDispatch = await json(app, `/v1/assignments/${assignment.id}/dispatch`, {
       method: "POST",
       headers: roleOnly("coordinator", "c1"),
       body: JSON.stringify({ idempotency_key: "bypass-dispatch" }),
     });
-    expect(denied.res.status).toBe(403);
-    expect(errCode(denied.body)).toBe("mcp_entry_required");
-    expect(denied.body.details?.path ?? denied.body.error?.details?.path).toBe("/v1/assignments/{id}/dispatch");
+    expect(deniedDispatch.res.status).toBe(403);
+    expect(errCode(deniedDispatch.body)).toBe("mcp_entry_required");
+    expect(deniedDispatch.body.details?.path ?? deniedDispatch.body.error?.details?.path).toBe(
+      "/v1/assignments/{id}/dispatch",
+    );
+
+    const deniedEvidence = await json(app, `/v1/runs/${run.id}/evidence`, {
+      method: "POST",
+      headers: roleOnly("executor", "e1"),
+      body: JSON.stringify({ items: [{ kind: "summary_md", uri: "file://s.md" }] }),
+    });
+    expect(deniedEvidence.res.status).toBe(403);
+    expect(errCode(deniedEvidence.body)).toBe("mcp_entry_required");
+    expect(deniedEvidence.body.details?.path ?? deniedEvidence.body.error?.details?.path).toBe(
+      "/v1/runs/{id}/evidence",
+    );
   });
 
   it("mcp_only_completion_path", async () => {
@@ -275,19 +293,39 @@ describe("P0 linkage contracts", () => {
     expect(grantedSlots.body.slots[0].filler_kind).toBe("human");
   });
 
-  it("MCP HTTP proxy injects entry and lists heartbeat", async () => {
+  it("dogfood_8787_mcp_sop", async () => {
+    const sop = readFileSync(sopPath, "utf8");
+    expect(sop).toContain("http://127.0.0.1:8787/mcp");
+    expect(sop).toContain(":8080");
+    expect(sop).toContain("禁止");
+    expect(sop).toContain("CURSOR_API_KEY");
+    expect(sop).toMatch(/Bearer/);
+
     const names = listTools({ http: true }).map((t) => t.name);
+    expect(names.every((n) => n.startsWith("harness_"))).toBe(true);
     expect(names).toContain("harness_heartbeat");
-    expect(names).toContain("harness_dispatch");
     const mcpApp = createMcpHttpApp();
+    const healthz = await mcpApp.request("/healthz");
+    const hz = (await healthz.json()) as { ok: boolean; api: string };
+    expect(hz.ok).toBe(true);
+    expect(hz.api).toContain("8080");
     const listed = await mcpApp.request("/mcp", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
     });
     const body = (await listed.json()) as { result: { tools: Array<{ name: string }> } };
-    expect(body.result.tools.map((t) => t.name)).toContain("harness_heartbeat");
-    const healthz = await mcpApp.request("/healthz");
-    expect(((await healthz.json()) as { ok: boolean }).ok).toBe(true);
+    expect(body.result.tools.map((t) => t.name)).toEqual(names);
+    const raw = await mcpApp.request("/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "cursor_raw_launch", arguments: {} },
+      }),
+    });
+    expect(((await raw.json()) as { error: { message: string } }).error.message).toBe("forbidden_tool");
   });
 });
