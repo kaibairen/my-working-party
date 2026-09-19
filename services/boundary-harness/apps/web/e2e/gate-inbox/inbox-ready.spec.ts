@@ -30,7 +30,8 @@ test.describe("E2E ready list", () => {
 
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
     await expect(page.getByTestId("gate-id")).toHaveText(ready.gate!.id);
-    await expect(page.getByTestId("gate-status")).toHaveText("ready");
+    await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
+    await expect(page.getByTestId("gate-status")).toHaveAttribute("data-status", "ready");
     await expect(page.locator(`[data-testid="gate-card"][data-id="${pending.gate!.id}"]`)).toHaveCount(0);
     await page.screenshot({ path: join(shotDir, "e2e01_inbox_lists_only_ready.png"), fullPage: true });
   });
@@ -40,7 +41,7 @@ test.describe("E2E ready list", () => {
     await seedDeliverPending(baseURL!);
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-empty")).toBeVisible();
-    await expect(page.getByTestId("inbox-empty")).toHaveText(/暂无待办|No ready gates/i);
+    await expect(page.getByTestId("inbox-empty")).toHaveText("此刻没有待办。安静是正常的。");
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(CANVAS_CTA_RE);

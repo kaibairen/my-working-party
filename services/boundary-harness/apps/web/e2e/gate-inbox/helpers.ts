@@ -79,14 +79,14 @@ export async function drainReadyGates(baseURL: string) {
   }
 }
 
-export async function seedDeliverPending(baseURL: string) {
+export async function seedDeliverPending(baseURL: string, title?: string) {
   const goal = await requireOk(
     "create goal",
     await api<{ id: string }>(baseURL, "/v1/goals", {
       method: "POST",
       headers: headers.coordinator,
       body: JSON.stringify({
-        title: `e2e pending ${uniq("g")}`,
+        title: title ?? `e2e pending ${uniq("g")}`,
         mode: "deliver",
         coordinator_ref: "coord-1",
       }),
@@ -123,8 +123,8 @@ export async function seedDeliverPending(baseURL: string) {
   return { goal, assignment: asg, run, gate };
 }
 
-export async function seedDeliverReady(baseURL: string) {
-  const seeded = await seedDeliverPending(baseURL);
+export async function seedDeliverReady(baseURL: string, title?: string) {
+  const seeded = await seedDeliverPending(baseURL, title);
   await requireOk(
     "attach evidence",
     await api(baseURL, `/v1/runs/${seeded.run.id}/evidence`, {
@@ -227,6 +227,11 @@ export async function seedExploreNoGate(baseURL: string) {
     }),
   );
   return { goal, assignment: asg, run };
+}
+
+export async function clickPass(page: Page) {
+  await page.getByTestId("decide-pass").click();
+  await page.getByTestId("decide-pass-confirm").click();
 }
 
 export const VERBAL_DONE_RE =

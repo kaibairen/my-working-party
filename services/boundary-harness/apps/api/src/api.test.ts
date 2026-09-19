@@ -302,19 +302,26 @@ describe("domain API", () => {
 
   it("serves inbox and ops pages", async () => {
     const { app } = setup();
+    const home = await app.request("/");
+    expect(home.status).toBe(200);
+    expect(await home.text()).toContain("AI 办公室");
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);
     const html = await inbox.text();
+    expect(html).toContain("AI 办公室");
+    expect(html).toContain("待我拍板");
     expect(html).toContain("待办");
     expect(html).not.toContain("M2-preview");
-    expect(html).not.toContain("Health / OpenAPI");
+    expect(html).not.toContain('href="/ops">Health');
+    expect(html).not.toContain("href=\"/openapi.yaml\"");
     expect(html).toContain('data-testid="gate-card"');
     expect(html).toContain('data-testid="missing-item"');
     expect(html).toContain('data-testid="decide-pass"');
     expect(html).toContain('data-testid="decide-revise"');
     expect(html).toContain('data-testid="decide-defer"');
     expect(html).toContain("/v1/gates?status=ready");
-    expect(html).toContain("version, structural_change: false");
+    expect(html).toContain("decision: act, version");
+    expect(html).toContain("structural_change:");
     expect(html).not.toContain("标记完成");
     expect(html).not.toContain("mark done");
     expect(html).not.toContain("去画布看进度");

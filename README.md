@@ -36,17 +36,17 @@ Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`)
 | `services/boundary-harness/packages/*` | domain, policy, ready, adapters-noop, adapters-cursor |
 | `services/boundary-harness/docker-compose.yml` | `docker compose up api` |
 
-**Inbox URL (decision-maker default):** http://127.0.0.1:8080/inbox — `/` redirects here. This shell is **待办 only** (ready gates). Health, OpenAPI, outbox, and role-impersonation are **not** in the top bar.
+**Decision-maker URL:** http://127.0.0.1:8080/ (`/` and `/inbox` are the same **AI 办公室**). The only HITL queue is **待我拍板**. Health, OpenAPI, outbox, and role-impersonation are **not** in the top bar.
 
 ### Decision-maker vs ops / dev
 
 | Mode | How to open | What you see |
 |------|-------------|--------------|
-| **Decision-maker (default)** | `/` or `/inbox` | Inbox only. No Health / OpenAPI / outbox / role switch. |
+| **Decision-maker (default)** | `/` or `/inbox` | AI 办公室 + 待我拍板. Top bar: `待办` / `待办 · n` and weak `工位一览`. No Health / OpenAPI / outbox / role switch. |
 | **Ops** | `/ops` (direct URL; not linked from the DM shell) | Health, OpenAPI prefix, outbox / delivery. |
-| **Dev** | `/inbox?dev=1` | Same inbox, plus role-impersonation and a 运维 link to `/ops`. |
+| **Dev** | `/inbox?dev=1` | Same office, plus role-impersonation and a 运维 link to `/ops`. |
 
-Rule: ops surfaces are only reachable via **`/ops` or `?dev=1`**. Domain API contracts (`GET /v1/gates?status=ready`, `POST /v1/gates/{id}/decide` with `version`) are unchanged.
+Rule: ops surfaces are only reachable via **`/ops` or `?dev=1`**. 「决策抽屉」=「待我拍板」= one queue (no second empty state). Domain API contracts (`GET /v1/gates?status=ready`, `POST /v1/gates/{id}/decide` with `version`) are unchanged. Advisory hints never enter the queue.
 
 M1: CursorAdapter (fixture / `CURSOR_API_STUB` / live), Dial freeze → **423** `dial_frozen`, BriefV1 422 on HTTP+MCP, dual external ids, FINISHED≠IDLE. MCP aliases from PRD §8; no `cursor_raw_*` / `set_steps`.
 M3: outbox exactly-once attempts + HMAC-SHA256 outbound (`X-Harness-Signature` / `X-Harness-Timestamp`). SSE `/v1/events` replays from `Last-Event-ID`.

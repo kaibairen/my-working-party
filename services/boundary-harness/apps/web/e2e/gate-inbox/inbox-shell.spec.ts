@@ -1,13 +1,17 @@
-import { join } from "node:path";
-import { drainReadyGates, expect, seedDeliverReady, shotDir, test } from "./helpers";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { clickPass, drainReadyGates, expect, seedDeliverReady, shotDir, test } from "./helpers";
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const evidenceDir = join(dirname(fileURLToPath(import.meta.url)), "../../evidence");
+mkdirSync(evidenceDir, { recursive: true });
 
 test.describe("Decision-maker shell", () => {
   test("decision_maker_shell_has_no_openapi_link", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveURL(/\/inbox\/?$/);
-    await expect(page.locator("h1")).toHaveText("待办");
+    await expect(page.locator("h1")).toHaveText("AI 办公室");
+    await expect(page.getByTestId("board-title")).toContainText("待我拍板");
     await expect(page.getByTestId("dm-topbar")).toBeVisible();
     await expect(page.getByRole("link", { name: /openapi|health/i })).toHaveCount(0);
     await expect(page.locator("a[href*='openapi']")).toHaveCount(0);
@@ -15,6 +19,7 @@ test.describe("Decision-maker shell", () => {
     const top = await page.getByTestId("dm-topbar").innerText();
     expect(top).not.toMatch(/OpenAPI/i);
     expect(top).not.toMatch(/Health/);
+    expect(top).not.toMatch(/decision_maker|Reload ready/i);
     await page.screenshot({ path: join(shotDir, "dm_shell_no_openapi_link.png"), fullPage: true });
   });
 
@@ -53,6 +58,27 @@ test.describe("Decision-maker shell", () => {
     await page.getByTestId("ops-link").click();
     await expect(page).toHaveURL(/\/ops/);
     await expect(page.getByTestId("outbox-table")).toBeVisible();
-    await page.screenshot({ path: join(shotDir, "ops_routes_forbidden_for_dm.png"), fullPage: true });
+  });
+
+  test("office_empty_and_pass_shots", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await page.goto("/");
+    await expect(page.getByTestId("inbox-empty")).toBeVisible();
+    await page.screenshot({ path: join(evidenceDir, "office_empty_quiet.png"), fullPage: true });
+    await page.screenshot({ path: join(shotDir, "office_empty_quiet.png"), fullPage: true });
+
+    await seedDeliverReady(baseURL!, "本周交付包");
+    await page.goto("/inbox");
+    await expect(page.getByTestId("gate-title")).toBeVisible();
+    await expect(page.getByTestId("gate-title")).not.toHaveText(UUID_RE);
+    await page.screenshot({ path: join(evidenceDir, "inbox_one_card_human.png"), fullPage: true });
+    await page.screenshot({ path: join(shotDir, "inbox_one_card_human.png"), fullPage: true });
+
+    await clickPass(page);
+    await expect(page.getByTestId("inbox-flash")).toContainText("已通过。");
+    await expect(page.getByTestId("inbox-flash")).not.toHaveText(UUID_RE);
+    await expect(page.getByTestId("inbox-empty")).toBeVisible();
+    await page.screenshot({ path: join(evidenceDir, "inbox_after_pass_quiet.png"), fullPage: true });
+    await page.screenshot({ path: join(shotDir, "inbox_after_pass_quiet.png"), fullPage: true });
   });
 });

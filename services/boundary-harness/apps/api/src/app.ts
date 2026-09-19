@@ -104,7 +104,7 @@ export function createApp(harness: Harness) {
     return c.json({ error: { code: "internal", message: "internal error" } }, 500);
   });
 
-  app.get("/", (c) => c.redirect("/inbox"));
+  app.get("/", (c) => c.html(inboxHtml));
   app.get("/inbox", (c) => c.html(inboxHtml));
   app.get("/ops", (c) => c.html(opsHtml));
   app.get("/health", (c) => c.json(health(c.get("harness"))));

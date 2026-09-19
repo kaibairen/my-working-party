@@ -20,8 +20,11 @@ test.describe("E2E missing[]", () => {
     await page.goto("/inbox");
     const items = page.getByTestId("missing-item");
     await expect(items).toHaveCount(missing.length);
+    await expect(page.getByTestId("missing-block")).toHaveText(/还差/);
+    await expect(page.getByTestId("missing-block")).not.toContainText("还差：");
     for (const entry of missing) {
-      await expect(page.getByTestId("missing-item").filter({ hasText: entry })).toHaveCount(1);
+      await expect(page.getByTestId("missing-code").filter({ hasText: entry })).toHaveCount(1);
+      await expect(page.getByTestId("missing-item").filter({ hasText: entry })).toHaveCount(0);
     }
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(/^\s*请批准\s*$/m);
@@ -40,8 +43,9 @@ test.describe("E2E missing[]", () => {
 
     await page.goto("/inbox");
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
-    await expect(page.getByTestId("missing-empty")).toBeVisible();
     await expect(page.getByTestId("missing-item")).toHaveCount(0);
+    await expect(page.getByTestId("missing-empty")).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("missing[]");
     await expect(page.getByTestId("decide-pass")).toBeEnabled();
     await expect(page.getByTestId("decide-revise")).toBeEnabled();
     await expect(page.getByTestId("decide-defer")).toBeEnabled();
