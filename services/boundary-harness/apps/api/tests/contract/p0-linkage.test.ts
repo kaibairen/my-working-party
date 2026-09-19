@@ -72,7 +72,7 @@ describe("P0 linkage contracts", () => {
     return { goal: goal.body, assignment: asg.body, run: run.body };
   }
 
-  it("mcp_entry_required — bot dispatch without x-harness-entry is 403", async () => {
+  it("completion_writes_missing_mcp_entry_403", async () => {
     const { app } = setup();
     const { assignment } = await seedDeliverRun(app);
     const denied = await json(app, `/v1/assignments/${assignment.id}/dispatch`, {
@@ -155,7 +155,7 @@ describe("P0 linkage contracts", () => {
     expect(listTools({ http: true }).some((t) => t.name.includes("cursor_raw"))).toBe(false);
   });
 
-  it("heartbeat desks prefer TTL presence over pool_seed stub", async () => {
+  it("harness_heartbeat_desks_ttl_readonly", async () => {
     let nowMs = Date.parse("2026-09-19T04:00:00.000Z");
     const { app } = setup(() => new Date(nowMs).toISOString());
 

@@ -33,4 +33,11 @@ describe("MCP M1 surface", () => {
     await expect(callTool("cursor_raw_launch", {}, {})).rejects.toThrow(/not registered/);
     await expect(callTool("set_steps", {}, {})).rejects.toThrow(/not registered/);
   });
+
+  it("mcp_two_knives_no_raw_cursor", () => {
+    const names = listTools({ http: true }).map((t) => t.name);
+    expect(names.every((n) => n.startsWith("harness_"))).toBe(true);
+    expect(names.some((n) => n.includes("cursor_raw"))).toBe(false);
+  });
 });
+
