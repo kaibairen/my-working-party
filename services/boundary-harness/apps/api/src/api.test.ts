@@ -307,13 +307,14 @@ describe("domain API", () => {
     const officeHtml = await office.text();
     expect(officeHtml).toContain("AI 办公室");
     expect(officeHtml).toContain("查看待我拍板");
-    expect(officeHtml).toContain("此刻没有需要你拍板的事");
+    expect(officeHtml).toContain("此刻没有待办。安静是正常的。");
     expect(officeHtml).not.toContain("OpenAPI");
     expect(officeHtml).not.toContain('href="/ops"');
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);
     const html = await inbox.text();
-    expect(html).toContain("待我拍板");
+    expect(html).toContain("待办");
+    expect(html).toContain("稍后处理");
     expect(html).toContain('data-testid="gate-card"');
     expect(html).toContain('data-testid="missing-item"');
     expect(html).toContain('data-testid="decide-pass"');

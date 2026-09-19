@@ -47,11 +47,11 @@
 </head>
 <body>
   <header>
-    <a href="/"><h1>AI 办公室</h1></a>
-    <span class="count" id="count-link" data-testid="inbox-count">待我拍板 · 0</span>
+    <a href="/">AI 办公室</a>
+    <h1 id="heading" data-testid="inbox-heading">待办</h1>
   </header>
   <main data-testid="gate-inbox">
-    <h1 id="heading" data-testid="inbox-heading">待我拍板</h1>
+    <p class="count" id="count-link" data-testid="inbox-count">待办</p>
     <div class="filters">
       <button type="button" class="on" data-filter="ready" data-testid="filter-ready">要你决定</button>
       <button type="button" data-filter="decided" data-testid="filter-decided">已决定</button>
@@ -88,11 +88,22 @@
     const KIND = { deliver_ready_v1: "交付验收", safety_only_v1: "安全审批" };
     function missingLabel(code) {
       const raw = String(code ?? "");
-      if (/summary_md/.test(raw)) return "还缺一份结论摘要";
-      if (/artifact_uri/.test(raw)) return "还缺可打开的产物";
-      if (/github_pr|is_draft/.test(raw)) return "相关合并请求还是草稿";
-      if (/checks|conclusion/.test(raw)) return "检查还没全部通过";
-      return "还缺：" + raw;
+      if (/summary_md|summary$/.test(raw)) return "还差：结论摘要";
+      if (/artifact_uri|artifact$/.test(raw)) return "还差：可打开的产物";
+      if (/github_pr|is_draft/.test(raw)) return "还差：合并请求仍是草稿";
+      if (/checks|conclusion/.test(raw)) return "还差：检查未全部通过";
+      return "还差：" + raw;
+    }
+    function relativeTime(iso) {
+      if (!iso) return "";
+      const then = Date.parse(iso);
+      if (!Number.isFinite(then)) return iso;
+      const min = Math.floor(Math.max(0, Date.now() - then) / 60000);
+      if (min < 1) return "刚刚";
+      if (min < 60) return min + " 分钟前";
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return hr + " 小时前";
+      return Math.floor(hr / 24) + " 天前";
     }
     const headers = () => ({
       "content-type": "application/json",
@@ -109,19 +120,16 @@
       $("flash").classList.toggle("conflict", kind === "conflict");
     }
     function emptyHtml() {
-      return `<section class="empty" data-testid="inbox-empty">
-        <h2>此刻没有需要你拍板的事</h2>
-        <p>安静是正常的。同事填满工位后，卡片会自己出现在这里。</p>
-        <p>不用去盯进度。完成以证据为准，不认口头说「好了」。</p>
-      </section>`;
+      return `<section class="empty" data-testid="inbox-empty">此刻没有待办。安静是正常的。</section>`;
     }
     function missingHtml(missing) {
       if (!missing.length) {
-        return `<p class="meta" data-testid="why-ready">证据已齐，等你过这一关</p>
+        return `<p class="meta" data-testid="why-ready">证据已齐，等你拍板</p>
           <span class="sr-only" data-testid="missing-empty" hidden>missing[] empty</span>`;
       }
       return `<div class="chips" data-testid="missing-list">
-        <p class="meta">还不能过，缺这些</p>
+        <p class="meta">还差</p>
+        <p class="meta">还不能过，先看缺什么</p>
         ${missing.map((m) => `<span class="chip" data-testid="missing-item">${missingLabel(m)}<span class="sr-only"> ${m}</span></span>`).join("")}
       </div>`;
     }
@@ -134,32 +142,36 @@
       const res = await fetch(status === "ready" ? "/v1/gates?status=ready" : "/v1/gates?status=decided", { headers: headers() });
       const body = await res.json();
       const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
-      if (filter === "ready") $("count-link").textContent = "待我拍板 · " + gates.length;
+      if (filter === "ready") {
+        const label = gates.length ? "待办 · " + gates.length : "待办";
+        $("count-link").textContent = label;
+        $("heading").textContent = label;
+      }
       $("lead").hidden = filter !== "ready" || !gates.length;
       $("list").innerHTML = gates.length ? gates.map((g) => {
         const missing = (g.ready_result && g.ready_result.missing) || [];
         const pred = g.predicate_id || (g.ready_result && g.ready_result.predicate_id) || "";
         const pver = g.predicate_version ?? (g.ready_result && g.ready_result.predicate_version) ?? "";
-        const title = g.goal_title || "需要你拍板";
-        const kind = KIND[pred] || "交付验收";
+        const title = g.goal_title || "未命名目标";
+        const rel = relativeTime(g.ready_at);
         const canPass = filter === "ready" && missing.length === 0;
         const actions = filter === "ready" ? `<div class="row">
             <button class="ok" data-act="pass-open" data-testid="decide-pass" ${canPass ? "" : "disabled"}>通过</button>
             <button class="warn" data-act="revise-open" data-testid="decide-revise">打回重做</button>
-            <button class="muted" data-act="defer" data-testid="decide-defer">以后再说</button>
+            <button class="muted" data-act="defer" data-testid="decide-defer">稍后处理</button>
           </div>` : "";
         return `<article class="card" data-testid="gate-card" data-id="${g.id}" data-version="${g.version}">
-          <p class="kind">${kind}</p>
           <h2 class="title" data-testid="gate-title">${title}</h2>
-          <p class="meta"><span class="badge" data-testid="gate-status" data-status="${g.status}">硬门禁</span></p>
-          <p class="meta">${canPass || filter !== "ready" ? "检查已齐，可以拍板" : ""}</p>
-          <p class="meta">目标：${title}</p>
-          ${filter === "ready" && !missing.length ? `<p class="meta">同事已交：摘要 / 产物链接</p>` : ""}
+          <p class="meta"><span class="badge" data-testid="gate-status" data-status="${g.status}">待你决定</span></p>
+          <p class="kind">规则：交付验收</p>
+          <p class="meta">${rel ? "就绪 · " + rel : ""}</p>
           ${filter === "ready" ? missingHtml(missing) : ""}
+          ${filter === "ready" && !missing.length ? `<p class="meta">同事已交：摘要 / 产物链接</p>` : ""}
           ${actions}
           <details>
             <summary>工程详情</summary>
-            <p data-testid="gate-id">${g.id}</p>
+            <p>编号 <span data-testid="gate-id">${g.id}</span></p>
+            <p>目标 ID ${g.goal_id || ""}</p>
             <p data-testid="predicate-id">predicate_id ${pred}</p>
             <p data-testid="predicate-version">predicate_version ${pver}</p>
             <p data-testid="ready-at">ready_at ${g.ready_at || ""}</p>
@@ -177,16 +189,16 @@
       const code = (body && body.code) || (body.error && body.error.code);
       if (!res.ok) {
         if (res.status === 409 || code === "optimistic_lock") {
-          flash("别人刚拍过，已为你刷新", "conflict");
+          flash("别人刚处理过这张，已帮你刷新。", "conflict");
           await load();
           return;
         }
         flash("处理失败，请再试一次");
         return;
       }
-      if (decision === "pass") flash("已通过 · 办公室少了一张待办");
-      else if (decision === "revise") flash("已打回重做");
-      else flash("以后再说");
+      if (decision === "pass") flash("已通过。");
+      else if (decision === "revise") flash("已打回，同事会再交一版。");
+      else flash("已搁下，需要时还会出现。");
       await load();
     }
     $("list").addEventListener("click", async (e) => {

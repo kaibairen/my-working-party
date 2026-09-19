@@ -41,7 +41,7 @@ test.describe("E2E missing[]", () => {
     await page.goto("/inbox");
     await expect(page.getByTestId("gate-card")).toHaveCount(1);
     await expect(page.getByTestId("missing-item")).toHaveCount(0);
-    await expect(page.getByText("还不能过，缺这些")).toHaveCount(0);
+    await expect(page.getByText("还差", { exact: true })).toHaveCount(0);
     await expect(page.getByTestId("decide-pass")).toBeEnabled();
     await expect(page.getByTestId("decide-revise")).toBeEnabled();
     await expect(page.getByTestId("decide-defer")).toBeEnabled();

@@ -1,25 +1,97 @@
-# Decision-maker copy / field map v1
+# 决策人 Inbox · 文案/字段映射一页（P0）
 
-Locked with `DECISION_MAKER_CLICK_FLOW_v1` §1. Source: `services/boundary-harness/apps/web/copy/zh-DM.ts`.
+**给：** HarnessFrontend（可直接改 UI）  
+**来源：** CTO P0 + 产品方案评审拆焊清单  
+**日期：** 2026-09-19 · Asia/Shanghai  
+**原则：** 壳上只留「待办」；工程字段进详情；不改 Ready / authority vs advisory 语义
 
-| Surface | Copy |
-|---|---|
-| Office title | AI 办公室 |
-| Office lede | 同事在工位上干活。你只在「待我拍板」出现时进来。 |
-| Office CTA | 查看待我拍板 |
-| Count | 待我拍板 · n |
-| Weak entry | 工位一览 |
-| Empty title | 此刻没有需要你拍板的事 |
-| Empty body | 安静是正常的。同事填满工位后，卡片会自己出现在这里。 |
-| Empty foot | 不用去盯进度。完成以证据为准，不认口头说「好了」。 |
-| Inbox title | 待我拍板 |
-| Filter | 要你决定 / 已决定 |
-| Lead | 下面每张卡都过了硬门禁检查，可以拍板。 |
-| Kind | 交付验收 / 安全审批 |
-| Why ready | 证据已齐，等你过这一关 |
-| Missing title | 还不能过，缺这些 |
-| Badge | 硬门禁 |
-| Buttons | 通过 / 打回重做 / 以后再说 |
-| Pass confirm | 确认通过？ / 确认通过 / 取消 |
-| Pass toast | 已通过 · 办公室少了一张待办 |
-| 409 | 别人刚拍过，已为你刷新 |
+---
+
+## 1. 顶栏（主路径只留这些）
+
+| UI | 文案 | 数据 |
+|----|------|------|
+| 标题 | `待办` | 固定 |
+| 未读 | `待办 · {n}`（n=ready 硬门禁张数；0 可不显数字） | `GET /v1/gates?status=ready` 的列表长度（仅 authority） |
+
+**必须移出主路径（决策人顶栏禁止出现）：**
+- `Health` / `OpenAPI` / 任何 `/ops` `/health` `/openapi` 链接
+- 角色下拉（`decision_maker` 等）与 `dm-1` 类调试身份框
+- `Reload ready`（改静默 SSE+断线补拉；若保留则藏进详情菜单且改名 `刷新`）
+
+---
+
+## 2. 卡面字段映射
+
+| 现在（调试台） | 主面显示 | 映射规则 | 藏进「详情」 |
+|----------------|----------|----------|--------------|
+| GateInstance UUID 作标题 | **不要** | — | `编号` = id |
+| （无）Goal 标题 | **卡标题** | Goal 人读 `title`/`summary`；缺则「未命名目标」 | `目标 ID` |
+| `predicate_id` | **不要**主面 | 可选一行弱文案：`规则：交付验收`（由 id 查表） | `predicate_id` + version |
+| `predicate_version` | 不显示 | — | 详情 |
+| `ready_at` ISO | 可选弱行 | `就绪 · 今天 01:50`（相对/本地时） | 原始 ISO |
+| `goal` UUID | 不显示 | — | 详情 |
+| `missing[]` 非空 | **`还差：`** + 人话条目 | 见 §3 | raw key |
+| `missing[]` 空 | **整块不渲染** | 禁止 `(empty)` / `missing[]: []` | — |
+| `version` | 不显示 | decide 请求静默带 | 详情可看 |
+| 状态 READY | 可不角标，或 `待你决定` | — | — |
+
+**卡面结构（从上到下）：**
+1. 标题 = Goal 人读标题  
+2. 一句原因：`证据已齐，等你拍板`（有「还差」时改：`还不能过，先看缺什么`）  
+3. 「还差：…」区块（仅非空）  
+4. 证据摘要入口（只读链接/短摘要，非 raw JSON）  
+5. 三按钮  
+
+---
+
+## 3. `missing[]` →「还差：…」
+
+| 机读 key（例） | 主面文案 |
+|----------------|----------|
+| `summary_md` / `summary` | `还差：结论摘要` |
+| `artifact_uri` / `artifact` | `还差：可打开的产物` |
+| `github_pr_draft` / pr draft | `还差：合并请求仍是草稿` |
+| `github_checks` / checks | `还差：检查未全部通过` |
+| 未知 key | `还差：{key}`（保底，仍比裸数组强） |
+
+空数组：**不展示**「还差」区块，也不写「空数组/已就绪」技术句。  
+有条目时区块标题固定：`还差`；此时 **「通过」禁用**。
+
+---
+
+## 4. 按钮（文案锁死）
+
+| decision | 按钮文案 | 主/次 |
+|----------|----------|------|
+| pass | `通过` | 主（无「还差」时可用） |
+| revise | `打回重做` | 次 |
+| defer | `稍后处理` | 弱 |
+
+打回默认：同 Assignment 新 Run；`structural_change` 进二次确认，不进主按钮文案。
+
+---
+
+## 5. 空态 / 成功 / 409（各一句中文）
+
+| 场景 | 文案 |
+|------|------|
+| 空态（0 张 ready） | `此刻没有待办。安静是正常的。` |
+| 通过成功 | `已通过。` |
+| 打回成功 | `已打回，同事会再交一版。` |
+| 稍后处理成功 | `已搁下，需要时还会出现。` |
+| 409 乐观锁冲突 | `别人刚处理过这张，已帮你刷新。` |
+
+禁止：toast/条里带 UUID、`Decide pass succeeded for …`、`No ready gates.`
+
+---
+
+## 6. 验收（Frontend 自检）
+
+- [x] 顶栏只有「待办」(+数字)，无 Health/OpenAPI/角色下拉/Reload ready  
+- [x] 卡标题 = Goal 人读标题；UUID、`predicate_id` 仅详情  
+- [x] 有 missing →「还差：…」；无 missing → 不出现技术空数组  
+- [x] 三键文案完全一致：通过 / 打回重做 / 稍后处理  
+- [x] 空态/成功/409 用上表中文一句  
+
+**打回线：** 任一调试台残留进决策人主路径 → 体验打回。

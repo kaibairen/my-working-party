@@ -28,7 +28,7 @@
 <body>
   <header>
     <h1>AI 办公室</h1>
-    <a class="count" href="/inbox" id="count-link" data-testid="inbox-count">待我拍板 · 0</a>
+    <a class="count" href="/inbox" id="count-link" data-testid="inbox-count">待办</a>
   </header>
   <main data-testid="office-shell">
     <p class="lede">同事在工位上干活。你只在「待我拍板」出现时进来。</p>
@@ -36,9 +36,7 @@
     <button type="button" class="weak" id="desks-toggle" data-testid="desks-entry">工位一览</button>
     <div id="desks" class="desks" data-testid="desks-panel">只读投影。开跑不依赖打开这一页或画布。</div>
     <section class="empty" data-testid="office-empty">
-      <h2 data-testid="inbox-empty">此刻没有需要你拍板的事</h2>
-      <p>安静是正常的。同事填满工位后，卡片会自己出现在这里。</p>
-      <p class="foot">不用去盯进度。完成以证据为准，不认口头说「好了」。</p>
+      <h2 data-testid="inbox-empty">此刻没有待办。安静是正常的。</h2>
     </section>
   </main>
   <script>
@@ -52,7 +50,7 @@
     };
     fetch("/v1/gates?status=ready", { headers }).then((r) => r.json()).then((body) => {
       const n = (body.gates || []).filter((g) => g.status === "ready" && !(g.ready_result && g.ready_result.advisory)).length;
-      const label = "待我拍板 · " + n;
+      const label = n > 0 ? "待办 · " + n : "待办";
       const count = document.getElementById("count-link");
       count.textContent = label;
       count.dataset.count = String(n);

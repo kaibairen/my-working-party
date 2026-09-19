@@ -16,7 +16,7 @@ test.describe("E2E decision-maker shell", () => {
     await expect(page.locator("h1")).toHaveText("AI 办公室");
     await expect(page.getByTestId("open-inbox")).toHaveText(/查看待我拍板/);
     await expect(page.getByTestId("office-empty")).toBeVisible();
-    await expect(page.getByTestId("office-empty")).toContainText("此刻没有需要你拍板的事");
+    await expect(page.getByTestId("office-empty")).toContainText("此刻没有待办。安静是正常的。");
     await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
     const officeHrefs = await page.locator("a[href]").evaluateAll((els) =>
       els.map((el) => (el as HTMLAnchorElement).getAttribute("href") || ""),
@@ -27,7 +27,7 @@ test.describe("E2E decision-maker shell", () => {
 
     await seedDeliverReady(baseURL!);
     await page.goto("/inbox");
-    await expect(page.getByTestId("inbox-heading")).toHaveText("待我拍板");
+    await expect(page.getByTestId("inbox-heading")).toHaveText(/待办/);
     await expect(page.getByRole("link", { name: /openapi|health|ops|outbox/i })).toHaveCount(0);
     const hrefs = await page.locator("a[href]").evaluateAll((els) =>
       els.map((el) => (el as HTMLAnchorElement).getAttribute("href") || ""),
@@ -49,7 +49,7 @@ test.describe("E2E decision-maker shell", () => {
     expect(title).not.toBe(ready.gate!.id);
     expect(title).toBe((ready.goal as { title?: string }).title);
     await expect(page.getByTestId("gate-id")).toHaveText(ready.gate!.id);
-    await expect(page.getByTestId("gate-status")).toHaveText("硬门禁");
+    await expect(page.getByTestId("gate-status")).toHaveText("待你决定");
   });
 
   test("ops_routes_forbidden_for_dm", async ({ request }) => {
@@ -69,8 +69,8 @@ test.describe("E2E decision-maker shell", () => {
     await seedDeliverReady(baseURL!);
     await page.goto("/inbox");
     await confirmPass(page);
-    await expect(page.getByTestId("inbox-flash")).toHaveText("已通过 · 办公室少了一张待办");
-    await expect(page.getByTestId("inbox-empty")).toContainText("此刻没有需要你拍板的事");
+    await expect(page.getByTestId("inbox-flash")).toHaveText("已通过。");
+    await expect(page.getByTestId("inbox-empty")).toContainText("此刻没有待办。安静是正常的。");
     assertNoOpsChrome(await page.locator("body").innerText());
     await page.screenshot({ path: join(shotDir, "inbox_after_pass_quiet.png"), fullPage: true });
   });

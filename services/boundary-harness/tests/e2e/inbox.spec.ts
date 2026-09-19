@@ -65,7 +65,7 @@ test("Gate Inbox lists ready gate, shows missing[], decide pass", async ({ page,
   await page.screenshot({ path: join(shotDir, "health_openapi.png"), fullPage: true });
 
   await page.goto("/inbox");
-  await expect(page.getByTestId("inbox-heading")).toContainText("待我拍板");
+  await expect(page.getByTestId("inbox-heading")).toContainText("待办");
   await expect(page.locator(".card").first()).toBeVisible();
   await expect(page.getByTestId("gate-title")).toHaveText(/Inbox demo/);
   await expect(page.getByTestId("decide-pass")).toHaveText("通过");

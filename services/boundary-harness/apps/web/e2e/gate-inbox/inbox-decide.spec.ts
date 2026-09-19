@@ -48,7 +48,7 @@ test.describe("E2E decide", () => {
     const json = (await (await decideRes).json()) as { follow_up?: { assignment_id?: string } };
     expect(json.follow_up?.assignment_id ?? assignmentId).toBe(assignmentId);
 
-    await expect(page.getByTestId("inbox-flash")).toContainText(/已打回重做|已通过|以后再说/);
+    await expect(page.getByTestId("inbox-flash")).toContainText(/已打回，同事会再交一版|已通过|已搁下/);
     await expect(page.locator(`[data-testid="gate-card"][data-id="${ready.gate!.id}"]`)).toHaveCount(0);
     await page.screenshot({ path: join(shotDir, "e2e11_decide_revise_same_assignment.png"), fullPage: true });
   });
@@ -75,7 +75,7 @@ test.describe("E2E decide", () => {
     expect(conflict.status).toBe(200);
 
     await confirmPass(page);
-    await expect(page.getByTestId("inbox-flash")).toContainText(/别人刚拍过，已为你刷新/);
+    await expect(page.getByTestId("inbox-flash")).toContainText(/别人刚处理过这张，已帮你刷新/);
     await expect(page.getByTestId("inbox-flash")).toHaveClass(/conflict/);
     await expect(page.getByTestId("gate-card")).toHaveCount(0);
 
