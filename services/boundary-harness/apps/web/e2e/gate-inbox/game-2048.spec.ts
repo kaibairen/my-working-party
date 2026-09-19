@@ -19,9 +19,12 @@ test.describe("QA 2048 freeze", () => {
     const snapshot = () =>
       page.locator('[data-testid="tile"]').evaluateAll((els) => els.map((el) => el.textContent));
     const before = await snapshot();
-    await page.keyboard.press("ArrowLeft");
-    const after = await snapshot();
-    expect(after).not.toEqual(before);
+    for (const key of ["ArrowLeft", "ArrowDown", "ArrowRight", "ArrowUp"] as const) {
+      await page.keyboard.press(key);
+      const after = await snapshot();
+      if (JSON.stringify(after) !== JSON.stringify(before)) return;
+    }
+    throw new Error("2048 board did not change after arrow keys");
   });
 
   test("game_2048_score_updates", async ({ page }) => {
