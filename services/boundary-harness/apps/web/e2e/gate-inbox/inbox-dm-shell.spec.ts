@@ -88,12 +88,11 @@ test.describe("E2E decision-maker shell", () => {
     await expect(roster).toHaveAttribute("data-readonly", "true");
     await expect(page.getByTestId("desks-hint")).toContainText("只读投影");
     await expect(page.getByTestId("desks-hint")).not.toContainText(/打开画布才能开工|去 Roster|派活|指派/);
-    const rows = page.getByTestId("desk-row");
-    await expect(rows).toHaveCount(2);
-    await expect(page.getByTestId("desk-name")).toHaveText(["交付同事", "Cursor 同事"]);
-    await expect(page.getByTestId("desk-status")).toHaveText([/在忙|等证据|空闲/, /在忙|等证据|空闲/]);
-    await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "在忙" }) })).toHaveCount(1);
-    await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "等证据" }) })).toHaveCount(1);
+    await expect(page.getByTestId("desks-empty")).toHaveText("还没有同事上线");
+    await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    const seedNames = await roster.innerText();
+    expect(seedNames).not.toContain("交付同事");
+    expect(seedNames).not.toContain("Cursor 同事");
     await expect(roster.getByRole("button")).toHaveCount(0);
     await expect(roster.getByRole("link")).toHaveCount(0);
     await expect(roster.locator("[draggable='true']")).toHaveCount(0);

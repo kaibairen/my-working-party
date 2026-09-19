@@ -44,8 +44,11 @@ test.describe("E2E office home P0", () => {
     const roster = page.getByTestId("roster");
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");
-    await expect(page.getByTestId("desk-row").first()).toBeVisible();
-    await expect(page.getByTestId("desk-status").first()).toHaveText(/在忙|等证据|空闲/);
+    await expect(page.getByTestId("desks-empty")).toHaveText("还没有同事上线");
+    await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    const rosterText = await roster.innerText();
+    expect(rosterText).not.toContain("交付同事");
+    expect(rosterText).not.toContain("Cursor 同事");
     await expect(roster.getByRole("button")).toHaveCount(0);
     await expect(roster.locator("[draggable='true']")).toHaveCount(0);
 
@@ -64,5 +67,99 @@ test.describe("E2E office home P0", () => {
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-heading")).toHaveText(/待办/);
     await expect(page.getByTestId("gate-card").first()).toBeVisible();
+  });
+
+  test("desks_hide_pool_seed_names", async ({ page }) => {
+    const desksReq = page.waitForRequest((req) => {
+      if (req.method() !== "GET") return false;
+      const url = new URL(req.url());
+      return url.pathname === "/v1/desks";
+    });
+    await page.goto("/");
+    const req = await desksReq;
+    expect(new URL(req.url()).searchParams.get("heartbeat_fresh")).toBe("true");
+    const roster = page.getByTestId("roster");
+    await expect(roster).toBeVisible();
+    await expect(roster).toHaveAttribute("data-readonly", "true");
+    await expect(page.getByTestId("desks-empty")).toHaveText("还没有同事上线");
+    await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    const rosterText = await roster.innerText();
+    expect(rosterText).not.toContain("交付同事");
+    expect(rosterText).not.toContain("Cursor 同事");
+    expect(rosterText).not.toMatch(/派活|指派|dispatch|assign|开始跑/i);
+    await expect(roster.getByRole("button")).toHaveCount(0);
+    await expect(roster.locator("[draggable='true']")).toHaveCount(0);
+    await expect(page.getByTestId("inbox-drawer")).not.toHaveClass(/open/);
+  });
+
+  test("desks_show_only_fresh_heartbeat", async ({ page }) => {
+    const now = new Date().toISOString();
+    const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await page.route("**/v1/desks**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          readonly: true,
+          hitl: "待我拍板",
+          heartbeat_ttl_seconds: 90,
+          desks: [
+            {
+              id: "pool_noop",
+              name: "交付同事",
+              presence: "idle",
+              status: "空闲",
+              last_heartbeat: null,
+              source: "pool_seed",
+            },
+            {
+              id: "pool_cursor",
+              name: "Cursor 同事",
+              presence: "busy",
+              status: "在忙",
+              last_heartbeat: now,
+              heartbeat_fresh: false,
+              source: "pool_seed",
+            },
+            {
+              id: "agent:stale",
+              name: "过期同事",
+              presence: "busy",
+              status: "在忙",
+              last_heartbeat: stale,
+              heartbeat_fresh: false,
+              source: "heartbeat",
+              ttl_seconds: 90,
+            },
+            {
+              id: "agent:live",
+              name: "小艾",
+              avatar: "小",
+              presence: "busy",
+              status: "在忙",
+              last_heartbeat: now,
+              heartbeat_fresh: true,
+              source: "heartbeat",
+              ttl_seconds: 90,
+            },
+          ],
+        }),
+      });
+    });
+    await page.goto("/");
+    const roster = page.getByTestId("roster");
+    await expect(page.getByTestId("desk-row")).toHaveCount(1);
+    await expect(page.getByTestId("desk-name")).toHaveText("小艾");
+    await expect(page.getByTestId("desk-status")).toHaveText("在忙");
+    await expect(page.getByTestId("desk-row")).toHaveAttribute("data-heartbeat-fresh", "true");
+    await expect(page.getByTestId("desk-row")).toHaveAttribute("data-presence", "busy");
+    const rosterText = await roster.innerText();
+    expect(rosterText).not.toContain("交付同事");
+    expect(rosterText).not.toContain("Cursor 同事");
+    expect(rosterText).not.toContain("过期同事");
+    await expect(page.getByTestId("desks-empty")).toHaveCount(0);
+    await expect(roster.getByRole("button")).toHaveCount(0);
+    await expect(roster.locator("[draggable='true']")).toHaveCount(0);
+    await expect(page.getByTestId("inbox-drawer")).not.toHaveClass(/open/);
   });
 });

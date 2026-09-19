@@ -315,7 +315,9 @@ describe("domain API", () => {
     expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
     expect(officeHtml).toContain('data-testid="roster"');
     expect(officeHtml).toContain('data-readonly="true"');
-    expect(officeHtml).toContain("/v1/desks");
+    expect(officeHtml).toContain("/v1/desks?heartbeat_fresh=true");
+    expect(officeHtml).toContain("visibleOfficeDesks");
+    expect(officeHtml).toContain("还没有同事上线");
     expect(officeHtml).toContain("/v1/goals");
     expect(officeHtml).toContain("inbox-drawer");
     expect(officeHtml).toContain("sanitizeCardTitle");

@@ -207,20 +207,70 @@
     }
 
     /* —— Office home: goals + fill slots + roster (not a dispatch board) —— */
-    function renderRoster(desks) {
+    /* Keep in sync with apps/web/src/officeDesks.ts — main list is heartbeat-only. */
+    const DEFAULT_TTL = 90;
+    const SEED_NAME_RE = /^(交付|Cursor|群组)\s*同事/i;
+    const SEED_ID_RE = /^(pool[_-]?)?(noop|cursor)$/i;
+    function lastHeartbeatOf(d) {
+      const raw = d && (d.last_heartbeat || d.last_seen_at || d.last_heartbeat_at);
+      if (!raw) return null;
+      return Number.isFinite(Date.parse(raw)) ? raw : null;
+    }
+    function looksLikePoolSeedName(name) {
+      const n = String(name ?? "").trim();
+      if (!n || n === "同事") return true;
+      if (SEED_NAME_RE.test(n)) return true;
+      if (SEED_ID_RE.test(n)) return true;
+      return false;
+    }
+    function deskTtlSeconds(d, envelopeTtl) {
+      const ttl = Number(d && (d.ttl_seconds || d.heartbeat_ttl_seconds || envelopeTtl));
+      return Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL;
+    }
+    function isFreshHeartbeat(d, nowMs, envelopeTtl) {
+      if (d && d.heartbeat_fresh === false) return false;
+      if (d && String(d.source || "") === "pool_seed") return false;
+      const last = lastHeartbeatOf(d || {});
+      if (!last) return false;
+      const ageSec = ((nowMs || Date.now()) - Date.parse(last)) / 1000;
+      if (!Number.isFinite(ageSec)) return false;
+      if (ageSec > deskTtlSeconds(d || {}, envelopeTtl)) return false;
+      return true;
+    }
+    function isVisibleOfficeDesk(d, nowMs, envelopeTtl) {
+      if (looksLikePoolSeedName(d && d.name)) return false;
+      return isFreshHeartbeat(d, nowMs, envelopeTtl);
+    }
+    function visibleOfficeDesks(desks, envelope) {
+      const ttl = envelope && envelope.heartbeat_ttl_seconds;
+      return (desks || []).filter((d) => isVisibleOfficeDesk(d, Date.now(), ttl));
+    }
+    async function fetchDesks() {
+      const filtered = await fetch("/v1/desks?heartbeat_fresh=true", { headers: headers() });
+      if (filtered.ok) return filtered.json().catch(() => ({ desks: [] }));
+      const fallback = await fetch("/v1/desks", { headers: headers() });
+      return fallback.json().catch(() => ({ desks: [] }));
+    }
+    function renderRoster(desks, envelope) {
       const root = $("roster");
-      const rows = (desks || []).map((d) => {
-        const name = String(d.name || "同事");
+      const visible = visibleOfficeDesks(desks, envelope || {});
+      if (!visible.length) {
+        root.innerHTML = `<p class="empty" data-testid="desks-empty">还没有同事上线</p>`;
+        return;
+      }
+      const rows = visible.map((d) => {
+        const name = String(d.name || "");
         const status = String(d.status || "空闲");
         const presence = String(d.presence || "idle");
-        const avatar = String(d.avatar || name.slice(0, 1));
-        return `<li class="desk-row" data-testid="desk-row" data-presence="${esc(presence)}" draggable="false">
+        const avatar = String(d.avatar || Array.from(name)[0] || "同");
+        const last = lastHeartbeatOf(d);
+        return `<li class="desk-row" data-testid="desk-row" data-presence="${esc(presence)}" data-heartbeat-fresh="true" draggable="false">
           <span class="desk-avatar" data-testid="desk-avatar" aria-hidden="true">${esc(avatar)}</span>
           <span class="desk-name" data-testid="desk-name">${esc(name)}</span>
           <span class="desk-meta">
             <span class="desk-dot" data-testid="desk-dot" aria-hidden="true"></span>
             <span data-testid="desk-status">${esc(status)}</span>
-            ${d.last_heartbeat ? `<span data-testid="desk-heartbeat">${esc(relativeTime(d.last_heartbeat))}</span>` : ""}
+            ${last ? `<span data-testid="desk-heartbeat">${esc(relativeTime(last))}</span>` : ""}
           </span>
         </li>`;
       }).join("");
@@ -246,13 +296,11 @@
       </li>`;
     }
     async function loadOffice() {
-      const [goalsRes, desksRes] = await Promise.all([
-        fetch("/v1/goals", { headers: headers() }),
-        fetch("/v1/desks", { headers: headers() }),
+      const [goalsBody, desksBody] = await Promise.all([
+        fetch("/v1/goals", { headers: headers() }).then((r) => r.json()),
+        fetchDesks(),
       ]);
-      const goalsBody = await goalsRes.json();
-      const desksBody = await desksRes.json();
-      renderRoster(desksBody.desks || []);
+      renderRoster(desksBody.desks || [], desksBody);
       const goals = goalsBody.goals || [];
       $("office-empty").hidden = goals.length > 0;
       if (!goals.length) {

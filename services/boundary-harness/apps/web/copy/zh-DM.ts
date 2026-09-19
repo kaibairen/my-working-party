@@ -11,6 +11,7 @@ export const zhDM = {
   inboxCount: (n: number) => (n > 0 ? `待办 · ${n}` : "待办"),
   desksEntry: "工位心跳",
   desksHint: "只读投影。开跑不依赖打开这一页或画布。",
+  desksEmpty: "还没有同事上线",
   desksBusy: "在忙",
   desksWaiting: "等证据",
   desksIdle: "空闲",
