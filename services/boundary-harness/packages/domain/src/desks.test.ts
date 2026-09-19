@@ -40,6 +40,7 @@ describe("listDesks presence projection", () => {
       name: "周报 Bot",
       source: "heartbeat",
       last_heartbeat: "2026-09-19T05:00:00.000Z",
+      pool_id: "pool_noop",
     });
     expect(live.desks.some((d) => FAKE_COLLEAGUE.test(d.name))).toBe(false);
     nowMs += 91_000;

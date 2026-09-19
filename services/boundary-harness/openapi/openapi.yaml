@@ -223,6 +223,7 @@ paths:
                         status: { type: string }
                         last_heartbeat: { type: string, nullable: true }
                         source: { type: string, enum: [pool_seed, heartbeat] }
+                        pool_id: { type: string, nullable: true, description: "Bound execution pool when the live heartbeat sent one. Shell groups from this; never a seed colleague." }
                   readonly: { type: boolean }
                   stub: { type: boolean }
                   heartbeat_ttl_seconds: { type: integer }

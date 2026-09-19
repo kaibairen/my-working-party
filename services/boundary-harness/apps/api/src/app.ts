@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
@@ -57,6 +57,19 @@ const inboxHtml = readFileSync(join(here, "inbox.html"), "utf8");
 const officeHtml = readFileSync(join(here, "office.html"), "utf8");
 const opsHtml = readFileSync(join(here, "ops.html"), "utf8");
 const openapiPath = join(here, "../../../openapi/openapi.yaml");
+const web2048Dir = join(here, "../../web/public/2048");
+const WEB2048_TYPES: Record<string, string> = {
+  html: "text/html; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  js: "text/javascript; charset=utf-8",
+};
+
+function web2048File(name: string): string | null {
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) return null;
+  const full = join(web2048Dir, name);
+  if (!full.startsWith(web2048Dir) || !existsSync(full)) return null;
+  return full;
+}
 
 function readActor(c: {
   req: { header: (name: string) => string | undefined; query: (name: string) => string | undefined };
@@ -113,6 +126,20 @@ export function createApp(harness: Harness) {
   app.get("/", (c) => c.html(officeHtml));
   app.get("/office", (c) => c.html(officeHtml));
   app.get("/inbox", (c) => c.html(inboxHtml));
+  app.get("/2048", (c) => c.redirect("/2048/"));
+  app.get("/2048/", (c) => {
+    const index = web2048File("index.html");
+    if (!index) return c.notFound();
+    return c.html(readFileSync(index, "utf8"));
+  });
+  app.get("/2048/:file", (c) => {
+    const full = web2048File(c.req.param("file"));
+    if (!full) return c.notFound();
+    const ext = full.split(".").pop() ?? "";
+    return c.body(readFileSync(full, "utf8"), 200, {
+      "content-type": WEB2048_TYPES[ext] ?? "application/octet-stream",
+    });
+  });
   app.get("/ops", (c) => {
     const role = (c.req.header("x-harness-role") ?? c.req.query("role") ?? "").toLowerCase();
     if (role === "decision_maker") {

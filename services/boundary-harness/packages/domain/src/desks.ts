@@ -138,6 +138,7 @@ function deskRow(input: {
   last_heartbeat: string | null;
   source: "pool_seed" | "heartbeat";
   ttl_seconds: number | null;
+  pool_id?: string | null;
 }) {
   return {
     id: input.id,
@@ -148,6 +149,7 @@ function deskRow(input: {
     last_heartbeat: input.last_heartbeat,
     source: input.source,
     ttl_seconds: input.ttl_seconds,
+    pool_id: input.pool_id ?? null,
   };
 }
 
@@ -198,6 +200,7 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
           last_heartbeat: null,
           source: "pool_seed",
           ttl_seconds: null,
+          pool_id: pool.id,
         }),
       );
     }
@@ -213,6 +216,7 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
         last_heartbeat: beat.lastSeenAt,
         source: "heartbeat",
         ttl_seconds: beat.ttlSeconds,
+        pool_id: beat.poolId ?? null,
       }),
     );
   }

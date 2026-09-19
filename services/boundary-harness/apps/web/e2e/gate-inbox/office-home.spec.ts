@@ -5,6 +5,7 @@ import {
   seedBusyDesk,
   seedDeliverPending,
   seedDeliverReady,
+  seedHeartbeat,
   shotDir,
   test,
 } from "./helpers";
@@ -65,5 +66,54 @@ test.describe("E2E office home P0", () => {
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-heading")).toHaveText(/待办/);
     await expect(page.getByTestId("gate-card").first()).toBeVisible();
+  });
+
+  test("desks_grouped_layout_readonly", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedHeartbeat(baseURL!, { actor: "bot-a", display_name: "Bot A", pool_id: "pool_noop" });
+    await seedHeartbeat(baseURL!, { actor: "bot-b", display_name: "Bot B", pool_id: "pool_cursor" });
+    await seedHeartbeat(baseURL!, { actor: "bot-c", display_name: "Bot C" });
+    await page.goto("/");
+    const roster = page.getByTestId("roster");
+    await expect(roster).toHaveAttribute("data-readonly", "true");
+    await expect(page.getByTestId("desk-group")).toHaveCount(3);
+    await expect(page.getByTestId("desk-group-name")).toHaveText(["交付组", "调研组", "未分组"]);
+    await expect(page.getByTestId("desk-name")).toHaveText(["Bot A", "Bot B", "Bot C"]);
+    await expect(page.getByTestId("desk-group").first()).toHaveAttribute("data-readonly", "true");
+    await page.getByTestId("desk-group-head").nth(1).click();
+    await expect(page.getByTestId("desk-group").nth(1)).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("desk-group").nth(1).getByTestId("desk-list")).toBeHidden();
+    await expect(page.getByTestId("desk-group").nth(0).getByTestId("desk-name")).toBeVisible();
+    await page.getByTestId("desk-group-head").nth(1).click();
+    await expect(page.getByTestId("desk-group").nth(1)).toHaveAttribute("data-collapsed", "false");
+    await expect(page.getByTestId("desk-group").nth(1).getByTestId("desk-list")).toBeVisible();
+  });
+
+  test("desks_group_no_drag_assign", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await seedHeartbeat(baseURL!, { actor: "bot-a", display_name: "Bot A", pool_id: "pool_noop" });
+    await page.goto("/");
+    const roster = page.getByTestId("roster");
+    await expect(page.getByTestId("desk-group")).toHaveCount(1);
+    await expect(roster.getByRole("button")).toHaveCount(0);
+    await expect(roster.locator("[draggable='true']")).toHaveCount(0);
+    await expect(roster.getByRole("link")).toHaveCount(0);
+    const text = await roster.innerText();
+    expect(text).not.toMatch(DISPATCH_RE);
+    expect(text).not.toMatch(/开始跑|开跑|指派/);
+  });
+
+  test("desks_group_no_fake_seeds", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await page.goto("/");
+    await expect(page.getByTestId("desks-empty")).toHaveText("还没有 Bot 报心跳");
+    expect(await page.getByTestId("roster").innerText()).not.toMatch(/交付同事|Cursor 同事|群组同事/);
+    await seedHeartbeat(baseURL!, { actor: "bot-a", display_name: "周报 Bot", pool_id: "pool_noop" });
+    await page.reload();
+    await expect(page.getByTestId("desk-group-name")).toHaveText(["交付组"]);
+    await expect(page.getByTestId("desk-name")).toHaveText(["周报 Bot"]);
+    const named = await page.getByTestId("roster").innerText();
+    expect(named).not.toMatch(/交付同事|Cursor 同事|群组同事/);
+    expect(named).toContain("交付组");
   });
 });

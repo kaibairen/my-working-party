@@ -20,5 +20,6 @@ P0 linkage add-on: empty slot **我来填** (human_allowed or exception_grant). 
 | No fake-name wall | `office_no_fake_name_wall` | DM `GET /v1/desks` (and `?include_pools=1`) never shows seed 「交付同事」「Cursor 同事」; only live heartbeat `display_name` / actor |
 | TTL expiry clears the row | `heartbeat_ttl_expiry_clears_row` | After TTL the heartbeat desk disappears — no `pool_seed` fallback on the office roster |
 | Readonly presence | `office_no_assign_desk` / `office_no_drag_dispatch` / `office_no_start_run_button` | 3-state 在忙 \| 等证据 \| 空闲; no assign / drag / 开跑 |
+| Grouped right rail | `desks_grouped_layout_readonly` / `desks_group_no_drag_assign` / `desks_group_no_fake_seeds` | Groups from live heartbeat `group` / `pool_id`; empty still 「还没有 Bot 报心跳」; no fake seeds |
 
 M4 MCP glove dogfood: [DOGFOOD_GROKBOT_MCP_SOP.md](../DOGFOOD_GROKBOT_MCP_SOP.md).

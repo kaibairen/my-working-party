@@ -426,4 +426,23 @@ describe("domain API", () => {
     expect(slots.body.slots[0].progress).toBe("等同事填");
     expect(JSON.stringify(slots.body)).not.toMatch(/指派给|开始跑|dispatch/);
   });
+
+  it("serves playable 2048 under /2048/", async () => {
+    const { app } = setup();
+    const index = await app.request("/2048/");
+    expect(index.status).toBe(200);
+    const html = await index.text();
+    expect(html).toContain("2048");
+    expect(html).toContain('data-testid="game-2048"');
+    expect(html).toContain("./game.js");
+    const js = await app.request("/2048/game.js");
+    expect(js.status).toBe(200);
+    const script = await js.text();
+    expect(script).toContain("ArrowLeft");
+    expect(script).toContain("spawn");
+    const css = await app.request("/2048/style.css");
+    expect(css.status).toBe(200);
+    expect(await css.text()).toContain(".tile");
+    expect((await app.request("/2048")).status).toBe(302);
+  });
 });

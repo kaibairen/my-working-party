@@ -99,6 +99,8 @@ test.describe("E2E decision-maker shell", () => {
     await seedHeartbeat(baseURL!, { actor: "bot-cursor", display_name: "调研 Bot", pool_id: "pool_cursor" });
     await page.reload();
     const rows = page.getByTestId("desk-row");
+    await expect(page.getByTestId("desk-group")).toHaveCount(2);
+    await expect(page.getByTestId("desk-group-name")).toHaveText(["交付组", "调研组"]);
     await expect(rows).toHaveCount(2);
     await expect(page.getByTestId("desk-name")).toHaveText(["周报 Bot", "调研 Bot"]);
     await expect(page.getByTestId("desk-status")).toHaveText([/在忙|等证据|空闲/, /在忙|等证据|空闲/]);
