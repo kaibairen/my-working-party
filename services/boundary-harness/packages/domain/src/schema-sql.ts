@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS goals (
   status TEXT NOT NULL,
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  summary TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ready_predicates (

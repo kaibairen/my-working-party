@@ -189,6 +189,13 @@ paths:
         "403":
           description: forbidden
   /v1/goals:
+    get:
+      summary: List goals with read-only fill-slot projection (office home)
+      responses:
+        "200":
+          description: Goals plus Bot fill slots. Never a dispatch surface.
+        "403":
+          description: forbidden
     post:
       summary: Create Goal (coordinator_ref required)
       requestBody:

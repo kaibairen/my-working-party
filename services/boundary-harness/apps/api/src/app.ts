@@ -26,6 +26,7 @@ import {
   listGateInstances,
   listGithubSnapshots,
   listDesks,
+  listGoals,
   listOutbox,
   listPools,
   parseBearer,
@@ -49,7 +50,6 @@ export type AppEnv = {
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
-const inboxHtml = readFileSync(join(here, "inbox.html"), "utf8");
 const officeHtml = readFileSync(join(here, "office.html"), "utf8");
 const opsHtml = readFileSync(join(here, "ops.html"), "utf8");
 const openapiPath = join(here, "../../../openapi/openapi.yaml");
@@ -108,7 +108,7 @@ export function createApp(harness: Harness) {
 
   app.get("/", (c) => c.html(officeHtml));
   app.get("/office", (c) => c.html(officeHtml));
-  app.get("/inbox", (c) => c.html(inboxHtml));
+  app.get("/inbox", (c) => c.html(officeHtml));
   app.get("/ops", (c) => {
     const role = (c.req.header("x-harness-role") ?? c.req.query("role") ?? "").toLowerCase();
     if (role === "decision_maker") {
@@ -212,6 +212,10 @@ export function createApp(harness: Harness) {
   v1.get("/audit", (c) => {
     requireRole(c.get("actor"), ["decision_maker", "coordinator", "service"]);
     return c.json({ audit: listAudit(c.get("harness")) });
+  });
+
+  v1.get("/goals", (c) => {
+    return c.json(listGoals(c.get("harness"), c.get("actor")));
   });
 
   v1.post("/goals", async (c) => {

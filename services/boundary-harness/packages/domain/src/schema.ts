@@ -24,6 +24,7 @@ export const goals = sqliteTable("goals", {
   createdBy: text("created_by").notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+  summary: text("summary"),
 });
 
 export const gateDefs = sqliteTable("gate_defs", {

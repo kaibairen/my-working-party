@@ -18,7 +18,7 @@ const DESK_NAMES: Record<string, string> = {
   pool_cursor: "Cursor 同事",
 };
 
-function humanDeskName(poolId: string, kind: string): string {
+export function humanDeskName(poolId: string, kind: string): string {
   if (DESK_NAMES[poolId]) return DESK_NAMES[poolId];
   if (kind === "bot_group") return "群组同事";
   if (kind === "cursor_account") return "Cursor 同事";
