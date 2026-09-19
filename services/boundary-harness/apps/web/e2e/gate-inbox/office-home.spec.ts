@@ -3,6 +3,7 @@ import {
   drainReadyGates,
   expect,
   seedBusyDesk,
+  seedDeskHeartbeat,
   seedDeliverPending,
   seedDeliverReady,
   shotDir,
@@ -16,6 +17,7 @@ test.describe("E2E office home P0", () => {
     await drainReadyGates(baseURL!);
     await seedDeliverPending(baseURL!);
     await seedBusyDesk(baseURL!);
+    await seedDeskHeartbeat(baseURL!, { actor: "bot-cursor", display_name: "Cursor 工位", pool_id: "pool_cursor" });
 
     await page.goto("/");
     await expect(page.locator("h1")).toHaveText("AI 办公室");

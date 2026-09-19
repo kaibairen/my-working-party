@@ -41,7 +41,8 @@ Stdio 备选（Cursor/`mcp.json`，仍是本机配置，不是账号目录）：
 `GET /v1/desks` 只读。`POST /v1/agents/heartbeat`（或 `harness_heartbeat`）刷新 `last_heartbeat`。
 
 - **默认 TTL：90 秒**（可在心跳体里设 `ttl_seconds`，夹在 15–3600）。  
-- 过期后该行不再算在线：池工位回落 `source=pool_seed`、`last_heartbeat=null`；无池的 agent 行消失。  
+- 过期后该行不再算在线，整行从默认列表消失（无 `pool_seed` 回落，不会再出现「交付同事」「Cursor 同事」种子名）。  
+- 从未心跳过的池工位不会出现在默认 `GET /v1/desks`。  
 - 看板仍是投影，**不是**派工台。无官方侧栏 roster API——不要扫 `agent-data` 或 `:1340`。
 
 ## 5. 人也能填

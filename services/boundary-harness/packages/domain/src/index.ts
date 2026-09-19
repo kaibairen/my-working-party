@@ -76,10 +76,12 @@ export {
   listDesks,
   recordHeartbeat,
   DESK_STATUS,
+  FAKE_SEED_DESK_NAMES,
   HEARTBEAT_TTL_SECONDS,
   HEARTBEAT_TTL_MIN,
   HEARTBEAT_TTL_MAX,
   humanDeskName,
+  isFakeSeedDeskName,
   type DeskPresence,
   type HeartbeatInput,
 } from "./desks";

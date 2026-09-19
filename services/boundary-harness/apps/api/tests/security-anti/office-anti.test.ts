@@ -28,6 +28,19 @@ describe("office anti-dispatch regressions", () => {
     harness = undefined;
   });
 
+  it("desks_no_fake_seed_names", async () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const app = createApp(harness);
+    const listed = await json(app, "/v1/desks", { headers: headers("decision_maker", "you") });
+    expect(listed.res.status).toBe(200);
+    expect(listed.body.readonly).toBe(true);
+    expect(listed.body.stub).toBe(true);
+    expect(listed.body.desks).toEqual([]);
+    const names = (listed.body.desks as Array<{ name: string }>).map((d) => d.name);
+    expect(names).not.toContain("交付同事");
+    expect(names).not.toContain("Cursor 同事");
+  });
+
   it("office_no_assign_desk", async () => {
     harness = createHarness({ databasePath: ":memory:" });
     const app = createApp(harness);

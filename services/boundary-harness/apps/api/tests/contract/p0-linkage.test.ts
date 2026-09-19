@@ -181,8 +181,8 @@ describe("P0 linkage contracts", () => {
     expect(before.body.readonly).toBe(true);
     expect(before.body.stub).toBe(true);
     expect(before.body.heartbeat_ttl_seconds).toBe(HEARTBEAT_TTL_SECONDS);
-    expect(before.body.desks.find((d: { id: string }) => d.id === "pool_noop").last_heartbeat).toBeNull();
-    expect(before.body.desks.find((d: { id: string }) => d.id === "pool_noop").source).toBe("pool_seed");
+    expect(before.body.desks.find((d: { id: string }) => d.id === "pool_noop")).toBeUndefined();
+    expect(before.body.desks.some((d: { name: string }) => d.name === "交付同事" || d.name === "Cursor 同事")).toBe(false);
 
     const beat = await json(app, "/v1/agents/heartbeat", {
       method: "POST",
@@ -218,8 +218,8 @@ describe("P0 linkage contracts", () => {
     nowMs += (HEARTBEAT_TTL_SECONDS + 1) * 1000;
     const expired = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
     expect(expired.body.stub).toBe(true);
-    expect(expired.body.desks.find((d: { id: string }) => d.id === "pool_noop").source).toBe("pool_seed");
-    expect(expired.body.desks.find((d: { id: string }) => d.id === "pool_noop").last_heartbeat).toBeNull();
+    expect(expired.body.desks.find((d: { id: string }) => d.id === "pool_noop")).toBeUndefined();
+    expect(expired.body.desks.some((d: { name?: string; source?: string }) => d.name === "交付同事" || d.source === "pool_seed")).toBe(false);
     expect(expired.body.desks.some((d: { id: string }) => d.id === "agent:sidebar-bot")).toBe(false);
   });
 

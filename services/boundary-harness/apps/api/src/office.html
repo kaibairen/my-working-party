@@ -106,7 +106,7 @@
     </section>
     <aside class="panel" id="desks" data-testid="desks-panel">
       <h2 data-testid="desks-entry">工位心跳</h2>
-      <p class="desks-hint" data-testid="desks-hint">只读投影。开跑不依赖打开这一页或画布。</p>
+      <p class="desks-hint" data-testid="desks-hint">只读投影。只列出有真实心跳的工位。开跑不依赖打开这一页或画布。</p>
       <div id="roster" class="roster" data-testid="roster" data-readonly="true" aria-readonly="true"></div>
     </aside>
   </div>
@@ -207,9 +207,17 @@
     }
 
     /* —— Office home: goals + fill slots + roster (not a dispatch board) —— */
+    const FAKE_SEED_DESK_NAMES = ["交付同事", "Cursor 同事"];
+    function isTrustedDesk(d) {
+      if (!d) return false;
+      const name = String(d.name || "");
+      const liveBeat = Boolean(d.last_heartbeat) && d.source !== "pool_seed" && (!d.source || d.source === "heartbeat");
+      if (!liveBeat && FAKE_SEED_DESK_NAMES.includes(name)) return false;
+      return liveBeat;
+    }
     function renderRoster(desks) {
       const root = $("roster");
-      const rows = (desks || []).map((d) => {
+      const rows = (desks || []).filter(isTrustedDesk).map((d) => {
         const name = String(d.name || "同事");
         const status = String(d.status || "空闲");
         const presence = String(d.presence || "idle");
@@ -224,7 +232,9 @@
           </span>
         </li>`;
       }).join("");
-      root.innerHTML = `<ul class="desk-list" data-testid="desk-list">${rows}</ul>`;
+      root.innerHTML = rows
+        ? `<ul class="desk-list" data-testid="desk-list">${rows}</ul>`
+        : `<p class="desks-hint" data-testid="desk-empty">此刻没有在线工位。</p><ul class="desk-list" data-testid="desk-list"></ul>`;
     }
     function slotHtml(slot, goal) {
       const who = slot.empty ? "还没人填" : (slot.filler_kind === "human" ? "人填 · " : "Bot 填 · ") + (slot.filler || "同事");

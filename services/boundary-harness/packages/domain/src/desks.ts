@@ -13,10 +13,21 @@ export const DESK_STATUS = {
 
 export type DeskPresence = keyof typeof DESK_STATUS;
 
-/** Default presence TTL. Fresh heartbeat = online; expired rows fall back to pool_seed. */
+/**
+ * Default presence TTL (#15). Fresh heartbeat = online.
+ * Expired / never-recorded rows are omitted from the default office list
+ * (no pool_seed fallback — those labels are inventory, not colleagues).
+ */
 export const HEARTBEAT_TTL_SECONDS = 90;
 export const HEARTBEAT_TTL_MIN = 15;
 export const HEARTBEAT_TTL_MAX = 3600;
+
+/**
+ * Pool-seed placeholder labels. They MUST NOT appear as default GET /v1/desks
+ * entries unless a live heartbeat is overlaying that row (then the heartbeat
+ * display_name is used, which may coincide with these strings).
+ */
+export const FAKE_SEED_DESK_NAMES = ["交付同事", "Cursor 同事"] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -24,6 +35,10 @@ const DESK_NAMES: Record<string, string> = {
   pool_noop: "交付同事",
   pool_cursor: "Cursor 同事",
 };
+
+export function isFakeSeedDeskName(name: string): boolean {
+  return (FAKE_SEED_DESK_NAMES as readonly string[]).includes(name);
+}
 
 export function humanDeskName(poolId: string, kind: string): string {
   if (DESK_NAMES[poolId]) return DESK_NAMES[poolId];
@@ -136,9 +151,17 @@ function deskRow(input: {
 /**
  * Read-only office roster. Never a dispatch / assign surface.
  *
- * Pool seed rows stay as fallback. Live `agent_heartbeats` within TTL overlay
- * `last_heartbeat` / `source=heartbeat` and may add extra agent desks.
- * Expired heartbeats do not count as presence.
+ * Default list semantics (trusted heartbeat = live TTL):
+ * - Include a desk/bot only when `agent_heartbeats.last_seen_at` is parseable
+ *   and still within that row's `ttl_seconds` (`now - last_seen_at < ttl`).
+ * - Never-recorded pool seeds are omitted (not colleagues).
+ * - Expired heartbeats are omitted — no `source=pool_seed` fallback, so
+ *   placeholder names like 「交付同事」「Cursor 同事」 cannot reappear.
+ * - We pick "within TTL", not "ever recorded": #15 already treated expiry as
+ *   not-present, and a stale last_seen without a live beat is not a real desk.
+ *
+ * Live rows use the heartbeat `display_name` (or actor id), never the
+ * hardcoded seed map. Fill-slot filler labels may still use `humanDeskName`.
  */
 export function listDesks(h: Harness, actor: Actor) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
@@ -151,7 +174,11 @@ export function listDesks(h: Harness, actor: Actor) {
   const live = beats.filter((b) => isLiveHeartbeat(b.lastSeenAt, b.ttlSeconds, now));
 
   const usedBeatActors = new Set<string>();
-  const desks = poolRows.map((pool) => {
+  const desks: ReturnType<typeof deskRow>[] = [];
+  for (const pool of poolRows) {
+    const beat = live.find((b) => b.poolId === pool.id);
+    if (!beat) continue;
+    usedBeatActors.add(beat.actorId);
     const asgs = assignmentRows.filter((a) => a.poolId === pool.id);
     const asgIds = new Set(asgs.map((a) => a.id));
     const presence = presenceFor({
@@ -159,18 +186,18 @@ export function listDesks(h: Harness, actor: Actor) {
       assignmentStatuses: asgs.map((a) => a.status),
       gateStatuses: gateRows.filter((g) => g.assignmentId && asgIds.has(g.assignmentId)).map((g) => g.status),
     });
-    const name = humanDeskName(pool.id, pool.kind);
-    const beat = live.find((b) => b.poolId === pool.id);
-    if (beat) usedBeatActors.add(beat.actorId);
-    return deskRow({
-      id: pool.id,
-      name,
-      presence,
-      last_heartbeat: beat?.lastSeenAt ?? null,
-      source: beat ? "heartbeat" : "pool_seed",
-      ttl_seconds: beat?.ttlSeconds ?? null,
-    });
-  });
+    const name = beat.displayName?.trim() || beat.actorId;
+    desks.push(
+      deskRow({
+        id: pool.id,
+        name,
+        presence,
+        last_heartbeat: beat.lastSeenAt,
+        source: "heartbeat",
+        ttl_seconds: beat.ttlSeconds,
+      }),
+    );
+  }
 
   for (const beat of live) {
     if (usedBeatActors.has(beat.actorId)) continue;

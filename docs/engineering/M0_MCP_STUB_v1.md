@@ -21,7 +21,7 @@
 | `harness_list_gates` | `GET /gates?status=ready` | decision_maker \| coordinator | 返回 GateInstance + `ready_result_json.missing[]` |
 | `harness_decide_gate` | `POST /gates/{id}/decide` | **仅 decision_maker** | `pass\|revise\|defer` + version 乐观锁；409 冲突 |
 | `harness_policy_check` | `POST /policy/check` | executor \| service \| adapter | 返回 allow \| redirect_hint \| require_gate \| deny；**advisory 不阻塞** |
-| `harness_heartbeat` | `POST /agents/heartbeat` | coordinator \| executor \| service | 刷新 `last_heartbeat`；`GET /desks` 按 TTL（默认 90s）投影在线 |
+| `harness_heartbeat` | `POST /agents/heartbeat` | coordinator \| executor \| service | 刷新 `last_heartbeat`；默认 `GET /desks` 只列出 TTL 内（默认 90s）的真实心跳，不含种子工位名 |
 
 文档别名（不注册第二套工具）：  
 `propose_assignment`→`fill_assignment` · `dispatch_assignment`→`dispatch` · `get_status`→`get_run` · `list_ready_gates`→`list_gates`。

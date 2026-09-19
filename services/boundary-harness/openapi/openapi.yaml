@@ -192,10 +192,13 @@ paths:
     get:
       summary: Read-only office roster (presence projection, not dispatch)
       description: |
-        Pool seed desks plus live `POST /v1/agents/heartbeat` rows within TTL
-        (default 90s, advertised as `heartbeat_ttl_seconds`). Expired heartbeats
-        fall back to `source=pool_seed` / `last_heartbeat=null`. Clients MUST NOT
-        POST this path.
+        Default list is heartbeat-only. A desk/bot is included only when Domain
+        has a trusted live `agent_heartbeats.last_seen_at` (parseable and still
+        within that row's TTL; default 90s, advertised as `heartbeat_ttl_seconds`).
+        Pool seed placeholders (「交付同事」「Cursor 同事」) are omitted — they
+        are inventory, not colleagues. Expired heartbeats are omitted (no
+        `pool_seed` fallback). Clients MUST NOT POST this path or render seed
+        names client-side as primary roster rows.
       responses:
         "200":
           description: OK

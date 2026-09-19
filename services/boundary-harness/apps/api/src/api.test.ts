@@ -312,7 +312,9 @@ describe("domain API", () => {
     expect(officeHtml).toContain("exception-grants");
     expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
     expect(officeHtml).toContain("工位心跳");
-    expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
+    expect(officeHtml).toContain("只读投影。只列出有真实心跳的工位。开跑不依赖打开这一页或画布。");
+    expect(officeHtml).toContain("交付同事");
+    expect(officeHtml).toContain("isTrustedDesk");
     expect(officeHtml).toContain('data-testid="roster"');
     expect(officeHtml).toContain('data-readonly="true"');
     expect(officeHtml).toContain("/v1/desks");
@@ -365,12 +367,7 @@ describe("domain API", () => {
     expect(listed.body.hitl).toBe("待我拍板");
     expect(listed.body.stub).toBe(true);
     expect(listed.body.heartbeat_ttl_seconds).toBe(90);
-    expect(listed.body.desks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "交付同事", status: "空闲", presence: "idle", source: "pool_seed" }),
-        expect.objectContaining({ name: "Cursor 同事", status: "空闲", presence: "idle", source: "pool_seed" }),
-      ]),
-    );
+    expect(listed.body.desks).toEqual([]);
     const write = await app.request("/v1/desks", {
       method: "POST",
       headers: headers("decision_maker", "you"),

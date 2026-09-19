@@ -207,6 +207,28 @@ export async function seedAuthorityReady(baseURL: string, action = "destructive_
   return { goal, gate: check.gate_instance };
 }
 
+/** Live bot presence so GET /v1/desks includes a real desk row. */
+export async function seedDeskHeartbeat(
+  baseURL: string,
+  input: { actor?: string; display_name: string; pool_id?: string; ttl_seconds?: number } = {
+    display_name: "侧栏同事",
+  },
+) {
+  const actor = input.actor ?? `bot-${input.display_name}`;
+  return requireOk(
+    "desk heartbeat",
+    await api(baseURL, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: jsonHeaders("executor", actor),
+      body: JSON.stringify({
+        display_name: input.display_name,
+        pool_id: input.pool_id,
+        ttl_seconds: input.ttl_seconds,
+      }),
+    }),
+  );
+}
+
 /** Fill an assignment without dispatch so the desk projects 在忙. */
 export async function seedBusyDesk(baseURL: string, poolId = "pool_cursor") {
   const goal = await requireOk(
