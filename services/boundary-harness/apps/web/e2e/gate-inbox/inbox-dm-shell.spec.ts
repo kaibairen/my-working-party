@@ -7,6 +7,7 @@ import {
   HUMAN_GOAL,
   JUNK_TITLE_RE,
   seedBusyDesk,
+  seedHeartbeat,
   seedDeliverPending,
   seedDeliverReady,
   shotDir,
@@ -87,13 +88,24 @@ test.describe("E2E decision-maker shell", () => {
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");
     await expect(page.getByTestId("desks-hint")).toContainText("只读投影");
+    await expect(page.getByTestId("desks-hint")).toContainText("不是侧栏同步");
     await expect(page.getByTestId("desks-hint")).not.toContainText(/打开画布才能开工|去 Roster|派活|指派/);
+    await expect(page.getByTestId("desks-empty")).toHaveText("还没有 Bot 报心跳");
+    await expect(page.getByTestId("desk-row")).toHaveCount(0);
+    const emptyText = await roster.innerText();
+    expect(emptyText).not.toMatch(/交付同事|Cursor 同事/);
+
+    await seedHeartbeat(baseURL!, { actor: "bot-deliver", display_name: "周报 Bot", pool_id: "pool_noop" });
+    await seedHeartbeat(baseURL!, { actor: "bot-cursor", display_name: "调研 Bot", pool_id: "pool_cursor" });
+    await page.reload();
     const rows = page.getByTestId("desk-row");
     await expect(rows).toHaveCount(2);
-    await expect(page.getByTestId("desk-name")).toHaveText(["交付同事", "Cursor 同事"]);
+    await expect(page.getByTestId("desk-name")).toHaveText(["周报 Bot", "调研 Bot"]);
     await expect(page.getByTestId("desk-status")).toHaveText([/在忙|等证据|空闲/, /在忙|等证据|空闲/]);
     await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "在忙" }) })).toHaveCount(1);
     await expect(rows.filter({ has: page.getByTestId("desk-status").filter({ hasText: "等证据" }) })).toHaveCount(1);
+    const namedText = await roster.innerText();
+    expect(namedText).not.toMatch(/交付同事|Cursor 同事/);
     await expect(roster.getByRole("button")).toHaveCount(0);
     await expect(roster.getByRole("link")).toHaveCount(0);
     await expect(roster.locator("[draggable='true']")).toHaveCount(0);

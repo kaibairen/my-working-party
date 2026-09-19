@@ -34,9 +34,13 @@ describe("office anti-dispatch regressions", () => {
     const listed = await json(app, "/v1/desks", { headers: headers("decision_maker", "you") });
     expect(listed.res.status).toBe(200);
     expect(listed.body.readonly).toBe(true);
+    expect(listed.body.desks).toEqual([]);
+    expect(JSON.stringify(listed.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
     for (const desk of listed.body.desks) {
       expect(["busy", "waiting_evidence", "idle"]).toContain(desk.presence);
     }
+    expect(officeHtml).toContain("还没有 Bot 报心跳");
+    expect(officeHtml).toContain("不是侧栏同步");
     const assign = await app.request("/v1/desks/pool_noop/assign", {
       method: "POST",
       headers: headers("decision_maker", "you"),

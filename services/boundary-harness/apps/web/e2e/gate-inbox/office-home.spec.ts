@@ -44,10 +44,11 @@ test.describe("E2E office home P0", () => {
     const roster = page.getByTestId("roster");
     await expect(roster).toBeVisible();
     await expect(roster).toHaveAttribute("data-readonly", "true");
-    await expect(page.getByTestId("desk-row").first()).toBeVisible();
-    await expect(page.getByTestId("desk-status").first()).toHaveText(/在忙|等证据|空闲/);
+    await expect(page.getByTestId("desks-empty")).toHaveText("还没有 Bot 报心跳");
+    await expect(page.getByTestId("desk-row")).toHaveCount(0);
     await expect(roster.getByRole("button")).toHaveCount(0);
     await expect(roster.locator("[draggable='true']")).toHaveCount(0);
+    expect(await roster.innerText()).not.toMatch(/交付同事|Cursor 同事/);
 
     await page.screenshot({ path: join(shotDir, "office_home_goals.png"), fullPage: true });
 

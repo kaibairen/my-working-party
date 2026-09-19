@@ -111,7 +111,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: "harness_heartbeat",
-    description: "Report bot presence. Domain stores last_heartbeat + TTL for GET /v1/desks.",
+    description: "Report bot presence so GET /v1/desks shows this bot. Seed pools are not colleagues.",
     method: "POST",
     path: () => "/v1/agents/heartbeat",
   },

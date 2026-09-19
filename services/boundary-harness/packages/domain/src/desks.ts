@@ -13,26 +13,37 @@ export const DESK_STATUS = {
 
 export type DeskPresence = keyof typeof DESK_STATUS;
 
-/** Default presence TTL. Fresh heartbeat = online; expired rows fall back to pool_seed. */
+/** Default presence TTL. Fresh heartbeat = online; expired rows disappear from the office roster. */
 export const HEARTBEAT_TTL_SECONDS = 90;
 export const HEARTBEAT_TTL_MIN = 15;
 export const HEARTBEAT_TTL_MAX = 3600;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const DESK_NAMES: Record<string, string> = {
+/** Fill-slot labels only. Office roster MUST NOT use these as Bot colleagues. */
+const FILLER_NAMES: Record<string, string> = {
   pool_noop: "交付同事",
   pool_cursor: "Cursor 同事",
 };
 
 export function humanDeskName(poolId: string, kind: string): string {
-  if (DESK_NAMES[poolId]) return DESK_NAMES[poolId];
+  if (FILLER_NAMES[poolId]) return FILLER_NAMES[poolId];
   if (kind === "bot_group") return "群组同事";
   if (kind === "cursor_account") return "Cursor 同事";
   if (kind === "noop") return "交付同事";
   const stripped = poolId.replace(/^pool_/, "").trim();
   if (!stripped || UUID_RE.test(stripped)) return "同事";
   return stripped;
+}
+
+/** Ops-only pool row. Never humanize execution pools as 同事. */
+export function executionPoolName(poolId: string, kind: string): string {
+  if (poolId === "pool_noop" || kind === "noop") return "执行池 · noop";
+  if (poolId === "pool_cursor" || kind === "cursor_account") return "执行池 · Cursor";
+  if (kind === "bot_group") return "执行池 · 群组";
+  const stripped = poolId.replace(/^pool_/, "").trim();
+  if (!stripped || UUID_RE.test(stripped)) return "执行池";
+  return `执行池 · ${stripped}`;
 }
 
 function presenceFor(input: {
@@ -60,8 +71,14 @@ function isLiveHeartbeat(lastSeenAt: string, ttlSeconds: number, nowIso: string)
 
 export type HeartbeatInput = {
   display_name?: string;
+  name?: string;
   pool_id?: string | null;
   ttl_seconds?: number;
+};
+
+export type ListDesksOptions = {
+  /** Ops flag. Default office roster is heartbeat agents only. */
+  includePools?: boolean;
 };
 
 /**
@@ -80,7 +97,8 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
     const pool = h.db.select().from(pools).where(eq(pools.id, poolId)).get();
     if (!pool) throw new HarnessError("not_found", `pool ${poolId} not found`, 404);
   }
-  const displayName = input.display_name?.trim() || actor.id;
+  const rawName = input.display_name ?? input.name;
+  const displayName = typeof rawName === "string" && rawName.trim() ? rawName.trim() : actor.id;
   const ts = h.now();
   const existing = h.db.select().from(agentHeartbeats).where(eq(agentHeartbeats.actorId, actor.id)).get();
   if (existing) {
@@ -124,7 +142,7 @@ function deskRow(input: {
   return {
     id: input.id,
     name: input.name,
-    avatar: Array.from(input.name)[0] ?? "同",
+    avatar: Array.from(input.name)[0] ?? "B",
     presence: input.presence,
     status: DESK_STATUS[input.presence],
     last_heartbeat: input.last_heartbeat,
@@ -133,53 +151,63 @@ function deskRow(input: {
   };
 }
 
+function presenceForPool(
+  poolId: string,
+  assignmentRows: Array<{ id: string; poolId: string; status: string }>,
+  runRows: Array<{ assignmentId: string; status: string }>,
+  gateRows: Array<{ assignmentId: string | null; status: string }>,
+): DeskPresence {
+  const asgs = assignmentRows.filter((a) => a.poolId === poolId);
+  const asgIds = new Set(asgs.map((a) => a.id));
+  return presenceFor({
+    runStatuses: runRows.filter((r) => asgIds.has(r.assignmentId)).map((r) => r.status),
+    assignmentStatuses: asgs.map((a) => a.status),
+    gateStatuses: gateRows.filter((g) => g.assignmentId && asgIds.has(g.assignmentId)).map((g) => g.status),
+  });
+}
+
 /**
  * Read-only office roster. Never a dispatch / assign surface.
  *
- * Pool seed rows stay as fallback. Live `agent_heartbeats` within TTL overlay
- * `last_heartbeat` / `source=heartbeat` and may add extra agent desks.
- * Expired heartbeats do not count as presence.
+ * Default: live `agent_heartbeats` within TTL only, named from heartbeat
+ * `display_name`. Seed execution pools are not Bot colleagues.
+ * `include_pools` is an ops overlay that labels pools as 「执行池 · …」.
+ * Expired heartbeats are omitted (no pool_seed fallback on the office roster).
  */
-export function listDesks(h: Harness, actor: Actor) {
+export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {}) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
   const now = h.now();
-  const poolRows = h.db.select().from(pools).all();
+  const includePools = Boolean(opts.includePools);
   const assignmentRows = h.db.select().from(assignments).all();
   const runRows = h.db.select().from(runs).all();
   const gateRows = h.db.select().from(gateInstances).all();
   const beats = h.db.select().from(agentHeartbeats).all();
   const live = beats.filter((b) => isLiveHeartbeat(b.lastSeenAt, b.ttlSeconds, now));
 
-  const usedBeatActors = new Set<string>();
-  const desks = poolRows.map((pool) => {
-    const asgs = assignmentRows.filter((a) => a.poolId === pool.id);
-    const asgIds = new Set(asgs.map((a) => a.id));
-    const presence = presenceFor({
-      runStatuses: runRows.filter((r) => asgIds.has(r.assignmentId)).map((r) => r.status),
-      assignmentStatuses: asgs.map((a) => a.status),
-      gateStatuses: gateRows.filter((g) => g.assignmentId && asgIds.has(g.assignmentId)).map((g) => g.status),
-    });
-    const name = humanDeskName(pool.id, pool.kind);
-    const beat = live.find((b) => b.poolId === pool.id);
-    if (beat) usedBeatActors.add(beat.actorId);
-    return deskRow({
-      id: pool.id,
-      name,
-      presence,
-      last_heartbeat: beat?.lastSeenAt ?? null,
-      source: beat ? "heartbeat" : "pool_seed",
-      ttl_seconds: beat?.ttlSeconds ?? null,
-    });
-  });
+  const desks: ReturnType<typeof deskRow>[] = [];
+
+  if (includePools) {
+    for (const pool of h.db.select().from(pools).all()) {
+      desks.push(
+        deskRow({
+          id: pool.id,
+          name: executionPoolName(pool.id, pool.kind),
+          presence: presenceForPool(pool.id, assignmentRows, runRows, gateRows),
+          last_heartbeat: null,
+          source: "pool_seed",
+          ttl_seconds: null,
+        }),
+      );
+    }
+  }
 
   for (const beat of live) {
-    if (usedBeatActors.has(beat.actorId)) continue;
     const name = beat.displayName?.trim() || beat.actorId;
     desks.push(
       deskRow({
         id: `agent:${beat.actorId}`,
         name,
-        presence: "idle",
+        presence: beat.poolId ? presenceForPool(beat.poolId, assignmentRows, runRows, gateRows) : "idle",
         last_heartbeat: beat.lastSeenAt,
         source: "heartbeat",
         ttl_seconds: beat.ttlSeconds,
@@ -193,5 +221,6 @@ export function listDesks(h: Harness, actor: Actor) {
     hitl: "待我拍板" as const,
     stub: live.length === 0,
     heartbeat_ttl_seconds: HEARTBEAT_TTL_SECONDS,
+    include_pools: includePools,
   };
 }

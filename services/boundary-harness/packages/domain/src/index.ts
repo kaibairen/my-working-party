@@ -80,8 +80,10 @@ export {
   HEARTBEAT_TTL_MIN,
   HEARTBEAT_TTL_MAX,
   humanDeskName,
+  executionPoolName,
   type DeskPresence,
   type HeartbeatInput,
+  type ListDesksOptions,
 } from "./desks";
 export type { FillSlot } from "./services";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
