@@ -94,7 +94,7 @@
       <p class="lede">看见目标、谁在填、工位在忙什么。需要拍板时打开待办。</p>
       <p class="flash" id="goal-flash" data-testid="goal-flash"></p>
       <form class="goal-form" id="goal-form" data-testid="new-goal-form">
-        <label>名称 <input name="title" data-testid="goal-title-input" placeholder="给同事一个能读的名字" maxlength="80" required /></label>
+        <label>名称 <input name="title" data-testid="goal-title-input" placeholder="给同事一个能读的名字" maxlength="80" required oninvalid="this.setCustomValidity('请填一个能读的名字')" oninput="this.setCustomValidity('')" /></label>
         <label>一句话要什么 <input name="intent" data-testid="goal-intent-input" placeholder="不要写步骤剧本" maxlength="200" /></label>
         <button type="submit" data-testid="new-goal">新建目标</button>
       </form>
@@ -227,7 +227,9 @@
     function slotHtml(slot) {
       const who = slot.empty ? "还没人填" : (slot.filler_kind === "human" ? "人填 · " : "Bot 填 · ") + (slot.filler || "同事");
       const progress = slot.progress || "等同事填";
-      const what = slot.outcome && isHumanTitle(slot.outcome) ? slot.outcome : "";
+      const what = slot.outcome && isHumanTitle(slot.outcome) && !/^(pending|presence|demo|chat) only$/i.test(slot.outcome)
+        ? slot.outcome
+        : "";
       const art = slot.artifact_uri
         ? `<a data-testid="slot-artifact" href="${esc(slot.artifact_uri)}">产物</a>`
         : `<span data-testid="slot-artifact">产物未交</span>`;

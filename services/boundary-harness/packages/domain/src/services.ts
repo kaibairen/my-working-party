@@ -506,7 +506,8 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
       progress = "在填";
     }
     const brief = parseJson<{ outcome?: string }>(asg.briefJson);
-    const outcome = brief?.outcome?.trim() || null;
+    const rawOutcome = brief?.outcome?.trim() || null;
+    const outcome = rawOutcome && /^(pending|presence|demo|chat) only$/i.test(rawOutcome) ? null : rawOutcome;
     const filler = pool ? humanDeskName(pool.id, pool.kind) : "同事";
     const filler_kind: FillSlot["filler_kind"] = pool?.kind === "bot_group" || pool?.kind === "cursor_account" || pool?.kind === "noop"
       ? "bot"
