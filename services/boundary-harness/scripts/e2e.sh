@@ -20,7 +20,7 @@ req() {
   python3 -m json.tool < "$OUT/${name}.body" > "$OUT/${name}.json" 2>/dev/null || cp "$OUT/${name}.body" "$OUT/${name}.json"
 }
 
-H=(-H 'X-Harness-Role: coordinator' -H 'X-Harness-Actor: coord-1' -H 'content-type: application/json')
+H=(-H 'X-Harness-Role: coordinator' -H 'X-Harness-Actor: coord-1' -H 'X-Harness-Entry: mcp' -H 'content-type: application/json')
 
 req health -X GET "$BASE/health"
 req openapi -X GET "$BASE/openapi.yaml"
@@ -38,7 +38,7 @@ req dispatch -X POST "$BASE/v1/assignments/$AID/dispatch" "${H[@]}" \
 RID=$(python3 -c 'import json;print(json.load(open("'"$OUT"'/dispatch.json"))["id"])')
 
 req evidence -X POST "$BASE/v1/runs/$RID/evidence" \
-  -H 'X-Harness-Role: executor' -H 'X-Harness-Actor: exec-1' -H 'content-type: application/json' \
+  -H 'X-Harness-Role: executor' -H 'X-Harness-Actor: exec-1' -H 'X-Harness-Entry: mcp' -H 'content-type: application/json' \
   -d '{"items":[{"kind":"summary_md","uri":"file://summary.md"},{"kind":"artifact_uri","uri":"file://out.tgz"}]}'
 
 req gates -X GET "$BASE/v1/gates?status=ready" \

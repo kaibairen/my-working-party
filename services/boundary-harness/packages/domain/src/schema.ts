@@ -15,6 +15,7 @@ export const pools = sqliteTable("pools", {
 export const goals = sqliteTable("goals", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
+  intent: text("intent"),
   mode: text("mode").notNull(),
   dispatchPolicy: text("dispatch_policy").notNull(),
   coordinatorRef: text("coordinator_ref").notNull(),

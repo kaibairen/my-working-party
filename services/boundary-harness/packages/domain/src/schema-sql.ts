@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS pools (
 CREATE TABLE IF NOT EXISTS goals (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  intent TEXT,
   mode TEXT NOT NULL,
   dispatch_policy TEXT NOT NULL,
   coordinator_ref TEXT NOT NULL,

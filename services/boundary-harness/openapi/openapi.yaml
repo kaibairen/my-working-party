@@ -13,6 +13,14 @@ info:
     Admin freeze POST/GET /v1/admin/freeze; new dispatch → 423 freeze_active.
     Goal dial freeze remains 403 dial_frozen and is distinct from admin freeze.
     audit_log is append-only (nine columns; no PATCH/DELETE).
+    M4 glove scope: only bots participating in a Boundary Goal (not the whole account).
+    Bot completion writes (POST /v1/assignments/{id}/dispatch, POST /v1/runs/{id}/evidence)
+    require header x-harness-entry: mcp (injected by the MCP proxy). Direct Cursor /
+    cursor_raw_* is never a completion path. No Bearer and no x-harness-role → 401 unauthenticated.
+    Missing entry → 403 mcp_entry_required. decide_gate remains decision_maker only (executor → 403).
+    attach_evidence success does not imply Gate ready — Ready still uses appendix A predicates.
+    Decision-maker office shell (/v1/office/*) is a READ projection plus limited goal create
+    (title + one-sentence intent). Owner/dispatch write paths on these routes return 403.
 servers:
   - url: http://127.0.0.1:8080
 security:
@@ -188,6 +196,113 @@ paths:
           description: unauthorized
         "403":
           description: forbidden
+  /v1/office/goals:
+    get:
+      summary: Office goal list (human titles + one-sentence status)
+      description: |
+        Decision-maker shell READ projection. `title` is a human label — never a raw UUID.
+        Does not expose assignment-board or dispatch controls.
+      responses:
+        "200":
+          description: Human-readable goals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfficeGoalList"
+        "401":
+          description: unauthorized
+        "403":
+          description: forbidden
+    post:
+      summary: Create a Goal from the office shell (title + intent)
+      description: |
+        Limited create for the decision-maker shell. Body is title (name) + one-sentence intent.
+        BriefV1 forbidden keys (steps, script, playbook, …) → 422 brief_forbidden_field.
+        Does not assign, dispatch, or start a run.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOfficeGoal"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfficeGoal"
+        "403":
+          description: forbidden
+        "422":
+          description: brief_forbidden_field | goal_title_required | goal_intent_required
+  /v1/office/goals/{id}/fill_slots:
+    get:
+      summary: Fill-slot projection (who is filling, stage, artifact links)
+      description: |
+        READ only. Projects who is filling, progress stage, and artifact entry links.
+        Not an assignment board — no assign / drag / start-run fields.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Fill slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfficeFillSlots"
+        "403":
+          description: forbidden
+        "404":
+          description: not_found
+    post:
+      summary: Forbidden — office fill slots are read-only
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "403":
+          description: office_write_forbidden
+  /v1/office/desks/presence:
+    get:
+      summary: Desk presence (busy | waiting_evidence | idle)
+      description: |
+        READ only three states. No write owner, no dispatch from this endpoint.
+        Mirrors GET /v1/desks.
+      responses:
+        "200":
+          description: Presence roster
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeskPresenceList"
+        "403":
+          description: forbidden
+    post:
+      summary: Forbidden — office desks are read-only
+      responses:
+        "403":
+          description: office_write_forbidden
+    patch:
+      summary: Forbidden — office desks are read-only
+      responses:
+        "403":
+          description: office_write_forbidden
+  /v1/office/desks/{id}/assign:
+    post:
+      summary: Forbidden — no owner write from the office shell
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "403":
+          description: office_write_forbidden
+  /v1/office/goals/{id}/dispatch:
+    post:
+      summary: Forbidden — no dispatch from the office shell
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "403":
+          description: office_write_forbidden
   /v1/goals:
     post:
       summary: Create Goal (coordinator_ref required)
@@ -278,8 +393,13 @@ paths:
   /v1/assignments/{id}/dispatch:
     post:
       summary: Create Run; Idempotency-Key; blocked when freeze_active
+      description: |
+        Bot completion write. Requires `x-harness-entry: mcp` (MCP proxy injects it).
+        M4 glove applies only to bots on a Boundary Goal. Direct Domain POST without
+        entry → 403 mcp_entry_required. No Bearer and no role session → 401 unauthenticated.
       parameters:
         - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/HarnessEntry"
         - name: Idempotency-Key
           in: header
           required: true
@@ -302,8 +422,10 @@ paths:
                 $ref: "#/components/schemas/Run"
         "200":
           description: Idempotent replay
+        "401":
+          description: unauthenticated
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: forbidden | mcp_entry_required | pool_forbidden
         "423":
           description: freeze_active — reject new dispatch (incl MCP)
           content:
@@ -326,8 +448,14 @@ paths:
   /v1/runs/{id}/evidence:
     post:
       summary: Unique completion entry. shadow=true is Path B and cannot write Gate.
+      description: |
+        Bot completion write. Requires `x-harness-entry: mcp`.
+        attach_evidence 2xx ≠ Gate ready. Ready still uses appendix A predicates.
+        Direct POST without entry → 403 mcp_entry_required. No auth → 401 unauthenticated.
+        M4 glove scope: only bots participating in a Boundary Goal.
       parameters:
         - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/HarnessEntry"
       requestBody:
         required: true
         content:
@@ -337,8 +465,10 @@ paths:
       responses:
         "201":
           description: Created
+        "401":
+          description: unauthenticated
         "403":
-          description: forbidden
+          description: forbidden | mcp_entry_required
   /v1/policy/check:
     post:
       summary: Policy/Dial check. Authority whitelist is exactly five keys.
@@ -446,6 +576,16 @@ components:
       schema:
         type: integer
       description: unix seconds; skew ±300s else 401 webhook_skew
+    HarnessEntry:
+      name: X-Harness-Entry
+      in: header
+      required: true
+      schema:
+        type: string
+        enum: [mcp]
+      description: |
+        MCP proxy injects `mcp` on bot completion writes (dispatch, attach_evidence).
+        Browser / Bot direct Domain calls omit it and are rejected with 403 mcp_entry_required.
   responses:
     Forbidden:
       description: RBAC / pool_forbidden / human fan-out without exception
@@ -570,6 +710,111 @@ components:
           nullable: true
         payload_json:
           nullable: true
+    CreateOfficeGoal:
+      type: object
+      additionalProperties: false
+      required: [title, intent]
+      properties:
+        title:
+          type: string
+          description: Human name. Must not be used as a raw UUID label in the shell.
+        intent:
+          type: string
+          description: One-sentence intent. Forbidden BriefV1 keys (steps, script, …) are rejected with 422.
+    OfficeGoal:
+      type: object
+      required: [id, title, status_summary]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          description: Human-readable label; UUID titles are replaced with 未命名目标.
+        intent:
+          type: string
+          nullable: true
+        status:
+          type: string
+        status_summary:
+          type: string
+    OfficeGoalList:
+      type: object
+      required: [goals, readonly]
+      properties:
+        goals:
+          type: array
+          items:
+            $ref: "#/components/schemas/OfficeGoal"
+        empty_copy:
+          type: string
+        readonly:
+          type: boolean
+    OfficeFillSlots:
+      type: object
+      required: [goal_id, title, slots, readonly]
+      properties:
+        goal_id:
+          type: string
+        title:
+          type: string
+        intent:
+          type: string
+          nullable: true
+        readonly:
+          type: boolean
+        slots:
+          type: array
+          items:
+            type: object
+            required: [filled_by, stage, artifacts]
+            properties:
+              assignment_id:
+                type: string
+              filled_by:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  pool_kind:
+                    type: string
+                    nullable: true
+                  role:
+                    type: string
+              stage:
+                type: string
+                enum: [proposed, accepted, filling, waiting_evidence, has_artifacts, done]
+              stage_label:
+                type: string
+              artifacts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    kind: { type: string }
+                    uri: { type: string }
+                    href: { type: string }
+    DeskPresenceList:
+      type: object
+      required: [desks, readonly]
+      properties:
+        readonly:
+          type: boolean
+        hitl:
+          type: string
+        desks:
+          type: array
+          items:
+            type: object
+            required: [name, presence, status]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              avatar: { type: string }
+              presence:
+                type: string
+                enum: [busy, waiting_evidence, idle]
+              status:
+                type: string
     CreateGoal:
       type: object
       additionalProperties: false
@@ -747,6 +992,9 @@ components:
             - secret_ref_unsupported
             - predicate_evidence_mismatch
             - optimistic_lock
+            - mcp_entry_required
+            - unauthenticated
+            - office_write_forbidden
         message:
           type: string
         keys:

@@ -11,14 +11,14 @@ export const DESK_STATUS = {
 
 export type DeskPresence = keyof typeof DESK_STATUS;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DESK_NAMES: Record<string, string> = {
   pool_noop: "交付同事",
   pool_cursor: "Cursor 同事",
 };
 
-function humanDeskName(poolId: string, kind: string): string {
+export function humanDeskName(poolId: string, kind: string): string {
   if (DESK_NAMES[poolId]) return DESK_NAMES[poolId];
   if (kind === "bot_group") return "群组同事";
   if (kind === "cursor_account") return "Cursor 同事";

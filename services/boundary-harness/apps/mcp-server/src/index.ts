@@ -111,7 +111,7 @@ export async function callTool(
   headers: Record<string, string>,
 ) {
   if (FORBIDDEN.some((p) => name.includes(p))) {
-    throw new Error(`tool ${name} is not registered`);
+    throw new Error(`forbidden_tool: tool ${name} is not registered`);
   }
   const tool = TOOLS.find((t) => t.name === name);
   if (!tool) throw new Error(`unknown tool ${name}`);
@@ -140,6 +140,7 @@ export async function callTool(
       authorization: `Bearer ${headers["x-harness-role"] ?? String(args.role ?? "coordinator")}:${headers["x-harness-actor"] ?? String(args.actor ?? "mcp")}`,
       "x-harness-role": headers["x-harness-role"] ?? String(args.role ?? "coordinator"),
       "x-harness-actor": headers["x-harness-actor"] ?? String(args.actor ?? "mcp"),
+      "x-harness-entry": "mcp",
     },
     body,
   });
