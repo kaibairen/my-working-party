@@ -56,7 +56,7 @@ describe("office anti-dispatch regressions", () => {
     expect(officeHtml).toContain("我来填");
     expect(officeHtml).not.toMatch(/>(开始跑|开跑)</);
     expect(officeHtml).not.toContain('data-testid="start-run"');
-    expect(officeHtml).toContain("exception-grants");
+    expect(officeHtml).toContain("human-fill");
   });
 
   it("fill_board_not_dispatch_console", async () => {

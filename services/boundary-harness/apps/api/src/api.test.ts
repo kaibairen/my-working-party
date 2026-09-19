@@ -309,7 +309,8 @@ describe("domain API", () => {
     expect(officeHtml).toContain("AI 办公室");
     expect(officeHtml).toContain("新建目标");
     expect(officeHtml).toContain("我来填");
-    expect(officeHtml).toContain("exception-grants");
+    expect(officeHtml).toContain("human-fill");
+    expect(officeHtml).not.toContain("开始跑");
     expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
     expect(officeHtml).toContain("工位心跳");
     expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
