@@ -18,7 +18,7 @@ const DESK_NAMES: Record<string, string> = {
   pool_cursor: "Cursor 同事",
 };
 
-function humanDeskName(poolId: string, kind: string): string {
+export function humanDeskName(poolId: string, kind: string): string {
   if (DESK_NAMES[poolId]) return DESK_NAMES[poolId];
   if (kind === "bot_group") return "群组同事";
   if (kind === "cursor_account") return "Cursor 同事";
@@ -44,7 +44,13 @@ function presenceFor(input: {
   return "idle";
 }
 
-/** Read-only office projection. Never a dispatch / assign surface. */
+/**
+ * Read-only office roster. Never a dispatch / assign surface.
+ *
+ * DEMO/STUB: default `pool_noop` / `pool_cursor` rows are the seeded presence
+ * board until real bot heartbeats exist. Presence is derived from
+ * assignment / run / gate rows, not a live heartbeat table.
+ */
 export function listDesks(h: Harness, actor: Actor) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
   const poolRows = h.db.select().from(pools).all();
@@ -67,8 +73,11 @@ export function listDesks(h: Harness, actor: Actor) {
       avatar: Array.from(name)[0] ?? "同",
       presence,
       status: DESK_STATUS[presence],
+      // DEMO/STUB: no heartbeat timestamp until bots report presence.
+      last_heartbeat: null as string | null,
+      source: "pool_seed" as const,
     };
   });
 
-  return { desks, readonly: true as const, hitl: "待我拍板" as const };
+  return { desks, readonly: true as const, hitl: "待我拍板" as const, stub: true as const };
 }

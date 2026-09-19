@@ -1,11 +1,12 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { checkPolicy, type PolicyCheckInput, type PolicyCheckResult } from "@harness/policy";
 import { evaluateReady, requiredEvidenceKinds, type ReadyContext } from "@harness/ready";
-import { parseBriefV1, parseBudget, EVIDENCE_KINDS, type EvidenceKind } from "./brief";
+import { parseBriefV1, parseBudget, BRIEF_FORBIDDEN_KEYS, EVIDENCE_KINDS, type EvidenceKind } from "./brief";
 import { HarnessError } from "./errors";
 import { signHarnessWebhook } from "./hmac";
 import type { Actor, Dial, Role } from "./rbac";
 import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
+import { humanDeskName } from "./desks";
 import type { Harness } from "./db";
 import {
   freezeState,
@@ -26,12 +27,14 @@ import {
 
 export type CreateGoalInput = {
   title: string;
-  mode: "explore" | "deliver";
+  mode?: "explore" | "deliver";
   coordinator_ref?: string | null;
   dispatch_policy?: "coordinator_only" | "human_allowed";
   gate_template_id?: string | null;
   safety_gate?: boolean;
   dial?: Dial;
+  /** One-line "要什么" from the office home form. Not a Brief / steps script. */
+  intent?: string | null;
 };
 
 export type FillAssignmentInput = {
@@ -83,6 +86,7 @@ function publicGoal(row: typeof goals.$inferSelect) {
   return {
     id: row.id,
     title: row.title,
+    intent: row.intent ?? null,
     mode: row.mode,
     dispatch_policy: row.dispatchPolicy,
     coordinator_ref: row.coordinatorRef,
@@ -93,6 +97,21 @@ function publicGoal(row: typeof goals.$inferSelect) {
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
+}
+
+function rejectGoalBriefKeys(input: object) {
+  const keys = Object.keys(input);
+  const forbidden = keys.filter(
+    (k) => k === "brief" || (BRIEF_FORBIDDEN_KEYS as readonly string[]).includes(k),
+  );
+  if (forbidden.length > 0) {
+    throw new HarnessError(
+      "brief_forbidden_field",
+      "Goal create accepts title + one-line intent only; no Brief steps",
+      422,
+      { keys: forbidden },
+    );
+  }
 }
 
 function publicAssignment(row: typeof assignments.$inferSelect) {
@@ -199,26 +218,64 @@ export function getGoal(h: Harness, id: string) {
   return { ...publicGoal(row), gate_defs: defs };
 }
 
+function goalStatusLine(
+  goal: typeof goals.$inferSelect,
+  assignmentRows: Array<typeof assignments.$inferSelect>,
+  gateRows: Array<typeof gateInstances.$inferSelect>,
+): string {
+  const gates = gateRows.filter((g) => g.goalId === goal.id);
+  if (gates.some((g) => g.status === "ready")) return "等你拍板";
+  if (gates.some((g) => g.status === "pending")) return "等证据";
+  if (assignmentRows.some((a) => a.goalId === goal.id)) return "同事在填";
+  return "等同事开工";
+}
+
+/** Decision-maker office list: human titles + one-line status. */
+export function listGoals(h: Harness, actor: Actor) {
+  requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
+  const goalRows = h.db.select().from(goals).all();
+  const assignmentRows = h.db.select().from(assignments).all();
+  const gateRows = h.db.select().from(gateInstances).all();
+  return goalRows
+    .slice()
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+    .map((row) => ({
+      ...publicGoal(row),
+      status_line: goalStatusLine(row, assignmentRows, gateRows),
+    }));
+}
+
 export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
   requireRole(actor, ["decision_maker", "coordinator"]);
-  if (!input.coordinator_ref || !input.coordinator_ref.trim()) {
+  rejectGoalBriefKeys(input);
+  const title = String(input.title ?? "").trim();
+  if (!title) {
+    throw new HarnessError("title_required", "Goal title is required", 422);
+  }
+  // Office home form is title + intent only. DM gets seeded coordinator / deliver.
+  const coordinatorRef =
+    input.coordinator_ref?.trim() ||
+    (actor.role === "decision_maker" ? "coord-1" : "");
+  const mode =
+    input.mode ?? (actor.role === "decision_maker" ? "deliver" : undefined);
+  if (!coordinatorRef) {
     throw new HarnessError("coordinator_ref_required", "Goal MUST bind coordinator_ref", 422);
   }
-  if (input.mode !== "explore" && input.mode !== "deliver") {
+  if (mode !== "explore" && mode !== "deliver") {
     throw new HarnessError("mode_invalid", "mode must be explore or deliver", 422);
   }
 
   let template = input.gate_template_id ?? null;
   if (input.safety_gate) template = "safety_only_v1";
 
-  if (input.mode === "explore" && template === "deliver_ready_v1") {
+  if (mode === "explore" && template === "deliver_ready_v1") {
     throw new HarnessError(
       "mode_template_mismatch",
       "explore MUST NOT default-bind deliver_ready_v1",
       422,
     );
   }
-  if (input.mode === "deliver") {
+  if (mode === "deliver") {
     if (template && template !== "deliver_ready_v1") {
       throw new HarnessError(
         "mode_template_mismatch",
@@ -228,7 +285,7 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
     }
     template = "deliver_ready_v1";
   }
-  if (input.mode === "explore" && template && template !== "safety_only_v1") {
+  if (mode === "explore" && template && template !== "safety_only_v1") {
     throw new HarnessError(
       "mode_template_mismatch",
       "explore may use null template or safety_only_v1",
@@ -236,14 +293,16 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
     );
   }
 
+  const intent = input.intent?.trim() || null;
   const id = h.newId();
   const ts = h.now();
   h.db.insert(goals).values({
     id,
-    title: input.title,
-    mode: input.mode,
+    title,
+    intent,
+    mode,
     dispatchPolicy: input.dispatch_policy ?? "coordinator_only",
-    coordinatorRef: input.coordinator_ref,
+    coordinatorRef,
     gateTemplateId: template,
     dial: input.dial && (DIALS as readonly string[]).includes(input.dial) ? input.dial : "free",
     status: "active",
@@ -272,7 +331,7 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
     }).run();
   }
 
-  audit(h, actor, "create_goal", "goal", id, { mode: input.mode, template });
+  audit(h, actor, "create_goal", "goal", id, { mode, template, intent });
   return getGoal(h, id);
 }
 
@@ -405,6 +464,78 @@ export function getAssignment(h: Harness, id: string) {
   const row = h.db.select().from(assignments).where(eq(assignments.id, id)).get();
   if (!row) throw new HarnessError("not_found", `assignment ${id} not found`, 404);
   return publicAssignment(row);
+}
+
+export type FillSlot = {
+  assignment_id: string | null;
+  empty: boolean;
+  filler: string | null;
+  filler_kind: "bot" | "human" | null;
+  progress: string;
+  outcome: string | null;
+  artifact_uri: string | null;
+};
+
+/**
+ * Fill-board projection under a goal. Read-only progress — not a dispatch board.
+ * Empty goals still return one "等同事填" slot so the office home shows the board.
+ */
+export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
+  requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
+  const goal = h.db.select().from(goals).where(eq(goals.id, goalId)).get();
+  if (!goal) throw new HarnessError("not_found", `goal ${goalId} not found`, 404);
+
+  const asgs = h.db.select().from(assignments).where(eq(assignments.goalId, goalId)).all();
+  const poolRows = h.db.select().from(pools).all();
+  const runRows = h.db.select().from(runs).all();
+  const gateRows = h.db.select().from(gateInstances).all();
+  const evRows = h.db.select().from(evidenceItems).where(eq(evidenceItems.goalId, goalId)).all();
+
+  const slots: FillSlot[] = asgs.map((asg) => {
+    const pool = poolRows.find((p) => p.id === asg.poolId);
+    const runsFor = runRows.filter((r) => r.assignmentId === asg.id);
+    const gatesFor = gateRows.filter((g) => g.assignmentId === asg.id);
+    const artifact = evRows.find((e) => e.assignmentId === asg.id && e.kind === "artifact_uri" && !e.shadow);
+    const liveRun = runsFor.some((r) =>
+      r.status === "queued" || r.status === "running" || r.status === "in_progress" || r.status === "dispatched",
+    );
+    let progress = "在填";
+    if (artifact) progress = "已交产物";
+    else if (gatesFor.some((g) => g.status === "pending")) progress = "等证据";
+    else if (liveRun || asg.status === "accepted" || asg.status === "proposed" || asg.status === "in_progress") {
+      progress = "在填";
+    }
+    const brief = parseJson<{ outcome?: string }>(asg.briefJson);
+    const rawOutcome = brief?.outcome?.trim() || null;
+    const outcome = rawOutcome && /^(pending|presence|demo|chat) only$/i.test(rawOutcome) ? null : rawOutcome;
+    const filler = pool ? humanDeskName(pool.id, pool.kind) : "同事";
+    const filler_kind: FillSlot["filler_kind"] = pool?.kind === "bot_group" || pool?.kind === "cursor_account" || pool?.kind === "noop"
+      ? "bot"
+      : "human";
+    return {
+      assignment_id: asg.id,
+      empty: false,
+      filler,
+      filler_kind,
+      progress,
+      outcome,
+      artifact_uri: artifact?.uri ?? null,
+    };
+  });
+
+  if (slots.length === 0) {
+    slots.push({
+      assignment_id: null,
+      empty: true,
+      filler: null,
+      filler_kind: null,
+      progress: "等同事填",
+      outcome: goal.intent ?? null,
+      artifact_uri: null,
+    });
+  }
+
+  return { slots, readonly: true as const };
 }
 
 function collectReadyContext(h: Harness, goalId: string): ReadyContext {

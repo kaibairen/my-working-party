@@ -189,8 +189,15 @@ paths:
         "403":
           description: forbidden
   /v1/goals:
+    get:
+      summary: List goals for the office home (human titles + status_line)
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: forbidden
     post:
-      summary: Create Goal (coordinator_ref required)
+      summary: Create Goal (title + optional intent; coordinator_ref required unless decision_maker)
       requestBody:
         required: true
         content:
@@ -238,6 +245,17 @@ paths:
         "422":
           description: dial_invalid
   /v1/goals/{id}/assignments:
+    get:
+      summary: List fill slots under a goal (read-only board, not dispatch)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: forbidden
+        "404":
+          description: goal not found
     post:
       summary: Fill Assignment (BriefV1). budget → budget_json.
       parameters:
@@ -577,6 +595,9 @@ components:
       properties:
         title:
           type: string
+        intent:
+          type: string
+          description: One-line "要什么". Not a Brief / steps script.
         mode:
           type: string
           enum: [explore, deliver]

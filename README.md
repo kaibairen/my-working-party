@@ -36,7 +36,7 @@ Frozen MUST: DB SoT; BriefV1 no steps (HTTP+MCP → `422 brief_forbidden_field`)
 | `services/boundary-harness/packages/*` | domain, policy, ready, adapters-noop, adapters-cursor |
 | `services/boundary-harness/docker-compose.yml` | `docker compose up api` |
 
-**Decision-maker:** http://127.0.0.1:8080/ (AI 办公室 + 只读 **工位一览**) → http://127.0.0.1:8080/inbox (待我拍板, sole HITL). Roster is presence only (在忙 / 等证据 / 空闲) — not dispatch. Health / OpenAPI / outbox stay on http://127.0.0.1:8080/ops (403 for `decision_maker`).
+**Decision-maker:** http://127.0.0.1:8080/ (**AI 办公室** — 目标列表 + 新建目标 + Bot 填充槽 + 只读 **工位心跳**). Inbox / 待我拍板 is a top-bar **drawer** (`待办 · n`); http://127.0.0.1:8080/inbox stays loadable. Roster is presence only (在忙 / 等证据 / 空闲) — not dispatch. Health / OpenAPI / outbox stay on http://127.0.0.1:8080/ops (403 for `decision_maker`). AUTHORITATIVE IA: [OFFICE_HOME_IA_P0_v1.md](services/boundary-harness/docs/experience/OFFICE_HOME_IA_P0_v1.md).
 
 M1: CursorAdapter (fixture / `CURSOR_API_STUB` / live `POST /v1/agents` with `repos[]` + `source.repository`), Dial freeze → **423** `dial_frozen`, BriefV1 422 on HTTP+MCP, dual external ids, FINISHED≠IDLE. Worker polls Cursor until `FINISHED`, writes `usage.cursor_lifecycle`, re-evals Ready. MCP aliases from PRD §8; no `cursor_raw_*` / `set_steps`. Live repo: `CURSOR_REPOSITORY` (default this GitHub repo).
 M3: outbox exactly-once attempts + HMAC-SHA256 outbound (`X-Harness-Signature` / `X-Harness-Timestamp`). SSE `/v1/events` replays from `Last-Event-ID`.

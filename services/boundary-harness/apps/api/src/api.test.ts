@@ -306,16 +306,23 @@ describe("domain API", () => {
     expect(office.status).toBe(200);
     const officeHtml = await office.text();
     expect(officeHtml).toContain("AI 办公室");
-    expect(officeHtml).toContain("查看待我拍板");
-    expect(officeHtml).toContain("工位一览");
+    expect(officeHtml).toContain("新建目标");
+    expect(officeHtml).toContain("还没有目标。建一个，同事才会开工。");
+    expect(officeHtml).toContain("工位心跳");
     expect(officeHtml).toContain("只读投影。开跑不依赖打开这一页或画布。");
     expect(officeHtml).toContain('data-testid="roster"');
     expect(officeHtml).toContain('data-readonly="true"');
     expect(officeHtml).toContain("/v1/desks");
+    expect(officeHtml).toContain("/v1/goals");
+    expect(officeHtml).toContain("inbox-drawer");
+    expect(officeHtml).toContain("sanitizeCardTitle");
     expect(officeHtml).toContain("此刻没有待办。安静是正常的。");
+    expect(officeHtml).not.toContain("查看待我拍板");
     expect(officeHtml).not.toContain("OpenAPI");
     expect(officeHtml).not.toContain('href="/ops"');
     expect(officeHtml).not.toContain("派活");
+    expect(officeHtml).not.toContain("指派给");
+    expect(officeHtml).not.toContain("开始跑");
     expect(officeHtml).not.toContain("draggable=\"true\"");
     const inbox = await app.request("/inbox");
     expect(inbox.status).toBe(200);
@@ -365,5 +372,42 @@ describe("domain API", () => {
       body: JSON.stringify({ pool_id: "pool_noop" }),
     });
     expect(write.status).toBe(404);
+  });
+
+  it("lists goals and fill slots for the office home", async () => {
+    const { app } = setup();
+    const created = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ title: "周报交付验收", intent: "写一份能读的周报" }),
+    });
+    expect(created.res.status).toBe(201);
+    expect(created.body.title).toBe("周报交付验收");
+    expect(created.body.intent).toBe("写一份能读的周报");
+    expect(created.body.mode).toBe("deliver");
+
+    const steps = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ title: "坏目标", steps: ["先打开画布"] }),
+    });
+    expect(steps.res.status).toBe(422);
+    expect(steps.body.code ?? steps.body.error?.code).toBe("brief_forbidden_field");
+
+    const listed = await json(app, "/v1/goals", { headers: headers("decision_maker", "you") });
+    expect(listed.res.status).toBe(200);
+    expect(listed.body.goals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: "周报交付验收", status_line: "等同事开工" }),
+      ]),
+    );
+
+    const slots = await json(app, `/v1/goals/${created.body.id}/assignments`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(slots.res.status).toBe(200);
+    expect(slots.body.readonly).toBe(true);
+    expect(slots.body.slots[0].progress).toBe("等同事填");
+    expect(JSON.stringify(slots.body)).not.toMatch(/指派给|开始跑|dispatch/);
   });
 });

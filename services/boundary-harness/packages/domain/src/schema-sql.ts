@@ -3,7 +3,7 @@ export const SCHEMA_VERSION = 1;
 /**
  * Compiled IF NOT EXISTS view of Backend migrations
  * `migrations/0001_m0_schema.sql` + `migrations/0002_m0_security.sql`
- * plus M0 runtime extras (goals.dial, gate_instances.assignment_id).
+ * plus M0 runtime extras (goals.dial, goals.intent, gate_instances.assignment_id).
  * applySchema() executes the migration files as source of truth.
  */
 export const SCHEMA_SQL = `
@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS goals (
   status TEXT NOT NULL,
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  intent TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ready_predicates (

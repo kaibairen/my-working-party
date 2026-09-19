@@ -18,6 +18,8 @@ import {
   getAssignment,
   getGoal,
   getRun,
+  listFillSlots,
+  listGoals,
   HarnessError,
   health,
   isHarnessError,
@@ -220,12 +222,20 @@ export function createApp(harness: Harness) {
     return c.json(createGoal(c.get("harness"), c.get("actor"), body), 201);
   });
 
+  v1.get("/goals", (c) => {
+    return c.json({ goals: listGoals(c.get("harness"), c.get("actor")) });
+  });
+
   v1.post("/goals/:id/dial", async (c) => {
     const body = (await c.req.json()) as { dial?: string };
     return c.json(setGoalDial(c.get("harness"), c.get("actor"), c.req.param("id"), String(body.dial ?? "")));
   });
 
   v1.get("/goals/:id", (c) => c.json(getGoal(c.get("harness"), c.req.param("id"))));
+
+  v1.get("/goals/:id/assignments", (c) => {
+    return c.json(listFillSlots(c.get("harness"), c.get("actor"), c.req.param("id")));
+  });
 
   v1.post("/goals/:id/assignments", async (c) => {
     const body = (await c.req.json()) as Record<string, unknown>;
