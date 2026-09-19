@@ -199,9 +199,9 @@ describe("P0 linkage contracts", () => {
     expect(live.body.desks[0].id).toBe("agent:bot-deliver");
     expect(live.body.desks[0].source).toBe("heartbeat");
     expect(JSON.stringify(live.body.desks)).not.toMatch(/交付同事|Cursor 同事/);
-    expect(live.body.desks[0].group).toBe("其他");
+    expect(live.body.desks[0].group).toBe("未分组");
     expect(live.body.groups).toEqual([
-      expect.objectContaining({ name: "其他", desks: [expect.objectContaining({ name: "周报 Bot" })] }),
+      expect.objectContaining({ name: "未分组", desks: [expect.objectContaining({ name: "周报 Bot" })] }),
     ]);
   });
 
@@ -210,18 +210,18 @@ describe("P0 linkage contracts", () => {
     await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "bot-harness"),
-      body: JSON.stringify({ display_name: "Harness Bot", group: "harness开发" }),
+      body: JSON.stringify({ display_name: "Harness Bot", pool_id: "pool_noop" }),
     });
     await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "bot-2048"),
-      body: JSON.stringify({ display_name: "2048 Bot", section: "2048" }),
+      body: JSON.stringify({ display_name: "2048 Bot", pool_id: "pool_cursor" }),
     });
     const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
     expect(live.body.readonly).toBe(true);
-    expect(live.body.groups.map((g: { name: string }) => g.name)).toEqual(["harness开发", "2048工作组"]);
+    expect(live.body.groups.map((g: { name: string }) => g.name)).toEqual(["pool_cursor", "pool_noop"]);
     expect(live.body.groups.every((g: { desks: unknown[] }) => g.desks.length > 0)).toBe(true);
-    expect(live.body.groups.some((g: { name: string }) => g.name === "其他")).toBe(false);
+    expect(live.body.groups.some((g: { name: string }) => g.name === "未分组")).toBe(false);
     expect(officeHtml).toContain("desk-group");
     expect(officeHtml).toContain("desk-group-title");
     expect(officeHtml).toContain('data-readonly="true"');
@@ -232,7 +232,7 @@ describe("P0 linkage contracts", () => {
     await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "bot-harness"),
-      body: JSON.stringify({ display_name: "Harness Bot", group: "harness" }),
+      body: JSON.stringify({ display_name: "Harness Bot", pool_id: "pool_noop" }),
     });
     const write = await app.request("/v1/desks", {
       method: "POST",
@@ -261,7 +261,7 @@ describe("P0 linkage contracts", () => {
     await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "bot-harness"),
-      body: JSON.stringify({ display_name: "Harness Bot", group: "harness开发" }),
+      body: JSON.stringify({ display_name: "Harness Bot", pool_id: "pool_noop" }),
     });
     const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
     expect(live.body.desks.map((d: { name: string }) => d.name)).toEqual(["Harness Bot"]);
@@ -283,23 +283,30 @@ describe("P0 linkage contracts", () => {
     await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "bot-harness"),
-      body: JSON.stringify({ display_name: "Harness Bot", group: "harness" }),
+      body: JSON.stringify({ display_name: "Harness Bot", pool_id: "pool_noop" }),
     });
     const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
-    expect(live.body.desks.find((d: { id: string }) => d.id === "agent:bot-loose").group).toBe("其他");
-    expect(live.body.groups.map((g: { name: string }) => g.name)).toEqual(["harness开发", "其他"]);
-    expect(live.body.groups.find((g: { name: string }) => g.name === "其他")?.desks.map((d: { name: string }) => d.name)).toEqual([
+    expect(live.body.desks.find((d: { id: string }) => d.id === "agent:bot-loose").group).toBe("未分组");
+    expect(live.body.groups.map((g: { name: string }) => g.name)).toEqual(["pool_noop", "未分组"]);
+    expect(live.body.groups.find((g: { name: string }) => g.name === "未分组")?.desks.map((d: { name: string }) => d.name)).toEqual([
       "闲逛 Bot",
     ]);
-    const onlyGrouped = await json(app, "/v1/agents/heartbeat", {
+    const stillLoose = await json(app, "/v1/agents/heartbeat", {
       method: "POST",
       headers: mcpHeaders("executor", "bot-loose"),
       body: JSON.stringify({ display_name: "闲逛 Bot", group: "2048" }),
     });
-    expect(onlyGrouped.body.group).toBe("2048工作组");
+    expect(stillLoose.body.group).toBe("未分组");
+    const afterGroup = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(afterGroup.body.desks.find((d: { id: string }) => d.id === "agent:bot-loose").group).toBe("未分组");
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-loose"),
+      body: JSON.stringify({ display_name: "闲逛 Bot", pool_id: "pool_cursor" }),
+    });
     const after = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
-    expect(after.body.groups.map((g: { name: string }) => g.name)).toEqual(["harness开发", "2048工作组"]);
-    expect(after.body.groups.some((g: { name: string }) => g.name === "其他")).toBe(false);
+    expect(after.body.groups.map((g: { name: string }) => g.name)).toEqual(["pool_cursor", "pool_noop"]);
+    expect(after.body.groups.some((g: { name: string }) => g.name === "未分组")).toBe(false);
   });
 
   it("fill_slots_pool_labels_not_colleague", async () => {

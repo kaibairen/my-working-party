@@ -210,12 +210,17 @@
     }
 
     /* —— Office home: goals + fill slots + roster (not a dispatch board) —— */
+    const UNGROUPED_LABEL = "未分组";
+    function deskGroupLabel(d) {
+      const poolId = String(d && d.pool_id ? d.pool_id : "").trim();
+      return poolId || UNGROUPED_LABEL;
+    }
     function deskRowHtml(d) {
       const name = String(d.name || "Bot");
       const status = String(d.status || "空闲");
       const presence = String(d.presence || "idle");
       const avatar = String(d.avatar || name.slice(0, 1));
-      const group = String(d.group || "其他");
+      const group = deskGroupLabel(d);
       return `<li class="desk-row" data-testid="desk-row" data-presence="${esc(presence)}" data-group="${esc(group)}" draggable="false">
         <span class="desk-avatar" data-testid="desk-avatar" aria-hidden="true">${esc(avatar)}</span>
         <span class="desk-name" data-testid="desk-name">${esc(name)}</span>
@@ -226,26 +231,29 @@
         </span>
       </li>`;
     }
-    function rosterGroups(desks, groups) {
-      if (Array.isArray(groups) && groups.length) {
-        return groups.filter((g) => (g.desks || []).length > 0);
-      }
+    function rosterGroups(desks) {
       const buckets = new Map();
       for (const d of desks || []) {
-        const name = String(d.group || "其他");
+        const name = deskGroupLabel(d);
         if (!buckets.has(name)) buckets.set(name, []);
         buckets.get(name).push(d);
       }
-      return [...buckets.entries()].map(([name, rows]) => ({ name, desks: rows }));
+      return [...buckets.keys()]
+        .sort((a, b) => {
+          if (a === UNGROUPED_LABEL) return 1;
+          if (b === UNGROUPED_LABEL) return -1;
+          return a.localeCompare(b);
+        })
+        .map((name) => ({ name, desks: buckets.get(name) }));
     }
-    function renderRoster(desks, groups) {
+    function renderRoster(desks) {
       const root = $("roster");
       const list = desks || [];
       if (!list.length) {
         root.innerHTML = `<p class="empty" data-testid="desks-empty">还没有 Bot 报心跳</p>`;
         return;
       }
-      const sections = rosterGroups(list, groups);
+      const sections = rosterGroups(list);
       root.innerHTML = sections.map((g) => `
         <section class="desk-group" data-testid="desk-group" data-group="${esc(g.name)}">
           <h3 class="desk-group-title" data-testid="desk-group-title">${esc(g.name)}</h3>
@@ -282,7 +290,7 @@
       ]);
       const goalsBody = await goalsRes.json();
       const desksBody = await desksRes.json();
-      renderRoster(desksBody.desks || [], desksBody.groups || []);
+      renderRoster(desksBody.desks || []);
       const goals = goalsBody.goals || [];
       $("office-empty").hidden = goals.length > 0;
       if (!goals.length) {

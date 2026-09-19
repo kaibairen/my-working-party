@@ -25,7 +25,7 @@ describe("2048 QA freeze", () => {
     expect(canMove(board)).toBe(true);
   });
 
-  it("game_2048_arrow_or_swipe_moves", () => {
+  it("game_2048_moves", () => {
     const board = [
       [2, 0, 0, 2],
       [0, 0, 0, 0],

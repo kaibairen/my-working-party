@@ -22,34 +22,28 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export const DESK_GROUP_HARNESS = "harness开发";
 export const DESK_GROUP_2048 = "2048工作组";
-export const DESK_GROUP_OTHER = "其他";
+/** Ungrouped roster bucket — no `pool_id` on the heartbeat. */
+export const DESK_GROUP_UNGROUPED = "未分组";
+/** @deprecated Use DESK_GROUP_UNGROUPED — 2048 workgroup freeze. */
+export const DESK_GROUP_OTHER = DESK_GROUP_UNGROUPED;
 export const DESK_GROUP_POOLS = "执行池";
 
-const GROUP_ALIASES: Record<string, string> = {
-  harness: DESK_GROUP_HARNESS,
-  "harness-dev": DESK_GROUP_HARNESS,
-  "harness开发": DESK_GROUP_HARNESS,
-  "2048": DESK_GROUP_2048,
-  "2048工作组": DESK_GROUP_2048,
-  other: DESK_GROUP_OTHER,
-  "其他": DESK_GROUP_OTHER,
-  pool: DESK_GROUP_POOLS,
-  pools: DESK_GROUP_POOLS,
-  "执行池": DESK_GROUP_POOLS,
-};
+/**
+ * Roster group from existing heartbeat `pool_id`. No new `group` field.
+ * Empty / missing pool → 未分组.
+ */
+export function deskGroupFromPoolId(poolId?: string | null): string {
+  const trimmed = typeof poolId === "string" ? poolId.trim() : "";
+  return trimmed ? trimmed.slice(0, 64) : DESK_GROUP_UNGROUPED;
+}
 
-/** Bots self-report `group` (or `section`). Empty / unknown → 其他. */
+/** @deprecated Grouping is `pool_id` → 未分组. Kept so old imports compile. */
 export function normalizeDeskGroup(raw?: string | null): string {
-  const trimmed = typeof raw === "string" ? raw.trim() : "";
-  if (!trimmed) return DESK_GROUP_OTHER;
-  const clipped = trimmed.slice(0, 32);
-  return GROUP_ALIASES[clipped] ?? GROUP_ALIASES[clipped.toLowerCase()] ?? clipped;
+  return deskGroupFromPoolId(raw);
 }
 
 function groupRank(name: string): number {
-  if (name === DESK_GROUP_HARNESS) return 0;
-  if (name === DESK_GROUP_2048) return 1;
-  if (name === DESK_GROUP_OTHER) return 1000;
+  if (name === DESK_GROUP_UNGROUPED) return 1000;
   if (name === DESK_GROUP_POOLS) return 1001;
   return 50;
 }
@@ -60,10 +54,10 @@ export function compareDeskGroups(a: string, b: string): number {
   return a.localeCompare(b, "zh");
 }
 
-export function groupDesks<T extends { group?: string | null }>(desks: T[]) {
+export function groupDesks<T extends { pool_id?: string | null; source?: string | null; group?: string | null }>(desks: T[]) {
   const buckets = new Map<string, T[]>();
   for (const desk of desks) {
-    const name = normalizeDeskGroup(desk.group);
+    const name = desk.source === "pool_seed" ? DESK_GROUP_POOLS : deskGroupFromPoolId(desk.pool_id);
     const list = buckets.get(name) ?? [];
     list.push(desk);
     buckets.set(name, list);
@@ -144,7 +138,8 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
   }
   const rawName = input.display_name ?? input.name;
   const displayName = typeof rawName === "string" && rawName.trim() ? rawName.trim() : actor.id;
-  const group = normalizeDeskGroup(input.group ?? input.section);
+  // Group from existing pool_id only — ignore group/section (no new API field).
+  const group = deskGroupFromPoolId(poolId);
   const ts = h.now();
   const existing = h.db.select().from(agentHeartbeats).where(eq(agentHeartbeats.actorId, actor.id)).get();
   if (existing) {
@@ -187,6 +182,7 @@ function deskRow(input: {
   last_heartbeat: string | null;
   source: "pool_seed" | "heartbeat";
   ttl_seconds: number | null;
+  pool_id: string | null;
   group: string;
 }) {
   return {
@@ -198,6 +194,7 @@ function deskRow(input: {
     last_heartbeat: input.last_heartbeat,
     source: input.source,
     ttl_seconds: input.ttl_seconds,
+    pool_id: input.pool_id,
     group: input.group,
   };
 }
@@ -221,7 +218,7 @@ function presenceForPool(
  * Read-only office roster. Never a dispatch / assign surface.
  *
  * Default: live `agent_heartbeats` within TTL only, named from heartbeat
- * `display_name`, grouped by self-reported `group` / `section`.
+ * `display_name`, grouped by existing `pool_id` (else 未分组).
  * Seed execution pools are not Bot colleagues.
  * `include_pools` is a non-DM ops overlay labeled 「执行池 · …」.
  * Decision-maker always gets heartbeat agents only — seed 同事 never occupy
@@ -251,6 +248,7 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
           last_heartbeat: null,
           source: "pool_seed",
           ttl_seconds: null,
+          pool_id: pool.id,
           group: DESK_GROUP_POOLS,
         }),
       );
@@ -267,7 +265,8 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
         last_heartbeat: beat.lastSeenAt,
         source: "heartbeat",
         ttl_seconds: beat.ttlSeconds,
-        group: normalizeDeskGroup(beat.groupName),
+        pool_id: beat.poolId ?? null,
+        group: deskGroupFromPoolId(beat.poolId),
       }),
     );
   }

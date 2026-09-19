@@ -34,14 +34,14 @@ Registries in `apps/api/tests/contract/required-cases.ts`. CI red if a freeze na
 | Grouped layout, readonly | `desks_grouped_layout_readonly` | `p0-linkage.test.ts` · `desks.test.ts` |
 | No drag / assign on groups | `desks_group_no_drag_assign` | `p0-linkage.test.ts` · `desks.test.ts` |
 | No fake seed names | `desks_group_no_fake_seeds` | `p0-linkage.test.ts` · `desks.test.ts` |
-| Ungrouped bucket = 其他 | `desks_ungrouped_bucket` | `p0-linkage.test.ts` · `desks.test.ts` |
+| Ungrouped bucket = 未分组 | `desks_ungrouped_bucket` | `p0-linkage.test.ts` · `desks.test.ts` |
 
 ### QA #21 2048 (`GAME_2048_MERGE_GATES`)
 
 | Gate | `it("…")` | File |
 |------|-----------|------|
 | Loads playable | `game_2048_loads_playable` | `examples/2048/board.test.ts` |
-| Arrow / swipe moves | `game_2048_arrow_or_swipe_moves` | `examples/2048/board.test.ts` |
+| Arrow / swipe moves | `game_2048_moves` | `examples/2048/board.test.ts` |
 | Score updates | `game_2048_score_updates` | `examples/2048/board.test.ts` |
 | New game resets | `game_2048_new_game_resets` | `examples/2048/board.test.ts` |
 

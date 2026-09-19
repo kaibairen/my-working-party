@@ -92,4 +92,34 @@ describe("office anti-dispatch regressions", () => {
     });
     expect(desksWrite.status).toBe(404);
   });
+
+  it("desks_grouped_layout_readonly", async () => {
+    expect(officeHtml).toContain('data-readonly="true"');
+    expect(officeHtml).toContain("desk-group");
+    expect(officeHtml).toContain("rosterGroups");
+    harness = createHarness({ databasePath: ":memory:" });
+    const app = createApp(harness);
+    const listed = await json(app, "/v1/desks", { headers: headers("decision_maker", "you") });
+    expect(listed.body.readonly).toBe(true);
+  });
+
+  it("desks_group_no_drag_assign", () => {
+    expect(officeHtml).toContain('draggable="false"');
+    expect(officeHtml).not.toContain('draggable="true"');
+    expect(officeHtml).not.toMatch(/指派给|拖到工位|开始跑|派活/);
+    expect(officeHtml).not.toContain('data-testid="start-run"');
+  });
+
+  it("desks_group_no_fake_seeds", () => {
+    expect(officeHtml).not.toContain("交付同事");
+    expect(officeHtml).not.toContain("Cursor 同事");
+    expect(officeHtml).toContain("还没有 Bot 报心跳");
+  });
+
+  it("desks_ungrouped_bucket", () => {
+    expect(officeHtml).toContain("未分组");
+    expect(officeHtml).toContain("deskGroupLabel");
+    expect(officeHtml).toContain("pool_id");
+    expect(officeHtml).not.toContain('d.group || "其他"');
+  });
 });
