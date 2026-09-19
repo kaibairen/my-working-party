@@ -66,6 +66,38 @@ test.describe("P0 AI office home", () => {
     await expect(card.getByTestId("slot-progress")).toBeVisible();
     const slotText = await card.getByTestId("fill-slots").innerText();
     expect(slotText).not.toMatch(DISPATCH_UI_RE);
+    await page.route("**/v1/goals", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            readonly: true,
+            goals: [
+              {
+                title: "周报交付验收",
+                summary: "要一份能转发的周报",
+                status_line: "同事在填",
+                slots: [
+                  {
+                    filler: "交付同事",
+                    progress: "同事在填",
+                    artifact: { label: "产物", uri: "file://out.tgz" },
+                    empty: false,
+                    readonly: true,
+                  },
+                ],
+              },
+            ],
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+    await page.reload();
+    await expect(page.getByTestId("goal-card")).toHaveCount(1);
+    await expect(page.getByTestId("fill-slot")).toBeVisible();
     await page.screenshot({ path: join(shotDir, "office_home_with_goals.png"), fullPage: true });
     await page.screenshot({ path: join(evidenceDir, "office_home_with_goals.png"), fullPage: true });
   });
@@ -95,6 +127,35 @@ test.describe("P0 AI office home", () => {
   test("inbox_opens_as_drawer", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
     await seedDeliverReady(baseURL!);
+    await page.route("**/v1/goals", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            readonly: true,
+            goals: [
+              {
+                title: "周报交付验收",
+                summary: "要一份能转发的周报",
+                status_line: "有一张待你拍板",
+                slots: [
+                  {
+                    filler: "交付同事",
+                    progress: "填到：等拍板",
+                    artifact: { label: "产物", uri: "file://out.tgz" },
+                    empty: false,
+                    readonly: true,
+                  },
+                ],
+              },
+            ],
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
     await page.goto("/");
     await expect(page.getByTestId("inbox-drawer")).toHaveAttribute("data-open", "false");
     await expect(page.getByTestId("office-shell")).toBeVisible();
