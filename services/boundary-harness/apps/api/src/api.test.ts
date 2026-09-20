@@ -419,7 +419,8 @@ describe("domain API", () => {
     expect(html).toContain("开始创作");
     expect(html).toContain("短剧工场");
     expect(html).toContain("./app.js");
-    expect(html).not.toMatch(/请先登录|login required|登录墙/i);
+    expect(html).toContain("无需登录");
+    expect(html).not.toMatch(/请先登录|login required/i);
     const script = await app.request("/examples/drama/app.js");
     expect(script.status).toBe(200);
     const seed = await app.request("/examples/drama/seed.js");

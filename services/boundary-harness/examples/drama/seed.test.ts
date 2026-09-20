@@ -29,6 +29,7 @@ describe("drama MVP slice", () => {
     expect(demo.episodes.every((ep) => ep.shots.length >= 3)).toBe(true);
     expect(projectShotCount(demo)).toBeGreaterThanOrEqual(9);
     expect(pageHtml).toContain("开始创作");
+    expect(pageHtml).toContain("短剧工场");
     expect(pageHtml).toContain("./app.js");
     expect(appJs).toContain("无需登录");
     expect(appJs).toMatch(/剧本|角色|分镜|预览/);

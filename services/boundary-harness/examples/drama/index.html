@@ -147,7 +147,26 @@
   </style>
 </head>
 <body>
-  <div class="wrap" id="app" data-testid="app"></div>
+  <div class="wrap" id="app" data-testid="app">
+    <header class="top">
+      <div class="brand">
+        <div class="mark">剧</div>
+        <div>
+          <h1>短剧工场</h1>
+          <p>对标小云雀的 Harness dogfood · 访客可走完一条 demo</p>
+        </div>
+      </div>
+      <span class="guest">访客 · 无需登录</span>
+    </header>
+    <section class="hero">
+      <h2>精选短剧，先把工作流走完。</h2>
+      <p class="lede">不设登录墙。打开「丧尸清道夫」看剧本 / 角色 / 分镜 / 预览。</p>
+      <div class="row">
+        <a class="btn primary" href="#/new" data-testid="cta-start">开始创作</a>
+        <a class="btn ghost" href="#/p/demo-scavenger">打开精选 Demo</a>
+      </div>
+    </section>
+  </div>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
