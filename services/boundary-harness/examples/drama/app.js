@@ -107,7 +107,7 @@ function renderHome() {
         <div class="mark">剧</div>
         <div>
           <h1>短剧工场</h1>
-          <p>对标小云雀的 Harness dogfood · 访客可走完一条 demo</p>
+          <p>Harness dogfood 残留 · 产品源是 <a href="https://github.com/kaibairen/video-copilot">video-copilot</a></p>
         </div>
       </div>
       <span class="guest" data-testid="guest-badge">访客 · 无需登录</span>
@@ -148,7 +148,7 @@ function renderHome() {
         `).join("")}
       </div>
     ` : `<p class="empty">还没有本地草稿。点「开始创作」贴灵感或剧本。</p>`}
-    <footer class="note">本地打开：Harness API <code>/examples/drama/</code>。映射见 <a href="./README.md">README</a>。</footer>
+    <footer class="note">DEPRECATED：产品 SoT 是 <a href="https://github.com/kaibairen/video-copilot">kaibairen/video-copilot</a>。本页只是 Harness dogfood，见 <a href="./README.md">README</a>。</footer>
   `;
 }
 

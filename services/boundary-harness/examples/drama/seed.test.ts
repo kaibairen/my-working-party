@@ -16,6 +16,7 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const pageHtml = readFileSync(join(here, "index.html"), "utf8");
 const appJs = readFileSync(join(here, "app.js"), "utf8");
+const readme = readFileSync(join(here, "README.md"), "utf8");
 
 describe("drama MVP slice", () => {
   it("demo project is guest-browsable with script, cast, and shots", () => {
@@ -33,6 +34,9 @@ describe("drama MVP slice", () => {
     expect(pageHtml).toContain("./app.js");
     expect(appJs).toContain("无需登录");
     expect(appJs).toMatch(/剧本|角色|分镜|预览/);
+    expect(readme).toContain("DEPRECATED");
+    expect(readme).toContain("kaibairen/video-copilot");
+    expect(appJs).toContain("kaibairen/video-copilot");
   });
 
   it("pasting inspiration seeds episodes and placeholder shots", () => {
