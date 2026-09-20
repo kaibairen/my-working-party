@@ -26,6 +26,8 @@ export const goals = sqliteTable("goals", {
   updatedAt: text("updated_at").notNull(),
   /** One-line intent from the office home form. Optional extra (applyCompat). */
   intent: text("intent"),
+  /** Optional roster group to highlight when this Goal is selected (applyCompat). */
+  teamGroup: text("team_group"),
 });
 
 export const gateDefs = sqliteTable("gate_defs", {
@@ -176,6 +178,8 @@ export const agentHeartbeats = sqliteTable("agent_heartbeats", {
   displayName: text("display_name"),
   poolId: text("pool_id"),
   groupName: text("group_name"),
+  /** `bot` | `channel`. Null / omitted treated as bot. */
+  entityKind: text("entity_kind"),
   lastSeenAt: text("last_seen_at").notNull(),
   ttlSeconds: integer("ttl_seconds").notNull(),
 });

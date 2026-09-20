@@ -38,6 +38,63 @@ const GROUP_ALIASES: Record<string, string> = {
   "执行池": DESK_GROUP_POOLS,
 };
 
+export const HEARTBEAT_KIND_BOT = "bot";
+export const HEARTBEAT_KIND_CHANNEL = "channel";
+export type HeartbeatEntityKind = typeof HEARTBEAT_KIND_BOT | typeof HEARTBEAT_KIND_CHANNEL;
+
+/**
+ * Grok Bot CreateChannel dirs still have profile.json, so a naive agent-data
+ * seeder heartbeats the channel itself. Those display_names collide with
+ * roster group headers (2048工作组 / harness开发) or are the channel title
+ * (harness组 / harness组研讨).
+ */
+const RESERVED_CHANNEL_DISPLAY_NAMES = new Set([
+  DESK_GROUP_HARNESS,
+  DESK_GROUP_2048,
+  DESK_GROUP_OTHER,
+  DESK_GROUP_POOLS,
+  "harness组",
+  "harness组研讨",
+]);
+
+/** `kind` / `entity_kind`. Unknown or omitted → bot (back-compat). `group` aliases channel. */
+export function normalizeHeartbeatKind(raw?: string | null): HeartbeatEntityKind {
+  const trimmed = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (trimmed === HEARTBEAT_KIND_CHANNEL || trimmed === "group") return HEARTBEAT_KIND_CHANNEL;
+  return HEARTBEAT_KIND_BOT;
+}
+
+/** True when display_name is a roster header or a known channel entity name. */
+export function isReservedGroupHeaderName(raw?: string | null): boolean {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) return false;
+  if (RESERVED_CHANNEL_DISPLAY_NAMES.has(trimmed)) return true;
+  const clipped = trimmed.slice(0, 32);
+  return Boolean(GROUP_ALIASES[clipped] || GROUP_ALIASES[clipped.toLowerCase()]);
+}
+
+function hasRealBotIdentity(input: {
+  displayName?: string | null;
+  poolId?: string | null;
+  entityKind?: string | null;
+}): boolean {
+  if (normalizeHeartbeatKind(input.entityKind) === HEARTBEAT_KIND_CHANNEL) return false;
+  const name = input.displayName?.trim() || "";
+  if (!name || isReservedGroupHeaderName(name)) return false;
+  return true;
+}
+
+/** Channel / group entities must never occupy a desk row. */
+export function isChannelLikeHeartbeat(input: {
+  displayName?: string | null;
+  poolId?: string | null;
+  entityKind?: string | null;
+}): boolean {
+  if (normalizeHeartbeatKind(input.entityKind) === HEARTBEAT_KIND_CHANNEL) return true;
+  const name = input.displayName?.trim() || "";
+  return Boolean(name) && isReservedGroupHeaderName(name) && !hasRealBotIdentity(input);
+}
+
 /** Bots self-report `group` (or `section`). Empty / unknown → 其他. */
 export function normalizeDeskGroup(raw?: string | null): string {
   const trimmed = typeof raw === "string" ? raw.trim() : "";
@@ -119,6 +176,9 @@ export type HeartbeatInput = {
   ttl_seconds?: number;
   group?: string | null;
   section?: string | null;
+  /** `bot` (default) | `channel`. Alias: `entity_kind`. */
+  kind?: string | null;
+  entity_kind?: string | null;
 };
 
 export type ListDesksOptions = {
@@ -145,6 +205,7 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
   const rawName = input.display_name ?? input.name;
   const displayName = typeof rawName === "string" && rawName.trim() ? rawName.trim() : actor.id;
   const group = normalizeDeskGroup(input.group ?? input.section);
+  const entityKind = normalizeHeartbeatKind(input.kind ?? input.entity_kind);
   const ts = h.now();
   const existing = h.db.select().from(agentHeartbeats).where(eq(agentHeartbeats.actorId, actor.id)).get();
   if (existing) {
@@ -154,6 +215,7 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
         displayName,
         poolId,
         groupName: group,
+        entityKind,
         lastSeenAt: ts,
         ttlSeconds: ttl,
       })
@@ -165,6 +227,7 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
       displayName,
       poolId,
       groupName: group,
+      entityKind,
       lastSeenAt: ts,
       ttlSeconds: ttl,
     }).run();
@@ -174,10 +237,52 @@ export function recordHeartbeat(h: Harness, actor: Actor, input: HeartbeatInput 
     display_name: displayName,
     pool_id: poolId,
     group,
+    kind: entityKind,
+    entity_kind: entityKind,
     last_heartbeat: ts,
     ttl_seconds: ttl,
     expires_at: new Date(Date.parse(ts) + ttl * 1000).toISOString(),
   };
+}
+
+export type ExpireHeartbeatsInput = {
+  /** Sweep channel-like rows when `channel` (default) or omitted. */
+  kind?: string | null;
+  entity_kind?: string | null;
+  /** Delete one actor row (ops cleanup of a stuck channel heartbeat). */
+  actor_id?: string | null;
+};
+
+/**
+ * Clear bad channel / group-entity heartbeats so dogfood does not wait on TTL.
+ * Default sweep is channel-like only — real bot rows are left alone.
+ */
+export function expireChannelHeartbeats(h: Harness, actor: Actor, input: ExpireHeartbeatsInput = {}) {
+  requireRole(actor, ["decision_maker", "coordinator", "service"]);
+  const actorId = input.actor_id?.trim() || "";
+  if (actorId) {
+    const row = h.db.select().from(agentHeartbeats).where(eq(agentHeartbeats.actorId, actorId)).get();
+    if (!row) throw new HarnessError("not_found", `heartbeat ${actorId} not found`, 404);
+    h.db.delete(agentHeartbeats).where(eq(agentHeartbeats.actorId, actorId)).run();
+    return { deleted: 1, actor_ids: [actorId], kind: normalizeHeartbeatKind(row.entityKind) };
+  }
+  const wantKind = normalizeHeartbeatKind(input.kind ?? input.entity_kind ?? HEARTBEAT_KIND_CHANNEL);
+  const beats = h.db.select().from(agentHeartbeats).all();
+  const actorIds: string[] = [];
+  for (const beat of beats) {
+    const channelLike =
+      wantKind === HEARTBEAT_KIND_CHANNEL
+        ? isChannelLikeHeartbeat({
+            displayName: beat.displayName,
+            poolId: beat.poolId,
+            entityKind: beat.entityKind,
+          })
+        : normalizeHeartbeatKind(beat.entityKind) === wantKind;
+    if (!channelLike) continue;
+    h.db.delete(agentHeartbeats).where(eq(agentHeartbeats.actorId, beat.actorId)).run();
+    actorIds.push(beat.actorId);
+  }
+  return { deleted: actorIds.length, actor_ids: actorIds, kind: wantKind };
 }
 
 function deskRow(input: {
@@ -222,7 +327,8 @@ function presenceForPool(
  *
  * Default: live `agent_heartbeats` within TTL only, named from heartbeat
  * `display_name`, grouped by self-reported `group` / `section`.
- * Seed execution pools are not Bot colleagues.
+ * `kind=channel` (and header-named heartbeats with no bot identity) are omitted —
+ * Grok Bot channels are not desks. Seed execution pools are not Bot colleagues.
  * `include_pools` is a non-DM ops overlay labeled 「执行池 · …」.
  * Decision-maker always gets heartbeat agents only — seed 同事 never occupy
  * the primary roster, even if the query flag is set.
@@ -237,7 +343,15 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
   const runRows = h.db.select().from(runs).all();
   const gateRows = h.db.select().from(gateInstances).all();
   const beats = h.db.select().from(agentHeartbeats).all();
-  const live = beats.filter((b) => isLiveHeartbeat(b.lastSeenAt, b.ttlSeconds, now));
+  const live = beats.filter(
+    (b) =>
+      isLiveHeartbeat(b.lastSeenAt, b.ttlSeconds, now) &&
+      !isChannelLikeHeartbeat({
+        displayName: b.displayName,
+        poolId: b.poolId,
+        entityKind: b.entityKind,
+      }),
+  );
 
   const desks: ReturnType<typeof deskRow>[] = [];
 

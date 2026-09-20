@@ -111,6 +111,9 @@ function applyCompat(sqlite: Database.Database): void {
   if (tableExists(sqlite, "goals") && !columnNames(sqlite, "goals").includes("intent")) {
     sqlite.exec("ALTER TABLE goals ADD COLUMN intent TEXT");
   }
+  if (tableExists(sqlite, "goals") && !columnNames(sqlite, "goals").includes("team_group")) {
+    sqlite.exec("ALTER TABLE goals ADD COLUMN team_group TEXT");
+  }
   if (tableExists(sqlite, "gate_instances") && !columnNames(sqlite, "gate_instances").includes("assignment_id")) {
     sqlite.exec("ALTER TABLE gate_instances ADD COLUMN assignment_id TEXT");
   }
@@ -140,6 +143,7 @@ function applyCompat(sqlite: Database.Database): void {
         display_name TEXT,
         pool_id TEXT,
         group_name TEXT,
+        entity_kind TEXT,
         last_seen_at TEXT NOT NULL,
         ttl_seconds INTEGER NOT NULL
       )
@@ -147,6 +151,7 @@ function applyCompat(sqlite: Database.Database): void {
   } else {
     const cols = columnNames(sqlite, "agent_heartbeats");
     if (!cols.includes("group_name")) sqlite.exec("ALTER TABLE agent_heartbeats ADD COLUMN group_name TEXT");
+    if (!cols.includes("entity_kind")) sqlite.exec("ALTER TABLE agent_heartbeats ADD COLUMN entity_kind TEXT");
   }
   if (tableExists(sqlite, "schema_meta") && columnNames(sqlite, "schema_meta").includes("schema_version") && !columnNames(sqlite, "schema_meta").includes("key")) {
     sqlite.exec(`

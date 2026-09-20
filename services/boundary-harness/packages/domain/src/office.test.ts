@@ -24,6 +24,18 @@ describe("office home goals + fill slots", () => {
     expect(listed).toHaveLength(1);
     expect(listed[0].status_line).toBe("等同事开工");
     expect(listed[0].title).toBe("周报交付验收");
+    expect(listed[0].team_group).toBeNull();
+  });
+
+  it("stores optional team_group on Goal so the office can highlight that roster", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, dm, {
+      title: "做一个能玩的 2048",
+      intent: "可玩页",
+      team_group: "2048",
+    });
+    expect(goal.team_group).toBe("2048工作组");
+    expect(listGoals(harness, dm)[0].team_group).toBe("2048工作组");
   });
 
   it("rejects Brief steps on goal create", () => {

@@ -36,6 +36,11 @@
     .desk-group { margin: 0 0 14px; }
     .desk-group:last-child { margin-bottom: 0; }
     .desk-group-title { margin: 0 0 6px; font-size: 12px; font-weight: 650; color: var(--muted); letter-spacing: .04em; }
+    .roster.is-filtered .desk-group { opacity: .42; }
+    .roster.is-filtered .desk-group.is-focus { opacity: 1; }
+    .desk-group.is-focus .desk-group-title { color: var(--ink); }
+    .goal-card { cursor: pointer; }
+    .goal-card.is-selected { border-color: #3a5a7a; box-shadow: inset 0 0 0 1px #3a5a7a; }
     .desk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
     .desk-row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; }
     .desk-avatar { width: 36px; height: 36px; border-radius: 50%; background: #1d2a36; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 650; color: var(--ink); flex: 0 0 auto; }
@@ -100,6 +105,7 @@
       <form class="goal-form" id="goal-form" data-testid="new-goal-form">
         <label>名称 <input name="title" data-testid="goal-title-input" placeholder="给同事一个能读的名字" maxlength="80" required oninvalid="this.setCustomValidity('请填一个能读的名字')" oninput="this.setCustomValidity('')" /></label>
         <label>一句话要什么 <input name="intent" data-testid="goal-intent-input" placeholder="不要写步骤剧本" maxlength="200" /></label>
+        <label>工作组 <input name="team_group" data-testid="goal-team-group-input" placeholder="2048 / harness（可选）" maxlength="32" /></label>
         <button type="submit" data-testid="new-goal">新建目标</button>
       </form>
       <div id="goals" class="goal-list" data-testid="goal-list"></div>
@@ -210,6 +216,15 @@
     }
 
     /* —— Office home: goals + fill slots + roster (not a dispatch board) —— */
+    let selectedGoalId = "";
+    function applyRosterFocus(teamGroup) {
+      const roster = $("roster");
+      const focus = String(teamGroup || "").trim();
+      roster.classList.toggle("is-filtered", Boolean(focus));
+      roster.querySelectorAll("[data-testid='desk-group']").forEach((el) => {
+        el.classList.toggle("is-focus", Boolean(focus) && el.getAttribute("data-group") === focus);
+      });
+    }
     function deskRowHtml(d) {
       const name = String(d.name || "Bot");
       const status = String(d.status || "空闲");
@@ -298,23 +313,28 @@
         const title = sanitizeCardTitle(g.title, g.intent);
         const status = g.status_line || "等同事开工";
         const slots = (slotSets[i] && slotSets[i].slots) || [{ empty: true, progress: "等同事填", outcome: g.intent }];
-        return `<article class="goal-card" data-testid="goal-card">
+        const team = String(g.team_group || "");
+        const selected = selectedGoalId === g.id ? " is-selected" : "";
+        return `<article class="goal-card${selected}" data-testid="goal-card" data-goal-id="${esc(g.id)}" data-team-group="${esc(team)}">
           <h3 class="goal-name" data-testid="goal-title">${esc(title)}</h3>
           <p class="goal-status" data-testid="goal-status">${esc(status)}</p>
           <ul class="fill-board" data-testid="fill-board">${slots.map((s) => slotHtml(s, g)).join("")}</ul>
         </article>`;
       }).join("");
+      const selected = goals.find((g) => g.id === selectedGoalId);
+      applyRosterFocus(selected && selected.team_group);
     }
     $("goal-form").onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData($("goal-form"));
       const title = String(fd.get("title") || "").trim();
       const intent = String(fd.get("intent") || "").trim();
+      const teamGroup = String(fd.get("team_group") || "").trim();
       const flash = $("goal-flash");
       const res = await fetch("/v1/goals", {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ title, intent: intent || undefined }),
+        body: JSON.stringify({ title, intent: intent || undefined, team_group: teamGroup || undefined }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -325,12 +345,22 @@
       flash.textContent = "目标已建。同事会来填。";
       flash.className = "flash show";
       $("goal-form").reset();
+      if (body && body.id) selectedGoalId = body.id;
       await loadOffice();
       void body;
     };
     $("goals").addEventListener("click", async (e) => {
       const btn = e.target.closest("[data-act='human-fill']");
-      if (!btn) return;
+      if (!btn) {
+        const card = e.target.closest("[data-testid='goal-card']");
+        if (!card) return;
+        selectedGoalId = card.dataset.goalId || "";
+        $("goals").querySelectorAll("[data-testid='goal-card']").forEach((el) => {
+          el.classList.toggle("is-selected", el === card);
+        });
+        applyRosterFocus(card.dataset.teamGroup);
+        return;
+      }
       const flash = $("goal-flash");
       const goalId = btn.dataset.goalId;
       const policy = btn.dataset.dispatchPolicy || "coordinator_only";

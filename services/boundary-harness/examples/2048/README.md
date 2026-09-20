@@ -26,7 +26,7 @@ python3 -m http.server 4173
 | Harness | 这一局 |
 |---------|--------|
 | **Goal** | 「做一个能玩的 2048」——办公室左侧目标标题 + 一句话要什么 |
-| **Assignment / 填充槽** | 协调者或执行池填槽。槽位应标 **执行池 · noop / Cursor**，不要写成假同事名。Bot 自己 `harness_heartbeat`（可带 `group=2048`）才会出现在右侧工位。 |
+| **Assignment / 填充槽** | 协调者或执行池填槽。槽位应标 **执行池 · noop / Cursor**，不要写成假同事名。Bot 自己 `harness_heartbeat`（可带 `group=2048`，`kind=bot`）才会出现在右侧工位。频道 / `group.json` 目录不要报心跳。 |
 | **Evidence** | 可打开的产物：本页 URL（`/examples/2048/`）或仓库路径 `services/boundary-harness/examples/2048/`。`artifact_uri` 指到这里。 |
 | **Gate · 待我拍板** | 决策人打开产物、滑两下、看分数和新游戏。过了就「通过」；坏了「打回重做」。办公室工位仍只读，不在花名册上派工。 |
 

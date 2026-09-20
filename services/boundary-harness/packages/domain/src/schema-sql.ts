@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS goals (
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  intent TEXT
+  intent TEXT,
+  team_group TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ready_predicates (
@@ -195,6 +196,7 @@ CREATE TABLE IF NOT EXISTS agent_heartbeats (
   display_name TEXT,
   pool_id TEXT,
   group_name TEXT,
+  entity_kind TEXT,
   last_seen_at TEXT NOT NULL,
   ttl_seconds INTEGER NOT NULL
 );

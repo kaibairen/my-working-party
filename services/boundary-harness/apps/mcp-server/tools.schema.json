@@ -141,6 +141,8 @@
           "pool_id": { "type": "string" },
           "group": { "type": "string", "description": "Self-reported roster group (harness开发 / 2048工作组 / 其他)" },
           "section": { "type": "string", "description": "Alias for group" },
+          "kind": { "type": "string", "enum": ["bot", "channel"], "description": "Entity kind. channel never appears as a desk. Default bot." },
+          "entity_kind": { "type": "string", "enum": ["bot", "channel"], "description": "Alias for kind" },
           "ttl_seconds": { "type": "integer", "minimum": 15, "maximum": 3600 },
           "role": { "type": "string" },
           "actor": { "type": "string" }
