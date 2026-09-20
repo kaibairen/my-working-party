@@ -238,13 +238,29 @@
       if (!labels.length) return "";
       return "还没勾上门禁要的种类：" + labels.join("、") + "。先补上再交。";
     }
-    function parseMissingKinds(body) {
+    function kindListFromBody(body, key) {
       if (!body || typeof body !== "object") return [];
       const details = body.details && typeof body.details === "object" ? body.details : {};
       const error = body.error && typeof body.error === "object" ? body.error : {};
       const errorDetails = error.details && typeof error.details === "object" ? error.details : {};
-      const raw = body.missing_kinds ?? details.missing_kinds ?? errorDetails.missing_kinds ?? error.missing_kinds ?? details.missing ?? errorDetails.missing ?? body.missing;
+      const raw = body[key] ?? details[key] ?? error[key] ?? errorDetails[key];
       return Array.isArray(raw) ? raw.map(normalizeEvidenceKind).filter(Boolean) : [];
+    }
+    function parseMissingKinds(body) {
+      const fromContract = kindListFromBody(body, "missing_kinds");
+      if (fromContract.length) return fromContract;
+      if (!body || typeof body !== "object") return [];
+      const details = body.details && typeof body.details === "object" ? body.details : {};
+      const error = body.error && typeof body.error === "object" ? body.error : {};
+      const errorDetails = error.details && typeof error.details === "object" ? error.details : {};
+      const raw = details.missing ?? errorDetails.missing ?? body.missing;
+      return Array.isArray(raw) ? raw.map(normalizeEvidenceKind).filter(Boolean) : [];
+    }
+    function parseRequiredKinds(body) {
+      return kindListFromBody(body, "required_kinds");
+    }
+    function parseEvidenceShape(body) {
+      return kindListFromBody(body, "evidence_shape");
     }
     function isPredicateEvidenceMismatch(body) {
       if (!body || typeof body !== "object") return false;
@@ -548,8 +564,14 @@
         if (!res.ok) {
           if (res.status === 422 && isPredicateEvidenceMismatch(body)) {
             const kinds = parseMissingKinds(body);
-            const required = Array.isArray(body.required_kinds) ? body.required_kinds.map(normalizeEvidenceKind) : [];
+            const required = parseRequiredKinds(body);
+            const shape = parseEvidenceShape(body);
             if (required.length) pendingFill.required = uniqueKinds(required);
+            if (shape.length) {
+              document.querySelectorAll("#fill-kind-choices input[type='checkbox']").forEach((el) => {
+                el.checked = shape.includes(el.value);
+              });
+            }
             const msg = kinds.length ? missingKindsHumanMessage(kinds) : "门禁要的证据种类对不上。";
             $("fill-kind-error").textContent = msg;
             $("fill-kind-error").hidden = false;

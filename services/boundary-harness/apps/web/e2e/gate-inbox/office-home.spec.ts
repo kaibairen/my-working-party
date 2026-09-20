@@ -143,6 +143,10 @@ test.describe("E2E office home P0", () => {
     await expect(page.getByTestId("fill-kind-error")).toContainText("结论摘要");
     await expect(page.getByTestId("fill-kind-error")).toContainText("还差");
     await expect(page.getByTestId("fill-kind-error")).not.toHaveText("predicate_evidence_mismatch");
+    await expect(page.getByTestId("fill-required-kinds")).toContainText("结论摘要 summary_md");
+    await expect(page.getByTestId("fill-kind-report_md")).toBeChecked();
+    await expect(page.getByTestId("fill-kind-summary_md")).not.toBeChecked();
+    await expect(page.getByTestId("fill-submit")).toBeDisabled();
   });
 
   test("fill_slot_missing_kinds_human_message", async ({ page, baseURL }) => {

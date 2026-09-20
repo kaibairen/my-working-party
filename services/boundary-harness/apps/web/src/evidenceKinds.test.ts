@@ -5,7 +5,9 @@ import {
   isPredicateEvidenceMismatch,
   missingKindsHumanMessage,
   missingRequiredKinds,
+  parseEvidenceShape,
   parseMissingKinds,
+  parseRequiredKinds,
   requiredKindsLine,
 } from "./evidenceKinds";
 
@@ -26,10 +28,14 @@ describe("office fill-slot evidence kinds", () => {
   it("fill_slot_missing_kinds_human_message", () => {
     const body = {
       code: "predicate_evidence_mismatch",
-      details: { missing_kinds: ["summary_md"] },
+      missing_kinds: ["summary_md"],
+      required_kinds: ["summary_md"],
+      evidence_shape: ["report_md"],
     };
     expect(isPredicateEvidenceMismatch(body)).toBe(true);
     expect(parseMissingKinds(body)).toEqual(["summary_md"]);
+    expect(parseRequiredKinds(body)).toEqual(["summary_md"]);
+    expect(parseEvidenceShape(body)).toEqual(["report_md"]);
     expect(parseMissingKinds({ error: { details: { missing: ["evidence:summary_md"] } } })).toEqual([
       "summary_md",
     ]);

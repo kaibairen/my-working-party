@@ -63,22 +63,33 @@ function asStringList(value: unknown): string[] {
   return value.map(normalizeEvidenceKind).filter(Boolean);
 }
 
-/** Read missing_kinds[] from 422 / predicate_evidence_mismatch bodies (and aliases). */
+function firstKindList(body: unknown, key: "missing_kinds" | "required_kinds" | "evidence_shape"): string[] {
+  const rec = asRecord(body);
+  if (!rec) return [];
+  const details = asRecord(rec.details);
+  const error = asRecord(rec.error);
+  const errorDetails = asRecord(error?.details);
+  return asStringList(rec[key] ?? details?.[key] ?? error?.[key] ?? errorDetails?.[key]);
+}
+
+/** Domain 422 body: missing_kinds[] (PR #25). */
 export function parseMissingKinds(body: unknown): string[] {
   const rec = asRecord(body);
   if (!rec) return [];
   const details = asRecord(rec.details);
   const error = asRecord(rec.error);
   const errorDetails = asRecord(error?.details);
-  return asStringList(
-    rec.missing_kinds ??
-      details?.missing_kinds ??
-      errorDetails?.missing_kinds ??
-      error?.missing_kinds ??
-      details?.missing ??
-      errorDetails?.missing ??
-      rec.missing,
-  );
+  const fromContract = firstKindList(body, "missing_kinds");
+  if (fromContract.length) return fromContract;
+  return asStringList(details?.missing ?? errorDetails?.missing ?? rec.missing);
+}
+
+export function parseRequiredKinds(body: unknown): string[] {
+  return firstKindList(body, "required_kinds");
+}
+
+export function parseEvidenceShape(body: unknown): string[] {
+  return firstKindList(body, "evidence_shape");
 }
 
 export function isPredicateEvidenceMismatch(body: unknown): boolean {
