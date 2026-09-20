@@ -21,6 +21,7 @@
 | 办公室主页不链到产物 | `/` 没有「打开 examples」入口 | 决策人只记得目标标题，不知道 `/examples/drama/` | 与 2048 相同。README 把 URL 写成 Evidence。办公室链出去是后续，不在本切片改 IA。 |
 | 对标产品过早登录墙 | 小云雀工作流/全片重定向登录 | Guest 验不了画布，获客和 dogfood 都断 | **本刀产品选择：** Demo 与新建都不要求登录。这是和竞品的差，不是漏做鉴权。 |
 | `file://` 打不开 | 直接打开 html，模块被拦 | 决策人把仓库当附件发 | README 写明走 API 或 `python3 -m http.server`。 |
+| 证据截图缺中文字体 | 部分环境只有 Noto 西文，中文会 tofu | Gate 看不清「开始创作 / 丧尸清道夫」 | **本刀：** CSS 补 `WenQuanYi Micro Hei` / `Droid Sans Fallback`。办公室机仍建议装 `fonts-noto-cjk`。 |
 | 证据不是页 | 只交摘要，决策人没法点四个 Tab | Gate 要「可打开的产物」 | 短剧页就是 artifact。预览是色块 stub，不要当成 Seedance 成片。 |
 
 ## 建议 Bot 心跳（短剧工作组，可选）
