@@ -6,7 +6,7 @@ import { HarnessError } from "./errors";
 import { signHarnessWebhook } from "./hmac";
 import type { Actor, Dial, Role } from "./rbac";
 import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
-import { executionPoolName } from "./desks";
+import { executionPoolName, normalizeDeskGroup } from "./desks";
 import type { Harness } from "./db";
 import {
   freezeState,
@@ -35,6 +35,8 @@ export type CreateGoalInput = {
   dial?: Dial;
   /** One-line "要什么" from the office home form. Not a Brief / steps script. */
   intent?: string | null;
+  /** Optional roster group to highlight when this Goal is selected (2048 / harness). */
+  team_group?: string | null;
 };
 
 export type FillAssignmentInput = {
@@ -96,6 +98,7 @@ function publicGoal(row: typeof goals.$inferSelect) {
     created_by: row.createdBy,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
+    team_group: row.teamGroup ?? null,
   };
 }
 
@@ -294,12 +297,15 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
   }
 
   const intent = input.intent?.trim() || null;
+  const rawTeam = typeof input.team_group === "string" ? input.team_group.trim() : "";
+  const teamGroup = rawTeam ? normalizeDeskGroup(rawTeam) : null;
   const id = h.newId();
   const ts = h.now();
   h.db.insert(goals).values({
     id,
     title,
     intent,
+    teamGroup,
     mode,
     dispatchPolicy: input.dispatch_policy ?? "coordinator_only",
     coordinatorRef,

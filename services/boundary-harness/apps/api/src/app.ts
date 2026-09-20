@@ -33,6 +33,7 @@ import {
   parseBearer,
   parseRole,
   policyCheck,
+  expireChannelHeartbeats,
   recordHeartbeat,
   assertMcpEntry,
   recordGithubSnapshot,
@@ -204,6 +205,8 @@ export function createApp(harness: Harness) {
       ttl_seconds?: number;
       group?: string;
       section?: string;
+      kind?: string;
+      entity_kind?: string;
     };
     return c.json(
       recordHeartbeat(c.get("harness"), c.get("actor"), {
@@ -213,8 +216,25 @@ export function createApp(harness: Harness) {
         ttl_seconds: body.ttl_seconds,
         group: body.group,
         section: body.section,
+        kind: body.kind,
+        entity_kind: body.entity_kind,
       }),
       200,
+    );
+  });
+
+  v1.delete("/agents/heartbeat", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      kind?: string;
+      entity_kind?: string;
+      actor_id?: string;
+    };
+    return c.json(
+      expireChannelHeartbeats(c.get("harness"), c.get("actor"), {
+        kind: body.kind ?? c.req.query("kind"),
+        entity_kind: body.entity_kind ?? c.req.query("entity_kind"),
+        actor_id: body.actor_id ?? c.req.query("actor_id"),
+      }),
     );
   });
 

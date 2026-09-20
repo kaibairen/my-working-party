@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, type Harness } from "./db";
 import { createGoal, dispatchAssignment, fillAssignment } from "./services";
-import { HEARTBEAT_TTL_SECONDS, executionPoolName, listDesks, recordHeartbeat } from "./desks";
+import {
+  HEARTBEAT_TTL_SECONDS,
+  executionPoolName,
+  expireChannelHeartbeats,
+  listDesks,
+  recordHeartbeat,
+} from "./desks";
 import type { Actor } from "./rbac";
 
 const dm: Actor = { id: "you", role: "decision_maker" };
@@ -163,5 +169,75 @@ describe("listDesks presence projection", () => {
     const agent = listDesks(harness, dm).desks.find((d) => d.id === "agent:deliver-bot");
     expect(agent?.status).toBe("等证据");
     expect(agent?.presence).toBe("waiting_evidence");
+  });
+
+  it("omits a channel heartbeat named 2048工作组 and keeps real bots under that header", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const channel = recordHeartbeat(
+      harness,
+      { id: "chan-2048", role: "executor" },
+      { display_name: "2048工作组", kind: "channel" },
+    );
+    expect(channel.kind).toBe("channel");
+    expect(channel.entity_kind).toBe("channel");
+    recordHeartbeat(harness, { id: "cto", role: "executor" }, { display_name: "CTO统筹bot", group: "2048" });
+    recordHeartbeat(harness, { id: "fe", role: "executor" }, { display_name: "HarnessFrontend", group: "2048工作组" });
+    recordHeartbeat(harness, { id: "qa", role: "executor" }, { display_name: "HarnessQA", section: "2048" });
+    const listed = listDesks(harness, dm);
+    expect(listed.desks.map((d) => d.name)).toEqual(["CTO统筹bot", "HarnessFrontend", "HarnessQA"]);
+    expect(listed.desks.some((d) => d.name === "2048工作组")).toBe(false);
+    expect(listed.groups.map((g) => g.name)).toEqual(["2048工作组"]);
+    expect(listed.groups.find((g) => g.name === "2048工作组")?.desks.map((d) => d.name)).toEqual([
+      "CTO统筹bot",
+      "HarnessFrontend",
+      "HarnessQA",
+    ]);
+    expect(listed.groups.some((g) => g.name === "其他")).toBe(false);
+    expect(JSON.stringify(listed)).not.toMatch(FAKE_COLLEAGUE);
+  });
+
+  it("omits header-named heartbeats even when kind is omitted (legacy seeder)", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const implicit = recordHeartbeat(harness, { id: "chan-legacy", role: "executor" }, { display_name: "2048工作组" });
+    expect(implicit.kind).toBe("bot");
+    recordHeartbeat(harness, { id: "chan-harness", role: "executor" }, { display_name: "harness开发", group: "harness" });
+    recordHeartbeat(harness, { id: "chan-group", role: "executor" }, { display_name: "harness组", group: "harness" });
+    recordHeartbeat(harness, { id: "chan-talk", role: "executor" }, { display_name: "harness组研讨", group: "harness" });
+    recordHeartbeat(harness, { id: "lead", role: "executor" }, { display_name: "HarnessTechLead", group: "2048" });
+    recordHeartbeat(harness, { id: "be", role: "executor" }, { display_name: "HarnessBackend", group: "harness" });
+    const listed = listDesks(harness, dm);
+    expect(listed.desks.map((d) => d.name).sort()).toEqual(["HarnessBackend", "HarnessTechLead"]);
+    expect(listed.groups.map((g) => g.name)).toEqual(["harness开发", "2048工作组"]);
+    expect(listed.desks.some((d) => /2048工作组|harness开发|harness组/.test(d.name))).toBe(false);
+    expect(JSON.stringify(listed)).not.toMatch(FAKE_COLLEAGUE);
+  });
+
+  it("keeps the fake-name wall hidden while filtering channels", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    recordHeartbeat(harness, { id: "chan-2048", role: "service" }, { display_name: "2048工作组", entity_kind: "channel" });
+    recordHeartbeat(harness, { id: "bridge", role: "executor" }, { display_name: "HarnessBridge", group: "2048" });
+    const listed = listDesks(harness, dm);
+    expect(listed.desks.map((d) => d.name)).toEqual(["HarnessBridge"]);
+    expect(listed.desks.every((d) => d.source === "heartbeat")).toBe(true);
+    expect(JSON.stringify(listed)).not.toMatch(FAKE_COLLEAGUE);
+    expect(listDesks(harness, dm, { includePools: true }).desks.every((d) => d.source === "heartbeat")).toBe(true);
+    const ops = listDesks(harness, coord, { includePools: true });
+    expect(ops.desks.some((d) => FAKE_COLLEAGUE.test(d.name))).toBe(false);
+    expect(ops.desks.some((d) => d.name === "2048工作组")).toBe(false);
+    expect(ops.desks.some((d) => d.source === "pool_seed")).toBe(true);
+  });
+
+  it("expires channel heartbeats without deleting real bots", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    recordHeartbeat(harness, { id: "chan-2048", role: "executor" }, { display_name: "2048工作组", kind: "channel" });
+    recordHeartbeat(harness, { id: "chan-talk", role: "executor" }, { display_name: "harness组研讨" });
+    recordHeartbeat(harness, { id: "cto", role: "executor" }, { display_name: "CTO统筹bot", group: "2048" });
+    const swept = expireChannelHeartbeats(harness, coord);
+    expect(swept.deleted).toBe(2);
+    expect(swept.actor_ids.sort()).toEqual(["chan-2048", "chan-talk"]);
+    expect(listDesks(harness, dm).desks.map((d) => d.name)).toEqual(["CTO统筹bot"]);
+    const one = expireChannelHeartbeats(harness, dm, { actor_id: "cto" });
+    expect(one.deleted).toBe(1);
+    expect(listDesks(harness, dm).desks).toEqual([]);
   });
 });

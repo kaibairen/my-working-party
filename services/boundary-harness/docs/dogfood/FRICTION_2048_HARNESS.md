@@ -25,6 +25,8 @@
 | 假名墙回潮 | 有人想把 `pool_noop` 画回花名册「凑热闹」 | 已在 #18 锁死；再画就是回灌派工台 | **不回归。** DM `GET /v1/desks` 只见活心跳；`?include_pools=1` 对决策人无效。 |
 | 证据不是页 | 只交摘要，决策人没法玩 | Gate 要「可打开的产物」 | 2048 页就是 artifact。README 写清 Goal/Assignment/Evidence/Gate 映射。 |
 | 填充板被当成派工台 | 想在槽位或工位上「指派 / 开跑」 | 官方已拒监工台 | 保持只读投影。摩擦里的「谁去跑」由协调者/Bot 自路由，不给人拖拽。 |
+| 频道当工位 | 组头「2048工作组」下已有真 Bot，**其他**里又出现一行也叫「2048工作组」（头像「2」）。harness开发下同样出现 harness组 / harness组研讨 / harness开发 自己 | Grok Bot `CreateChannel` 仍有 `profile.json` + `serverId` + `group.json`。扫 agent-data 的心跳播种机把**频道**当成 Bot 报了心跳；`display_name` 撞组头 | **本刀：** Domain `kind`/`entity_kind`（`bot`\|`channel`，默认 bot）。`GET /v1/desks` 省略频道，以及组头同名且无真 Bot 身份的心跳。`DELETE /v1/agents/heartbeat` 清脏行。 |
+| 播种机扫到 group.json | 含 `group.json` 的目录被当成同事心跳 | 频道不是人 | **必须跳过**带 `group.json` 的 agent-data 目录。只给真 Bot（无 `group.json`）报 `harness_heartbeat`。见 `COLLAB_DELIVERY_2048.md`。 |
 
 ## 建议 Bot 心跳（2048 工作组）
 
@@ -36,7 +38,9 @@
 }
 ```
 
-`group` / `section` 别名：`harness` → harness开发，`2048` → 2048工作组，空 → 其他。
+`group` / `section` 别名：`harness` → harness开发，`2048` → 2048工作组，空 → 其他。  
+`kind` / `entity_kind`：省略或 `bot` = 工位；`channel` = 只记账、花名册不画。  
+Dogfood 播种机：**跳过含 `group.json` 的目录**。合并后若库里仍有频道心跳：`DELETE /v1/agents/heartbeat`（或等 90s TTL）。
 
 ## 明确还没做
 

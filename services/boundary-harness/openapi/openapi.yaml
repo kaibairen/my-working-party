@@ -195,7 +195,9 @@ paths:
         Default office roster is live `POST /v1/agents/heartbeat` rows within TTL
         only (default 90s, advertised as `heartbeat_ttl_seconds`), named from
         heartbeat `display_name` and grouped by self-reported `group` / `section`
-        (empty groups omitted). Seed execution pools are not Bot colleagues.
+        (empty groups omitted). Heartbeats with `kind=channel` (and display_name
+        equal to a group header with no bot identity) are omitted — Grok Bot
+        channels are not desks. Seed execution pools are not Bot colleagues.
         Pass `include_pools=1` for a **non-DM** ops overlay labeled 「执行池 · …」.
         Decision-maker requests ignore the flag — seed pools never occupy the
         primary roster. Expired heartbeats are omitted. Clients MUST NOT POST this path.
@@ -243,7 +245,9 @@ paths:
       summary: Bot presence heartbeat (MCP tool harness_heartbeat)
       description: |
         Refresh last_heartbeat. Default TTL 90s (15–3600). Domain is SoT —
-        not unofficial sidebar roster APIs.
+        not unofficial sidebar roster APIs. Optional `kind` / `entity_kind`
+        is `bot` (default) or `channel`. Channel heartbeats are stored but
+        omitted from GET /v1/desks.
       requestBody:
         content:
           application/json:
@@ -255,6 +259,8 @@ paths:
                 pool_id: { type: string }
                 group: { type: string, description: "Self-reported roster group (harness开发 / 2048工作组 / 其他)" }
                 section: { type: string, description: "Alias for group" }
+                kind: { type: string, enum: [bot, channel], description: "Entity kind. Default bot. channel is not a desk." }
+                entity_kind: { type: string, enum: [bot, channel], description: "Alias for kind" }
                 ttl_seconds: { type: integer, minimum: 15, maximum: 3600 }
       responses:
         "200":
@@ -263,6 +269,31 @@ paths:
           description: forbidden
         "422":
           description: heartbeat_invalid
+    delete:
+      summary: Expire channel / group-entity heartbeats (ops cleanup)
+      description: |
+        Sweep `kind=channel` and header-named heartbeats that have no bot
+        identity (dogfood leftover from an agent-data seeder). Pass `actor_id`
+        to delete one row. Real bot heartbeats are left alone.
+        Dogfood migration: after merge, `DELETE /v1/agents/heartbeat` then
+        stop seeding dirs that contain `group.json`. Remaining rows also
+        expire via the 90s TTL once the seeder skips channels.
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, enum: [channel] }
+        - name: actor_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted count
+        "403":
+          description: forbidden
+        "404":
+          description: actor_id not found
   /v1/goals:
     get:
       summary: List goals for the office home (human titles + status_line)
@@ -685,6 +716,9 @@ components:
         intent:
           type: string
           description: One-line "要什么". Not a Brief / steps script.
+        team_group:
+          type: string
+          description: Optional roster group to highlight when this Goal is selected (2048 / harness).
         mode:
           type: string
           enum: [explore, deliver]

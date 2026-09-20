@@ -28,7 +28,8 @@ pnpm --filter @harness/mcp-server start:http   # HTTP 手套 :8787/mcp
 
 ## 3. 建议先调的工具
 
-1. **必须先调 `harness_heartbeat`**（`display_name` 或 `name` = 侧栏 Bot 真名；可选 `pool_id`、`group` / `section`）——**不报心跳就不会出现在办公室工位**。`group` 自报分组（`harness` / `2048` / 空=其他）。种子执行池不是同事，默认花名册是空的。TTL **90s**，见下。  
+1. **必须先调 `harness_heartbeat`**（`display_name` 或 `name` = 侧栏 Bot 真名；可选 `pool_id`、`group` / `section`、`kind` / `entity_kind`）——**不报心跳就不会出现在办公室工位**。`group` 自报分组（`harness` / `2048` / 空=其他）。`kind` 默认 `bot`；频道实体用 `channel`（花名册不画）。种子执行池不是同事，默认花名册是空的。TTL **90s**，见下。  
+   **播种机纪律：** 只扫真 Bot 目录。目录里有 `group.json`（Grok Bot `CreateChannel` 频道）就跳过，不要给 2048工作组 / harness开发 / harness组 / harness组研讨 报心跳。
 2. `harness_create_goal` / `harness_fill_assignment` / `harness_dispatch` / `harness_attach_evidence`。  
 3. 办公室槽位应显示该 Bot 的填充，而不是 curl 代跑。
 
@@ -38,7 +39,7 @@ Stdio 备选（Cursor/`mcp.json`，仍是本机配置，不是账号目录）：
 
 ## 4. 工位 TTL
 
-`GET /v1/desks` 只读，**默认只返回 TTL 内的心跳 Bot**（`display_name` / actor），按自报 `group` 分组（空组不画）。种子 `pool_noop` / `pool_cursor` **不会**当成「交付同事 / Cursor 同事」出现，也**不得占用决策人主花名册**。运维（非 decision_maker）可加 `?include_pools=1`，池行只标「执行池 · noop / Cursor」并落在「执行池」组；决策人带该参数仍只见心跳。
+`GET /v1/desks` 只读，**默认只返回 TTL 内的心跳 Bot**（`display_name` / actor），按自报 `group` 分组（空组不画）。`kind=channel` 以及 `display_name` 撞组头、又没有真 Bot 身份的心跳**不会**出现。种子 `pool_noop` / `pool_cursor` **不会**当成「交付同事 / Cursor 同事」出现，也**不得占用决策人主花名册**。运维（非 decision_maker）可加 `?include_pools=1`，池行只标「执行池 · noop / Cursor」并落在「执行池」组；决策人带该参数仍只见心跳。脏频道行：`DELETE /v1/agents/heartbeat`。
 
 - **必须调用 `harness_heartbeat`（或 `POST /v1/agents/heartbeat`）才会出现在工位。**  
 - **默认 TTL：90 秒**（可在心跳体里设 `ttl_seconds`，夹在 15–3600）。  
