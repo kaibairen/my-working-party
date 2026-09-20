@@ -60,14 +60,17 @@ describe("office home goals + fill slots", () => {
     expect(JSON.stringify(slots)).not.toMatch(/指派给|开始跑|dispatch/);
   });
 
-  it("surfaces missing_kinds when Fill evidence_shape misses the predicate", () => {
+  it("fill_shape_missing_kinds_422", () => {
     harness = createHarness({ databasePath: ":memory:" });
-    const goal = createGoal(harness, dm, { title: "周报交付验收", intent: "写一份能读的周报" });
-    expect(goal.required_evidence_kinds).toEqual(["summary_md"]);
+    const goal = createGoal(harness, coord, {
+      title: "ship",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+    });
     try {
       fillAssignment(harness, coord, goal.id, {
         pool_id: "pool_noop",
-        brief: { outcome: "只交报告", constraints: [], evidence_shape: ["report_md"] },
+        brief: { outcome: "x", constraints: [], evidence_shape: ["artifact_uri"] },
       });
       throw new Error("expected predicate_evidence_mismatch");
     } catch (err) {
@@ -75,8 +78,34 @@ describe("office home goals + fill slots", () => {
       const he = err as HarnessError;
       expect(he.code).toBe("predicate_evidence_mismatch");
       expect(he.status).toBe(422);
-      expect(he.details).toEqual({ missing: ["summary_md"], missing_kinds: ["summary_md"] });
+      const details = he.details as {
+        missing_kinds: string[];
+        required_kinds: string[];
+        evidence_shape: string[];
+      };
+      expect(details.missing_kinds).toEqual(["summary_md"]);
+      expect(details.required_kinds).toEqual(["summary_md"]);
+      expect(details.evidence_shape).toEqual(["artifact_uri"]);
     }
+  });
+
+  it("fill_shape_superset_ok", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, coord, {
+      title: "ship",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+    });
+    const asg = fillAssignment(harness, coord, goal.id, {
+      pool_id: "pool_noop",
+      brief: { outcome: "x", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    });
+    expect(asg.id).toBeTruthy();
+    expect(asg.status).toBe("accepted");
+    expect((asg.brief as { evidence_shape: string[] }).evidence_shape).toEqual([
+      "summary_md",
+      "artifact_uri",
+    ]);
   });
 
   it("projects who is filling after an assignment exists", () => {

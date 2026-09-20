@@ -437,9 +437,13 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
     if (missing.length > 0) {
       throw new HarnessError(
         "predicate_evidence_mismatch",
-        "predicate kinds must be ⊆ assignment evidence_shape",
+        `Brief evidence_shape is missing kinds required by the GateDef predicate: ${missing.join(", ")}. Check or add those kinds and retry.`,
         422,
-        { missing, missing_kinds: missing },
+        {
+          missing_kinds: missing,
+          required_kinds: needed,
+          evidence_shape: brief.evidence_shape,
+        },
       );
     }
   }

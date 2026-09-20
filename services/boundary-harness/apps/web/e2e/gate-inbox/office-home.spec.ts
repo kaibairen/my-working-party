@@ -95,6 +95,56 @@ test.describe("E2E office home P0", () => {
     await page.screenshot({ path: join(shotDir, "fill_slot_required_kinds.png"), fullPage: true });
   });
 
+  test("fill_ui_prompts_missing_summary_md", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await page.goto("/");
+    const title = `提示摘要-${Date.now()}`;
+    await page.getByTestId("goal-title-input").fill(title);
+    await page.getByTestId("goal-intent-input").fill("写一份能读的周报");
+    await page.getByTestId("new-goal").click();
+    const card = page.getByTestId("goal-card").filter({ hasText: title });
+    await expect(card.getByTestId("slot-required-kinds")).toContainText("结论摘要");
+    await expect(card.getByTestId("slot-required-kinds")).toContainText("summary_md");
+    await card.getByTestId("human-fill").click();
+    await expect(page.getByTestId("fill-form")).toBeVisible();
+    await expect(page.getByTestId("fill-required-kinds")).toContainText("结论摘要 summary_md");
+    await expect(page.getByTestId("fill-kind-summary_md")).toBeChecked();
+    await page.getByTestId("fill-kind-summary_md").uncheck();
+    await page.getByTestId("fill-kind-report_md").check();
+    await expect(page.getByTestId("fill-kind-warn")).toContainText("结论摘要");
+    await expect(page.getByTestId("fill-kind-warn")).toContainText("summary_md");
+    await expect(page.getByTestId("fill-submit")).toBeDisabled();
+    await page.route("**/v1/goals/*/assignments", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "predicate_evidence_mismatch",
+          message: "Brief evidence_shape is missing kinds required by the GateDef predicate: summary_md. Check or add those kinds and retry.",
+          missing_kinds: ["summary_md"],
+          required_kinds: ["summary_md"],
+          evidence_shape: ["report_md"],
+          details: { missing_kinds: ["summary_md"], required_kinds: ["summary_md"], evidence_shape: ["report_md"] },
+          error: {
+            code: "predicate_evidence_mismatch",
+            missing_kinds: ["summary_md"],
+            required_kinds: ["summary_md"],
+            evidence_shape: ["report_md"],
+          },
+        }),
+      });
+    });
+    await page.getByTestId("fill-kind-summary_md").check();
+    await page.getByTestId("fill-submit").click();
+    await expect(page.getByTestId("fill-kind-error")).toContainText("结论摘要");
+    await expect(page.getByTestId("fill-kind-error")).toContainText("还差");
+    await expect(page.getByTestId("fill-kind-error")).not.toHaveText("predicate_evidence_mismatch");
+  });
+
   test("fill_slot_missing_kinds_human_message", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
     await page.goto("/");

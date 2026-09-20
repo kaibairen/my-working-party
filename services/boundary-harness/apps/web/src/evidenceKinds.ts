@@ -74,6 +74,7 @@ export function parseMissingKinds(body: unknown): string[] {
     rec.missing_kinds ??
       details?.missing_kinds ??
       errorDetails?.missing_kinds ??
+      error?.missing_kinds ??
       details?.missing ??
       errorDetails?.missing ??
       rec.missing,

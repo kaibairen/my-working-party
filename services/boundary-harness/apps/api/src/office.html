@@ -243,7 +243,7 @@
       const details = body.details && typeof body.details === "object" ? body.details : {};
       const error = body.error && typeof body.error === "object" ? body.error : {};
       const errorDetails = error.details && typeof error.details === "object" ? error.details : {};
-      const raw = body.missing_kinds ?? details.missing_kinds ?? errorDetails.missing_kinds ?? details.missing ?? errorDetails.missing ?? body.missing;
+      const raw = body.missing_kinds ?? details.missing_kinds ?? errorDetails.missing_kinds ?? error.missing_kinds ?? details.missing ?? errorDetails.missing ?? body.missing;
       return Array.isArray(raw) ? raw.map(normalizeEvidenceKind).filter(Boolean) : [];
     }
     function isPredicateEvidenceMismatch(body) {
@@ -546,13 +546,17 @@
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-          if (res.status === 422 || res.status === 400 || isPredicateEvidenceMismatch(body)) {
+          if (res.status === 422 && isPredicateEvidenceMismatch(body)) {
             const kinds = parseMissingKinds(body);
+            const required = Array.isArray(body.required_kinds) ? body.required_kinds.map(normalizeEvidenceKind) : [];
+            if (required.length) pendingFill.required = uniqueKinds(required);
             const msg = kinds.length ? missingKindsHumanMessage(kinds) : "门禁要的证据种类对不上。";
             $("fill-kind-error").textContent = msg;
             $("fill-kind-error").hidden = false;
+            $("fill-required-kinds").textContent = required.length ? requiredKindsLine(required) : $("fill-required-kinds").textContent;
             flash.textContent = msg;
             flash.className = "flash show bad";
+            syncFillSubmitState();
             return;
           }
           flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";

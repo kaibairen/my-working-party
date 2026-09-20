@@ -487,6 +487,8 @@ describe("domain API", () => {
     expect(mismatch.res.status).toBe(422);
     expect(mismatch.body.code ?? mismatch.body.error?.code).toBe("predicate_evidence_mismatch");
     expect(mismatch.body.missing_kinds).toEqual(["summary_md"]);
+    expect(mismatch.body.required_kinds).toEqual(["summary_md"]);
+    expect(mismatch.body.evidence_shape).toEqual(["report_md"]);
     expect(mismatch.body.details.missing_kinds).toEqual(["summary_md"]);
 
     const filled = await json(app, `/v1/goals/${created.body.id}/assignments`, {

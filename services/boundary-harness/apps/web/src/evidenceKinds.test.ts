@@ -17,6 +17,12 @@ describe("office fill-slot evidence kinds", () => {
     expect(requiredKindsLine(["summary_md"])).not.toBe("summary_md");
   });
 
+  it("fill_ui_prompts_missing_summary_md", () => {
+    expect(requiredKindsLine(["summary_md"])).toContain("结论摘要 summary_md");
+    expect(fillKindsWarnMessage(["summary_md"])).toContain("结论摘要");
+    expect(missingRequiredKinds(["summary_md"], ["report_md"])).toEqual(["summary_md"]);
+  });
+
   it("fill_slot_missing_kinds_human_message", () => {
     const body = {
       code: "predicate_evidence_mismatch",
