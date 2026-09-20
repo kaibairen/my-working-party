@@ -29,7 +29,7 @@ pnpm --filter @harness/mcp-server start:http   # HTTP 手套 :8787/mcp
 ## 3. 建议先调的工具
 
 1. **必须先调 `harness_heartbeat`**（`display_name` 或 `name` = 侧栏 Bot 真名；可选 `pool_id`、`group` / `section`、`kind` / `entity_kind`）——**不报心跳就不会出现在办公室工位**。`group` 自报分组（`harness` / `2048` / 空=其他）。`kind` 默认 `bot`；频道实体用 `channel`（花名册不画）。种子执行池不是同事，默认花名册是空的。TTL **90s**，见下。  
-   **播种机纪律：** 只扫真 Bot 目录。目录里有 `group.json`（Grok Bot `CreateChannel` 频道）就跳过，不要给 2048工作组 / harness开发 / harness组 / harness组研讨 报心跳。
+   **播种机纪律：** 只扫真 Bot 目录。目录里有 `group.json`（Grok Bot `CreateChannel` 频道）就跳过，不要给 2048工作组 / harness开发 / harness组 / harness组研讨 报心跳。Dogfood 过渡桥：`pnpm presence-bridge`（见 `docs/dogfood/PRESENCE_BRIDGE_SOP.md`）。Bot 仍应自己循环调 `harness_heartbeat`；桥只是忘了自报时的兜底。
 2. `harness_create_goal` / `harness_fill_assignment` / `harness_dispatch` / `harness_attach_evidence`。  
 3. 办公室槽位应显示该 Bot 的填充，而不是 curl 代跑。
 

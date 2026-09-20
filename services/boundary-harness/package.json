@@ -17,6 +17,7 @@
     "dev:worker": "pnpm --filter @harness/worker dev",
     "dev:mcp": "pnpm --filter @harness/mcp-server dev",
     "dev:mcp-http": "pnpm --filter @harness/mcp-server start:http",
+    "presence-bridge": "node scripts/presence-bridge.mjs",
     "migrate": "pnpm --filter @harness/domain migrate"
   },
   "pnpm": {

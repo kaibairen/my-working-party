@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import {
+  clearHeartbeats,
   confirmPass,
   drainReadyGates,
   evidenceDir,
@@ -78,6 +79,7 @@ test.describe("E2E decision-maker shell", () => {
 
   test("roster_is_read_only_presence", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
+    await clearHeartbeats(baseURL!);
     await seedDeliverPending(baseURL!);
     await seedBusyDesk(baseURL!);
     await page.goto("/");

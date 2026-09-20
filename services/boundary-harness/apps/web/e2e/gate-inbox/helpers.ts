@@ -207,6 +207,21 @@ export async function seedAuthorityReady(baseURL: string, action = "destructive_
   return { goal, gate: check.gate_instance };
 }
 
+/** Shared e2e DB can keep live heartbeats from an earlier spec — sweep them. */
+export async function clearHeartbeats(baseURL: string) {
+  const listed = await api<{ desks?: Array<{ id?: string }> }>(baseURL, "/v1/desks", {
+    headers: headers.decisionMaker,
+  });
+  for (const desk of listed.body.desks ?? []) {
+    const actorId = String(desk.id ?? "").replace(/^agent:/, "");
+    if (!actorId) continue;
+    await api(baseURL, `/v1/agents/heartbeat?actor_id=${encodeURIComponent(actorId)}`, {
+      method: "DELETE",
+      headers: headers.decisionMaker,
+    });
+  }
+}
+
 /** Bot self-report so the office roster shows a real name (not a seed pool). */
 export async function seedHeartbeat(
   baseURL: string,

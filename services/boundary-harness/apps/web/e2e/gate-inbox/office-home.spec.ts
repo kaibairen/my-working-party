@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import {
+  clearHeartbeats,
   drainReadyGates,
   expect,
   seedBusyDesk,
@@ -14,6 +15,7 @@ const DISPATCH_RE = /指派给|拖到工位|开始跑|派活|dispatch|assign/i;
 test.describe("E2E office home P0", () => {
   test("office_home_p0_30s", async ({ page, baseURL }) => {
     await drainReadyGates(baseURL!);
+    await clearHeartbeats(baseURL!);
     await seedDeliverPending(baseURL!);
     await seedBusyDesk(baseURL!);
 

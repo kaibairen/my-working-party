@@ -37,7 +37,7 @@ Grok Bot 侧栏                         AI 办公室 `/`
 | section「bot harness」里的 2048 交付 Bot | `2048` → **2048工作组** |
 | harness 控制面开发 Bot | `harness` → **harness开发** |
 | 未自报组 | **其他**（空组不画） |
-| Channel / 群（`group.json`） | **不是工位。** 心跳可标 `kind=channel`；`GET /v1/desks` 省略。 |
+| Channel / 群（`group.json`） | **不是工位。** 心跳可标 `kind=channel`；`GET /v1/desks` 省略。CreateAgent → 工位的过渡桥：`scripts/presence-bridge.mjs`（跳过 `group.json`）。 |
 
 选中带 `team_group` 的 Goal 时，花名册**高亮**该组，不把其他组藏死（仍是投影，不是过滤器派工）。
 

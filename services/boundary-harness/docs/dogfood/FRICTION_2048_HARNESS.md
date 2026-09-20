@@ -26,7 +26,8 @@
 | 证据不是页 | 只交摘要，决策人没法玩 | Gate 要「可打开的产物」 | 2048 页就是 artifact。README 写清 Goal/Assignment/Evidence/Gate 映射。 |
 | 填充板被当成派工台 | 想在槽位或工位上「指派 / 开跑」 | 官方已拒监工台 | 保持只读投影。摩擦里的「谁去跑」由协调者/Bot 自路由，不给人拖拽。 |
 | 频道当工位 | 组头「2048工作组」下已有真 Bot，**其他**里又出现一行也叫「2048工作组」（头像「2」）。harness开发下同样出现 harness组 / harness组研讨 / harness开发 自己 | Grok Bot `CreateChannel` 仍有 `profile.json` + `serverId` + `group.json`。扫 agent-data 的心跳播种机把**频道**当成 Bot 报了心跳；`display_name` 撞组头 | **本刀：** Domain `kind`/`entity_kind`（`bot`\|`channel`，默认 bot）。`GET /v1/desks` 省略频道，以及组头同名且无真 Bot 身份的心跳。`DELETE /v1/agents/heartbeat` 清脏行。 |
-| 播种机扫到 group.json | 含 `group.json` 的目录被当成同事心跳 | 频道不是人 | **必须跳过**带 `group.json` 的 agent-data 目录。只给真 Bot（无 `group.json`）报 `harness_heartbeat`。见 `COLLAB_DELIVERY_2048.md`。 |
+| 播种机扫到 group.json | 含 `group.json` 的目录被当成同事心跳 | 频道不是人 | **必须跳过**带 `group.json` 的 agent-data 目录。只给真 Bot（无 `group.json`）报 `harness_heartbeat`。见 `COLLAB_DELIVERY_2048.md` + `PRESENCE_BRIDGE_SOP.md`。 |
+| 无官方花名册 API | CreateAgent 后办公室不自动出现工位，人只能 curl | 侧栏不是 Harness SoT | **本刀过渡：** `scripts/presence-bridge.mjs` 扫 `profile.json`、跳过 `group.json`、POST `harness_heartbeat`。正路仍是 Bot 自报。官方 roster 订阅是未来。 |
 
 ## 建议 Bot 心跳（2048 工作组）
 
@@ -44,6 +45,6 @@ Dogfood 播种机：**跳过含 `group.json` 的目录**。合并后若库里仍
 
 ## 明确还没做
 
-- 官方 Grok Bot 花名册 / 扫 `agent-data` / `:1340`  
+- 官方 Grok Bot 花名册订阅（没有 API）。`presence-bridge` 只是 interim 扫盘  
 - OS 级强迫每个 Bot 挂 MCP 手套  
 - 工位可写回 owner 或前置 dispatch
