@@ -8,6 +8,8 @@ grokbot 工作 画布 规划 状态
 
 Under discussion: **Boundary Harness** — control plane as a harness, not a jail; fence the blast radius, not the intelligence. Aligns with Grok Bot autonomy.
 
+**Short-drama product SoT** is [kaibairen/video-copilot](https://github.com/kaibairen/video-copilot). `services/boundary-harness/examples/drama/` is a deprecated pointer only — do not grow product features there. Harness ops stay in this repo. See [DRAMA_PRODUCT_SOT.md](services/boundary-harness/docs/dogfood/DRAMA_PRODUCT_SOT.md).
+
 Canonical docs only (do not implement from older `*_DRAFT.md` or v0.1.x product titles):
 
 - [docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md](docs/product/BOUNDARY_HARNESS_PRD_AUTHORITATIVE_v1.md)（**AUTHORITATIVE**）

@@ -143,7 +143,7 @@ export function createApp(harness: Harness) {
     return c.html(opsHtml);
   });
   mountExample(app, "2048", ["board.js", "README.md"]);
-  mountExample(app, "drama", ["app.js", "seed.js", "README.md"]);
+  mountExample(app, "drama", ["README.md"]);
   app.get("/health", (c) => c.json(health(c.get("harness"))));
   app.get("/openapi.yaml", (c) => {
     const yaml = readFileSync(openapiPath, "utf8");
