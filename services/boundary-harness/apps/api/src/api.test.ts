@@ -427,6 +427,10 @@ describe("domain API", () => {
     expect(seed.status).toBe(200);
     const readme = await app.request("/examples/drama/README.md");
     expect(readme.status).toBe(200);
+    const readmeText = await readme.text();
+    expect(readmeText).toContain("DEPRECATED");
+    expect(readmeText).toContain("kaibairen/video-copilot");
+    expect(readmeText).not.toMatch(/apps\/drama-web/);
     const bare = await app.request("/examples/drama");
     expect(bare.status).toBe(302);
     expect(bare.headers.get("location")).toBe("/examples/drama/");
