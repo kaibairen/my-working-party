@@ -27,6 +27,18 @@ export default tseslint.config(
     },
   },
   {
+    files: ["examples/**/*.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        localStorage: "readonly",
+        location: "readonly",
+        URLSearchParams: "readonly",
+      },
+    },
+  },
+  {
     files: ["scripts/**/*.mjs"],
     languageOptions: {
       globals: {
