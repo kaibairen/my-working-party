@@ -25,6 +25,17 @@ Also: `safety_only_v1` / `deliver_ready_v1` pure-function tests in `packages/rea
 `policy.track` tests in `packages/policy/src/policy.test.ts`.  
 Security checklist: [HARNESSSECURITY_M0_SECURITY_CHECKLIST.md](HARNESSSECURITY_M0_SECURITY_CHECKLIST.md).
 
+## Fill shape vs GateDef kinds (QA freeze · do not relax 422)
+
+`FILL_SHAPE_MERGE_GATES` in `apps/api/tests/contract/required-cases.ts`. Ready-anti 14 names stay unchanged.
+
+| Case | Assert | File |
+|------|--------|------|
+| `fill_shape_missing_kinds_422` | shape missing Gate required kinds → **422** `predicate_evidence_mismatch` + `missing_kinds[]` | `apps/api/tests/ready-anti/fill-shape.test.ts` |
+| `fill_shape_superset_ok` | shape ⊇ predicate kinds → fill **201** | `apps/api/tests/ready-anti/fill-shape.test.ts` |
+
+Frontend owns `fill_ui_prompts_missing_summary_md` (not this suite).
+
 ## Security anti-patterns S1–S8 (QA freeze · merge-blocking)
 
 Path: `apps/api/tests/security-anti/**`. See [M0_SECURITY_ANTI_FINAL_v1.md](M0_SECURITY_ANTI_FINAL_v1.md).

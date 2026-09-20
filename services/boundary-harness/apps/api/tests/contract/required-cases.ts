@@ -37,6 +37,15 @@ export const GAME_2048_MERGE_GATES = [
   "game_2048_new_game_resets",
 ] as const;
 
+/**
+ * QA fill-shape freeze — `it("…")` titles must match exactly.
+ * Frontend owns `fill_ui_prompts_missing_summary_md` (do not implement here).
+ */
+export const FILL_SHAPE_MERGE_GATES = [
+  "fill_shape_missing_kinds_422",
+  "fill_shape_superset_ok",
+] as const;
+
 export const FORBIDDEN_ERROR_ALIASES = [
   "webhook_timestamp_skew",
   "webhook_signature_invalid",

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACCEPTANCE_CASE_NAMES,
   DESKS_GROUP_MERGE_GATES,
+  FILL_SHAPE_MERGE_GATES,
   FORBIDDEN_ERROR_ALIASES,
   GAME_2048_MERGE_GATES,
   OFFICE_ROSTER_MERGE_GATES,
@@ -16,6 +17,7 @@ const p0Src = readFileSync(join(here, "p0-linkage.test.ts"), "utf8");
 const officeAntiSrc = readFileSync(join(here, "../security-anti/office-anti.test.ts"), "utf8");
 const desksDomainSrc = readFileSync(join(here, "../../../../packages/domain/src/desks.test.ts"), "utf8");
 const game2048Src = readFileSync(join(here, "../../../../examples/2048/board.test.ts"), "utf8");
+const fillShapeSrc = readFileSync(join(here, "../ready-anti/fill-shape.test.ts"), "utf8");
 const rosterSrc = [p0Src, officeAntiSrc].join("\n");
 const desksGroupSrc = [p0Src, desksDomainSrc].join("\n");
 const harnessRoot = join(here, "../../../../");
@@ -63,6 +65,19 @@ describe("Security acceptance case registry", () => {
       "game_2048_score_updates",
       "game_2048_new_game_resets",
     ]);
+  });
+
+  it("registers QA fill-shape freeze names", () => {
+    for (const name of FILL_SHAPE_MERGE_GATES) {
+      expect(fillShapeSrc, `missing it("${name}") in ready-anti/fill-shape.test.ts`).toContain(
+        `it("${name}"`,
+      );
+    }
+    expect(FILL_SHAPE_MERGE_GATES).toEqual([
+      "fill_shape_missing_kinds_422",
+      "fill_shape_superset_ok",
+    ]);
+    expect(fillShapeSrc).not.toContain('it("fill_ui_prompts_missing_summary_md"');
   });
 
   it("does not use forbidden error-code aliases", () => {

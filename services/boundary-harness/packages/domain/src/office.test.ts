@@ -117,7 +117,7 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].empty).toBe(false);
   });
 
-  it("predicate_evidence_mismatch_422_lists_missing_kinds", () => {
+  it("fill_shape_missing_kinds_422", () => {
     harness = createHarness({ databasePath: ":memory:" });
     const goal = createGoal(harness, coord, {
       title: "ship",
@@ -144,5 +144,24 @@ describe("office home goals + fill slots", () => {
       expect(details.required_kinds).toEqual(["summary_md"]);
       expect(details.evidence_shape).toEqual(["artifact_uri"]);
     }
+  });
+
+  it("fill_shape_superset_ok", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, coord, {
+      title: "ship",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+    });
+    const asg = fillAssignment(harness, coord, goal.id, {
+      pool_id: "pool_noop",
+      brief: { outcome: "x", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    });
+    expect(asg.id).toBeTruthy();
+    expect(asg.status).toBe("accepted");
+    expect((asg.brief as { evidence_shape: string[] }).evidence_shape).toEqual([
+      "summary_md",
+      "artifact_uri",
+    ]);
   });
 });

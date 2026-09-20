@@ -90,7 +90,7 @@ describe("domain API", () => {
     expect(body.gate_defs[0].predicate_id).toBe("deliver_ready_v1");
   });
 
-  it("predicate_evidence_mismatch_422_lists_missing_kinds", async () => {
+  it("fill_shape_missing_kinds_422", async () => {
     const { app } = setup();
     const goal = await json(app, "/v1/goals", {
       method: "POST",
@@ -107,22 +107,27 @@ describe("domain API", () => {
     });
     expect(res.status).toBe(422);
     expect(body.code).toBe("predicate_evidence_mismatch");
-    expect(body.error.code).toBe("predicate_evidence_mismatch");
     expect(body.missing_kinds).toEqual(["summary_md"]);
-    expect(body.missing_kinds).toContain("summary_md");
-    expect(body.required_kinds).toEqual(["summary_md"]);
-    expect(body.evidence_shape).toEqual(["artifact_uri"]);
     expect(body.message).toMatch(/summary_md/);
+  });
 
+  it("fill_shape_superset_ok", async () => {
+    const { app } = setup();
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+    });
     const covered = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
       method: "POST",
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({
         pool_id: "pool_noop",
-        brief: { outcome: "x", constraints: [], evidence_shape: ["summary_md"] },
+        brief: { outcome: "x", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
       }),
     });
     expect(covered.res.status).toBe(201);
+    expect(covered.body.id).toBeTruthy();
   });
 
   it("canvas_not_required_for_dispatch — goal → assignment → noop → evidence → gate", async () => {

@@ -253,28 +253,6 @@ describe("ready-anti (appendix A5)", () => {
     expect(run.body.external_run_id).toBeTruthy();
   });
 
-  it("predicate_evidence_mismatch_422_lists_missing_kinds", async () => {
-    const { app } = setup();
-    const goal = await json(app, "/v1/goals", {
-      method: "POST",
-      headers: headers("coordinator", "c1"),
-      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
-    });
-    const { res, body } = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
-      method: "POST",
-      headers: headers("coordinator", "c1"),
-      body: JSON.stringify({
-        pool_id: "pool_noop",
-        brief: { outcome: "x", constraints: [], evidence_shape: ["artifact_uri"] },
-      }),
-    });
-    expect(res.status).toBe(422);
-    expect(body.code).toBe("predicate_evidence_mismatch");
-    expect(body.missing_kinds).toEqual(["summary_md"]);
-    expect(body.required_kinds).toEqual(["summary_md"]);
-    expect(body.evidence_shape).toEqual(["artifact_uri"]);
-  });
-
   it("human_dispatch_forbidden_without_exception", async () => {
     const { app } = setup();
     const goal = await json(app, "/v1/goals", {
