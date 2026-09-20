@@ -110,17 +110,37 @@ export function createApp(harness: Harness) {
 
   app.onError((err, c) => {
     if (isHarnessError(err)) {
-      const keys =
-        err.details && typeof err.details === "object" && err.details !== null && "keys" in err.details
-          ? (err.details as { keys?: string[] }).keys
+      const details =
+        err.details && typeof err.details === "object" && err.details !== null
+          ? (err.details as Record<string, unknown>)
           : undefined;
+      const keys = Array.isArray(details?.keys) ? (details.keys as string[]) : undefined;
+      const missing_kinds = Array.isArray(details?.missing_kinds)
+        ? (details.missing_kinds as string[])
+        : undefined;
+      const required_kinds = Array.isArray(details?.required_kinds)
+        ? (details.required_kinds as string[])
+        : undefined;
+      const evidence_shape = Array.isArray(details?.evidence_shape)
+        ? (details.evidence_shape as string[])
+        : undefined;
       return c.json(
         {
           code: err.code,
           message: err.message,
           keys,
+          missing_kinds,
+          required_kinds,
+          evidence_shape,
           details: err.details ?? null,
-          error: { code: err.code, message: err.message, details: err.details ?? null },
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details ?? null,
+            missing_kinds,
+            required_kinds,
+            evidence_shape,
+          },
         },
         err.status as 400 | 401 | 403 | 404 | 405 | 409 | 422 | 423 | 500,
       );

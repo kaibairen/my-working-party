@@ -376,11 +376,11 @@ paths:
         "201":
           description: Created
         "400":
-          description: predicate_evidence_mismatch
+          description: unused for Fill shape (do not map predicate_evidence_mismatch here)
         "403":
           description: RBAC / human fan-out without exception
         "422":
-          description: brief_forbidden_field
+          description: brief_forbidden_field | predicate_evidence_mismatch (missing_kinds / required_kinds / evidence_shape)
   /v1/goals/{id}/exception-grants:
     post:
       summary: Decision-maker scoped human fan-out grant
@@ -894,6 +894,10 @@ components:
         keys:
           type: array
           items: { type: string }
+        missing_kinds:
+          type: array
+          items: { type: string }
+          description: predicate kinds absent from Fill evidence_shape
     Error:
       type: object
       properties:

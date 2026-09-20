@@ -501,7 +501,24 @@ describe("domain API", () => {
     expect(slots.res.status).toBe(200);
     expect(slots.body.readonly).toBe(true);
     expect(slots.body.slots[0].progress).toBe("等同事填");
+    expect(slots.body.required_evidence_kinds).toEqual(["summary_md"]);
+    expect(slots.body.slots[0].required_evidence_kinds).toEqual(["summary_md"]);
     expect(JSON.stringify(slots.body)).not.toMatch(/指派给|开始跑|dispatch/);
+
+    const mismatch = await json(app, `/v1/goals/${created.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "coord-1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "只交报告", constraints: [], evidence_shape: ["report_md"] },
+      }),
+    });
+    expect(mismatch.res.status).toBe(422);
+    expect(mismatch.body.code ?? mismatch.body.error?.code).toBe("predicate_evidence_mismatch");
+    expect(mismatch.body.missing_kinds).toEqual(["summary_md"]);
+    expect(mismatch.body.required_kinds).toEqual(["summary_md"]);
+    expect(mismatch.body.evidence_shape).toEqual(["report_md"]);
+    expect(mismatch.body.details.missing_kinds).toEqual(["summary_md"]);
 
     const filled = await json(app, `/v1/goals/${created.body.id}/assignments`, {
       method: "POST",
