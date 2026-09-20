@@ -3,20 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>短剧工场 · Boundary Harness</title>
+  <title>短剧工场 · DEPRECATED · video-copilot</title>
   <style>
     :root {
       color-scheme: dark;
       --bg: #0c0a0d;
       --card: #161218;
-      --card-2: #1c171c;
       --line: #2d2430;
       --ink: #f4ebe6;
       --muted: #9a8b92;
       --accent: #e85d4c;
       --accent-2: #f0b56a;
-      --ok: #3dd68c;
-      --chip: #241c22;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
@@ -28,122 +25,35 @@
         var(--bg);
       color: var(--ink);
     }
-    a { color: inherit; text-decoration: none; }
-    button, input, textarea, select { font: inherit; color: inherit; }
-    button { cursor: pointer; }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 20px 16px 80px; }
-    header.top {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      margin-bottom: 22px;
-    }
+    a { color: #8cb4ff; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 28px 16px 80px; }
+    header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .mark {
       width: 34px; height: 34px; border-radius: 10px;
       background: linear-gradient(160deg, #e85d4c, #6a2030);
-      display: grid; place-items: center; font-weight: 800; letter-spacing: .04em;
+      display: grid; place-items: center; font-weight: 800;
     }
     .brand h1 { margin: 0; font-size: 18px; }
     .brand p { margin: 0; color: var(--muted); font-size: 12px; }
-    .guest {
+    .badge {
       flex: 0 0 auto;
-      border: 1px solid #3d2a28; background: #231416; color: #f0b56a;
+      border: 1px solid #6a2a24; background: #231416; color: #f0b56a;
       border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 650;
     }
-    .hero { padding: 8px 0 22px; }
-    .hero h2 { margin: 0 0 8px; font-size: clamp(28px, 6vw, 40px); letter-spacing: -.03em; }
-    .hero .lede { margin: 0 0 18px; color: var(--muted); max-width: 36em; }
-    .row { display: flex; flex-wrap: wrap; gap: 10px; }
+    h2 { margin: 0 0 10px; font-size: clamp(26px, 5vw, 36px); letter-spacing: -.03em; }
+    .lede { margin: 0 0 18px; color: var(--muted); max-width: 40em; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin: 0 0 14px; }
+    .card h3 { margin: 0 0 8px; font-size: 15px; }
+    .card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
     .btn {
-      border-radius: 12px; border: 1px solid #6a2a24; background: #3a1614;
-      color: #ffd4cc; font-weight: 700; padding: 10px 16px;
+      display: inline-block; border-radius: 12px; border: 1px solid #6a2a24;
+      background: linear-gradient(180deg, #f06a56, #c43b32); color: #fff8f6;
+      font-weight: 700; padding: 10px 16px; text-decoration: none;
     }
-    .btn.primary { background: linear-gradient(180deg, #f06a56, #c43b32); border-color: #f08a76; color: #fff8f6; }
-    .btn.ghost { background: var(--chip); border-color: var(--line); color: var(--ink); }
-    .btn:disabled { opacity: .45; cursor: not-allowed; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-    .poster {
-      display: block; border-radius: 16px; overflow: hidden;
-      border: 1px solid var(--line); background: var(--card); min-height: 220px;
-      position: relative; isolation: isolate;
-    }
-    .poster .art { height: 128px; }
-    .poster.ash .art { background: linear-gradient(160deg, #2a3038, #6a3a38 70%, #1a1214); }
-    .poster.teal .art { background: linear-gradient(160deg, #143038, #2a6a68 70%, #0e1618); }
-    .poster.amber .art { background: linear-gradient(160deg, #3a2a14, #c48a3a 70%, #1a120c); }
-    .poster .body { padding: 12px 14px 16px; }
-    .poster h3 { margin: 0 0 6px; font-size: 18px; }
-    .poster p { margin: 0; color: var(--muted); font-size: 13px; }
-    .chip {
-      position: absolute; top: 10px; left: 10px;
-      background: rgba(12,10,13,.72); border: 1px solid rgba(255,255,255,.12);
-      border-radius: 999px; padding: 3px 8px; font-size: 11px; font-weight: 700;
-    }
-    .section-title { margin: 26px 0 12px; font-size: 14px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
-    label.field { display: block; margin: 0 0 12px; }
-    label.field span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
-    input[type="text"], input[type="number"], textarea, select {
-      width: 100%; background: #100e12; border: 1px solid var(--line); border-radius: 10px;
-      padding: 10px 12px; outline: none;
-    }
-    textarea { min-height: 160px; resize: vertical; }
-    .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
-    .tabs {
-      display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin: 0 0 14px;
-    }
-    .tab {
-      border: 1px solid var(--line); background: var(--chip); border-radius: 999px;
-      padding: 8px 14px; font-weight: 650; white-space: nowrap;
-    }
-    .tab[aria-selected="true"] { border-color: #8a3a32; background: #2a1616; color: #ffd4cc; }
-    .workspace-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
-    .workspace-head h2 { margin: 0; font-size: 22px; flex: 1; min-width: 12ch; }
-    .meta { color: var(--muted); font-size: 13px; }
-    .cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-    .avatar {
-      width: 56px; height: 72px; border-radius: 10px; display: grid; place-items: center;
-      font-weight: 800; letter-spacing: .06em; flex: 0 0 auto;
-    }
-    .cast-card { display: flex; gap: 12px; }
-    .cast-card .grow { flex: 1; min-width: 0; }
-    .look { font-size: 12px; color: var(--muted); margin-top: 6px; }
-    .shots { display: flex; flex-direction: column; gap: 8px; }
-    .shot {
-      display: grid; grid-template-columns: 52px 88px 1fr 72px 56px;
-      gap: 8px; align-items: center; background: var(--card-2);
-      border: 1px solid var(--line); border-radius: 12px; padding: 8px;
-    }
-    .shot .no { font-weight: 800; color: var(--accent-2); text-align: center; }
-    .preview-layout { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 18px; align-items: start; }
-    .phone {
-      width: min(280px, 100%); aspect-ratio: 9 / 16; border-radius: 28px;
-      border: 2px solid #3a3036; background: #111; overflow: hidden; position: relative;
-      box-shadow: 0 18px 50px rgba(0,0,0,.4);
-    }
-    .phone .stub {
-      position: absolute; inset: 0; display: grid; place-items: end center;
-      padding: 18px 14px 28px; text-align: left;
-    }
-    .phone .stub strong { display: block; font-size: 16px; }
-    .phone .stub span { display: block; color: rgba(255,255,255,.82); font-size: 13px; margin-top: 6px; }
-    .phone .notch {
-      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-      width: 42%; height: 16px; border-radius: 999px; background: #0a0a0c;
-    }
-    .ep-switch { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-    .err { color: #ff8a7a; font-size: 13px; min-height: 1.2em; }
-    .empty { color: var(--muted); padding: 18px 0; }
+    .btn.ghost { background: #241c22; border-color: var(--line); color: var(--ink); }
     footer.note { margin-top: 28px; color: var(--muted); font-size: 12px; }
-    footer.note a { color: #8cb4ff; text-decoration: underline; }
-    @media (max-width: 720px) {
-      .shot { grid-template-columns: 44px 1fr 64px; grid-template-areas: "no size dur" "prompt prompt prompt" "pass pass pass"; }
-      .shot .no { grid-area: no; }
-      .shot .size { grid-area: size; }
-      .shot .dur { grid-area: dur; }
-      .shot .prompt { grid-area: prompt; }
-      .shot .pass { grid-area: pass; }
-      .preview-layout { grid-template-columns: 1fr; justify-items: center; }
-    }
   </style>
 </head>
 <body>
@@ -153,20 +63,30 @@
         <div class="mark">剧</div>
         <div>
           <h1>短剧工场</h1>
-          <p>Harness dogfood 残留 · 产品源是 video-copilot</p>
+          <p>Harness 上的 deprecated 指针 · 不是产品 SoT</p>
         </div>
       </div>
-      <span class="guest">访客 · 无需登录</span>
+      <span class="badge">DEPRECATED</span>
     </header>
-    <section class="hero">
-      <h2>精选短剧，先把工作流走完。</h2>
-      <p class="lede">不设登录墙。打开「丧尸清道夫」看剧本 / 角色 / 分镜 / 预览。产品源是 <a href="https://github.com/kaibairen/video-copilot">video-copilot</a>，本页不是 SoT。</p>
-      <div class="row">
-        <a class="btn primary" href="#/new" data-testid="cta-start">开始创作</a>
-        <a class="btn ghost" href="#/p/demo-scavenger">打开精选 Demo</a>
-      </div>
-    </section>
+    <h2>产品已迁到 video-copilot。</h2>
+    <p class="lede">
+      短剧产品 SoT 是
+      <a href="https://github.com/kaibairen/video-copilot">github.com/kaibairen/video-copilot</a>。
+      这里不再长功能。本页只是旧 <code>/examples/drama/</code> 挂载的薄 stub，避免 dogfood 链接 404。
+    </p>
+    <div class="card">
+      <h3>短剧产品 → video-copilot</h3>
+      <p>工作台、分镜、出片都去产品仓。不要在 harness <code>examples/drama/</code> 或 <code>apps/drama-web</code> 继续做产品。</p>
+    </div>
+    <div class="card">
+      <h3>Harness 操作 → 本仓库</h3>
+      <p>办公室、Gate、MCP、填充槽仍在 <code>kaibairen/my-working-party</code> 的 <code>services/boundary-harness/</code>。</p>
+    </div>
+    <div class="row">
+      <a class="btn" href="https://github.com/kaibairen/video-copilot">打开 video-copilot</a>
+      <a class="btn ghost" href="./README.md">读本目录 README</a>
+    </div>
+    <footer class="note">无登录墙。不要把本 stub 当成短剧 MVP。</footer>
   </div>
-  <script type="module" src="./app.js"></script>
 </body>
 </html>

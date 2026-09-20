@@ -398,11 +398,8 @@ describe("domain API", () => {
     const drama = await app.request("/examples/drama/");
     expect(drama.status).toBe(200);
     const dramaHtml = await drama.text();
-    expect(dramaHtml).toContain("开始创作");
-    expect(dramaHtml).toContain("./app.js");
-    const dramaSeed = await app.request("/examples/drama/seed.js");
-    expect(dramaSeed.status).toBe(200);
-    expect(dramaSeed.headers.get("content-type")).toMatch(/javascript/);
+    expect(dramaHtml).toContain("DEPRECATED");
+    expect(dramaHtml).toContain("https://github.com/kaibairen/video-copilot");
     const write = await app.request("/v1/desks", {
       method: "POST",
       headers: headers("decision_maker", "you"),
@@ -411,25 +408,26 @@ describe("domain API", () => {
     expect(write.status).toBe(404);
   });
 
-  it("serves the drama example without login", async () => {
+  it("serves the deprecated drama pointer without login", async () => {
     const { app } = setup();
     const page = await app.request("/examples/drama/");
     expect(page.status).toBe(200);
     const html = await page.text();
-    expect(html).toContain("开始创作");
+    expect(html).toContain("DEPRECATED");
     expect(html).toContain("短剧工场");
-    expect(html).toContain("./app.js");
-    expect(html).toContain("无需登录");
+    expect(html).toContain("https://github.com/kaibairen/video-copilot");
+    expect(html).not.toContain("./app.js");
     expect(html).not.toMatch(/请先登录|login required/i);
-    const script = await app.request("/examples/drama/app.js");
-    expect(script.status).toBe(200);
-    const seed = await app.request("/examples/drama/seed.js");
-    expect(seed.status).toBe(200);
+    const goneApp = await app.request("/examples/drama/app.js");
+    expect(goneApp.status).toBe(404);
+    const goneSeed = await app.request("/examples/drama/seed.js");
+    expect(goneSeed.status).toBe(404);
     const readme = await app.request("/examples/drama/README.md");
     expect(readme.status).toBe(200);
     const readmeText = await readme.text();
     expect(readmeText).toContain("DEPRECATED");
-    expect(readmeText).toContain("kaibairen/video-copilot");
+    expect(readmeText).toContain("https://github.com/kaibairen/video-copilot");
+    expect(readmeText).toMatch(/不再长功能/);
     const bare = await app.request("/examples/drama");
     expect(bare.status).toBe(302);
     expect(bare.headers.get("location")).toBe("/examples/drama/");
