@@ -217,6 +217,7 @@
 
     /* —— Office home: goals + fill slots + roster (not a dispatch board) —— */
     let selectedGoalId = "";
+    const extraKinds = {};
     function applyRosterFocus(teamGroup) {
       const roster = $("roster");
       const focus = String(teamGroup || "").trim();
@@ -382,6 +383,8 @@
           }
           grantId = grantBody.id;
         }
+        const extra = extraKinds[goalId] || [];
+        const evidence_shape = [...new Set(["summary_md", "artifact_uri", ...extra])];
         const res = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/assignments", {
           method: "POST",
           headers: headers(),
@@ -390,12 +393,21 @@
             brief: {
               outcome: intent || "人填",
               constraints: [],
-              evidence_shape: ["summary_md", "artifact_uri"],
+              evidence_shape,
             },
             exception_grant_id: grantId,
           }),
         });
+        const fillBody = await res.json().catch(() => ({}));
         if (!res.ok) {
+          const missing = fillBody.missing_kinds || (fillBody.error && fillBody.error.missing_kinds) || [];
+          const code = fillBody.code || (fillBody.error && fillBody.error.code);
+          if (res.status === 422 && code === "predicate_evidence_mismatch" && missing.length) {
+            extraKinds[goalId] = [...new Set([...extra, ...missing])];
+            flash.textContent = "门禁还要这些证据种类，已勾上：" + missing.join("、") + "。再点一次「我来填」。";
+            flash.className = "flash show bad";
+            return;
+          }
           flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";
           flash.className = "flash show bad";
           return;

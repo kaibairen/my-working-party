@@ -63,7 +63,7 @@
 - **401** `webhook_skew` / `webhook_bad_signature` / unauthorized
 - **409** Gate decide 乐观锁
 - **423** `freeze_active`
-- **400** `predicate_evidence_mismatch`
+- **422** `predicate_evidence_mismatch`（`missing_kinds`）
 
 ## OpenAPI 落地勾选
 - [x] `Pool.secret_ref` file:/env: + 明文永不回显

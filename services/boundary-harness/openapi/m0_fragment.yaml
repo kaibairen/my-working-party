@@ -47,10 +47,10 @@ paths:
           description: missing coordinator_ref / illegal mode
   /v1/goals/{id}/assignments:
     post:
-      summary: Fill assignment; BriefV1; 422 brief_forbidden_field
+      summary: Fill assignment; BriefV1; 422 brief_forbidden_field / predicate_evidence_mismatch
       responses:
         "422":
-          description: brief_forbidden_field
+          description: brief_forbidden_field / predicate_evidence_mismatch (missing_kinds)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorBody" }
@@ -272,5 +272,14 @@ components:
             - optimistic_lock
         message: { type: string }
         keys:
+          type: array
+          items: { type: string }
+        missing_kinds:
+          type: array
+          items: { type: string }
+        required_kinds:
+          type: array
+          items: { type: string }
+        evidence_shape:
           type: array
           items: { type: string }

@@ -375,12 +375,10 @@ paths:
       responses:
         "201":
           description: Created
-        "400":
-          description: predicate_evidence_mismatch
         "403":
           description: RBAC / human fan-out without exception
         "422":
-          description: brief_forbidden_field
+          description: brief_forbidden_field / predicate_evidence_mismatch (missing_kinds)
   /v1/goals/{id}/exception-grants:
     post:
       summary: Decision-maker scoped human fan-out grant
@@ -894,6 +892,18 @@ components:
         keys:
           type: array
           items: { type: string }
+        missing_kinds:
+          type: array
+          items: { type: string }
+          description: GateDef predicate kinds absent from FillAssignment brief.evidence_shape
+        required_kinds:
+          type: array
+          items: { type: string }
+          description: kinds the bound GateDef predicate requires
+        evidence_shape:
+          type: array
+          items: { type: string }
+          description: echo of brief.evidence_shape that was sent
     Error:
       type: object
       properties:

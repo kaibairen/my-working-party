@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, type Harness } from "./db";
+import { HarnessError } from "./errors";
 import { createGoal, fillAssignment, listFillSlots, listGoals } from "./services";
 import type { Actor } from "./rbac";
 
@@ -114,5 +115,34 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].filler_kind).toBe("human");
     expect(slots[0].filler).toBe("你");
     expect(slots[0].empty).toBe(false);
+  });
+
+  it("predicate_evidence_mismatch_422_lists_missing_kinds", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, coord, {
+      title: "ship",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+    });
+    try {
+      fillAssignment(harness, coord, goal.id, {
+        pool_id: "pool_noop",
+        brief: { outcome: "x", constraints: [], evidence_shape: ["artifact_uri"] },
+      });
+      throw new Error("expected predicate_evidence_mismatch");
+    } catch (err) {
+      expect(err).toBeInstanceOf(HarnessError);
+      const he = err as HarnessError;
+      expect(he.code).toBe("predicate_evidence_mismatch");
+      expect(he.status).toBe(422);
+      const details = he.details as {
+        missing_kinds: string[];
+        required_kinds: string[];
+        evidence_shape: string[];
+      };
+      expect(details.missing_kinds).toEqual(["summary_md"]);
+      expect(details.required_kinds).toEqual(["summary_md"]);
+      expect(details.evidence_shape).toEqual(["artifact_uri"]);
+    }
   });
 });

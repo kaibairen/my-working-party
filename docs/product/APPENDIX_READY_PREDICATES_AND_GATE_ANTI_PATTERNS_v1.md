@@ -27,7 +27,7 @@
 4. `gates.status` 迁移：`pending → ready` **仅当**谓词 `ok=true`，且只跳一次并 outbox `gate.ready`（至少一次投递 + 消费者幂等）。  
 5. 「规范化降级」MVP：仅允许 GateDef 配置 `on_fail: keep_pending | open_revise_hint`；**禁止**自动把 deliver 谓词降成 explore 空链。  
 6. EvidenceKind（MVP 冻结）：`pr` | `report_md` | `summary_md` | `screenshot` | `ci_check` | `artifact_uri`。  
-7. 绑定 GateDef 时：谓词所需 `kinds` MUST ⊆ 该 Goal 下 Assignment `evidence_shape` 并集（或 Goal 默认 shape）；否则 **400** `predicate_evidence_mismatch`。
+7. 绑定 GateDef 时：谓词所需 `kinds` MUST ⊆ 该 Goal 下 Assignment `evidence_shape` 并集（或 Goal 默认 shape）；否则 **422** `predicate_evidence_mismatch`（机读 `missing_kinds`；不得放松 ⊆ 规则）。
 
 ---
 
