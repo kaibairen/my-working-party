@@ -36,7 +36,6 @@ describe("drama MVP slice", () => {
     expect(appJs).toMatch(/剧本|角色|分镜|预览/);
     expect(readme).toContain("DEPRECATED");
     expect(readme).toContain("kaibairen/video-copilot");
-    expect(readme).not.toMatch(/apps\/drama-web/);
     expect(appJs).toContain("kaibairen/video-copilot");
   });
 

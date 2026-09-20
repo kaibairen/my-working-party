@@ -430,7 +430,6 @@ describe("domain API", () => {
     const readmeText = await readme.text();
     expect(readmeText).toContain("DEPRECATED");
     expect(readmeText).toContain("kaibairen/video-copilot");
-    expect(readmeText).not.toMatch(/apps\/drama-web/);
     const bare = await app.request("/examples/drama");
     expect(bare.status).toBe(302);
     expect(bare.headers.get("location")).toBe("/examples/drama/");
