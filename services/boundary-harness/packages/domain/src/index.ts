@@ -53,6 +53,7 @@ export {
   getRun,
   listFillSlots,
   listGoals,
+  requiredKindsForGoal,
   health,
   listAudit,
   listEventsAfter,

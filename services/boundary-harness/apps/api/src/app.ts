@@ -97,11 +97,17 @@ export function createApp(harness: Harness) {
         err.details && typeof err.details === "object" && err.details !== null && "keys" in err.details
           ? (err.details as { keys?: string[] }).keys
           : undefined;
+      const mismatch =
+        err.details && typeof err.details === "object" && err.details !== null
+          ? (err.details as { missing_kinds?: string[]; missing?: string[] })
+          : undefined;
+      const missing_kinds = mismatch?.missing_kinds ?? mismatch?.missing;
       return c.json(
         {
           code: err.code,
           message: err.message,
           keys,
+          missing_kinds,
           details: err.details ?? null,
           error: { code: err.code, message: err.message, details: err.details ?? null },
         },

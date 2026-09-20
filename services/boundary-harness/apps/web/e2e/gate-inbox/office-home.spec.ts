@@ -39,7 +39,12 @@ test.describe("E2E office home P0", () => {
     await expect(card.getByTestId("fill-slot")).toBeVisible();
     await expect(card.getByTestId("slot-progress")).toContainText(/等同事填|在填|等证据|已交产物/);
     await expect(card.getByTestId("human-fill")).toHaveText("我来填");
+    await expect(card.getByTestId("slot-required-kinds")).toContainText("结论摘要");
+    await expect(card.getByTestId("slot-required-kinds")).toContainText("summary_md");
     await card.getByTestId("human-fill").click();
+    await expect(page.getByTestId("fill-form")).toBeVisible();
+    await expect(page.getByTestId("fill-required-kinds")).toContainText("结论摘要");
+    await page.getByTestId("fill-submit").click();
     await expect(card.getByTestId("slot-filler")).toContainText("人填");
     await expect(card.getByRole("button", { name: /指派|开跑|dispatch/i })).toHaveCount(0);
 
@@ -67,5 +72,77 @@ test.describe("E2E office home P0", () => {
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-heading")).toHaveText(/待办/);
     await expect(page.getByTestId("gate-card").first()).toBeVisible();
+  });
+
+  test("fill_slot_shows_required_evidence_kinds", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await page.goto("/");
+    const title = `门禁种类-${Date.now()}`;
+    await page.getByTestId("goal-title-input").fill(title);
+    await page.getByTestId("goal-intent-input").fill("写一份能读的周报");
+    await page.getByTestId("new-goal").click();
+    const card = page.getByTestId("goal-card").filter({ hasText: title });
+    await expect(card.getByTestId("fill-slot")).toBeVisible();
+    await expect(card.getByTestId("slot-required-kinds")).toContainText("结论摘要");
+    await expect(card.getByTestId("slot-required-kinds")).toContainText("summary_md");
+    await expect(card.getByTestId("slot-required-kinds")).toHaveText(/结论摘要 summary_md/);
+    await card.getByTestId("human-fill").click();
+    await expect(page.getByTestId("fill-form")).toBeVisible();
+    await expect(page.getByTestId("fill-required-kinds")).toContainText("结论摘要");
+    await expect(page.getByTestId("fill-required-kinds")).toContainText("summary_md");
+    await expect(page.getByTestId("fill-kind-summary_md")).toBeChecked();
+    await expect(page.getByTestId("fill-submit")).toBeEnabled();
+    await page.screenshot({ path: join(shotDir, "fill_slot_required_kinds.png"), fullPage: true });
+  });
+
+  test("fill_slot_missing_kinds_human_message", async ({ page, baseURL }) => {
+    await drainReadyGates(baseURL!);
+    await page.goto("/");
+    const title = `种类对不上-${Date.now()}`;
+    await page.getByTestId("goal-title-input").fill(title);
+    await page.getByTestId("goal-intent-input").fill("写一份能读的周报");
+    await page.getByTestId("new-goal").click();
+    const card = page.getByTestId("goal-card").filter({ hasText: title });
+    await card.getByTestId("human-fill").click();
+    await expect(page.getByTestId("fill-form")).toBeVisible();
+
+    await page.getByTestId("fill-kind-summary_md").uncheck();
+    await page.getByTestId("fill-kind-report_md").check();
+    await expect(page.getByTestId("fill-kind-warn")).toBeVisible();
+    await expect(page.getByTestId("fill-kind-warn")).toContainText("结论摘要");
+    await expect(page.getByTestId("fill-kind-warn")).toContainText("summary_md");
+    await expect(page.getByTestId("fill-kind-warn")).not.toHaveText(/^summary_md$/);
+    await expect(page.getByTestId("fill-submit")).toBeDisabled();
+
+    await page.route("**/v1/goals/*/assignments", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "predicate_evidence_mismatch",
+          message: "predicate kinds must be ⊆ assignment evidence_shape",
+          missing_kinds: ["summary_md"],
+          details: { missing_kinds: ["summary_md"] },
+          error: {
+            code: "predicate_evidence_mismatch",
+            details: { missing_kinds: ["summary_md"] },
+          },
+        }),
+      });
+    });
+    await page.getByTestId("fill-kind-summary_md").check();
+    await expect(page.getByTestId("fill-kind-warn")).toBeHidden();
+    await expect(page.getByTestId("fill-submit")).toBeEnabled();
+    await page.getByTestId("fill-submit").click();
+    await expect(page.getByTestId("fill-kind-error")).toBeVisible();
+    await expect(page.getByTestId("fill-kind-error")).toContainText("结论摘要");
+    await expect(page.getByTestId("fill-kind-error")).toContainText("还差");
+    await expect(page.getByTestId("fill-kind-error")).not.toHaveText("predicate_evidence_mismatch");
+    await expect(page.getByTestId("goal-flash")).toContainText("结论摘要");
+    await page.screenshot({ path: join(shotDir, "fill_slot_missing_kinds.png"), fullPage: true });
   });
 });

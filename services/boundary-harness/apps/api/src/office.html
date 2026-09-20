@@ -26,10 +26,18 @@
     .goal-name { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
     .goal-status { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
     .fill-board { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-    .fill-slot { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
+    .fill-slot { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
+    .fill-slot-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; }
     .fill-slot button.human-fill { font: inherit; font-size: 13px; font-weight: 600; border-radius: 999px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 5px 10px; cursor: pointer; }
     .fill-slot .who { color: var(--ink); font-weight: 600; }
     .fill-slot a { color: var(--accent); }
+    .required-kinds { margin: 0; font-size: 12px; color: var(--warn); }
+    .kind-chip { display: inline-block; background: #3a2e14; color: var(--warn); border-radius: 999px; padding: 2px 8px; margin: 0 4px 0 0; }
+    .fill-kind-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+    .fill-kind-list label { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+    .fill-kind-list input { width: auto; margin: 0; }
+    .fill-kind-warn, .fill-kind-error { margin: 0 0 10px; font-size: 13px; color: var(--warn); }
+    .fill-kind-error { color: var(--bad); }
     .empty { color: var(--muted); padding: 12px 4px 4px; }
     .empty h3 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--ink); }
     .desks-hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
@@ -140,6 +148,19 @@
       <div id="list" data-testid="gate-list"></div>
     </main>
   </aside>
+  <dialog id="fill-dialog" data-testid="fill-form">
+    <h3>我来填</h3>
+    <p id="fill-goal-title" data-testid="fill-goal-title"></p>
+    <p class="required-kinds" id="fill-required-kinds" data-testid="fill-required-kinds"></p>
+    <p class="lede" style="margin:0 0 8px">先勾上门禁要的种类。只交报告正文过不了要结论摘要的门。</p>
+    <fieldset class="fill-kind-list" id="fill-kind-choices" data-testid="fill-kind-choices"></fieldset>
+    <p class="fill-kind-warn" id="fill-kind-warn" data-testid="fill-kind-warn" hidden></p>
+    <p class="fill-kind-error" id="fill-kind-error" data-testid="fill-kind-error" hidden></p>
+    <div class="row">
+      <button class="ok" id="fill-submit" data-testid="fill-submit">填上这格</button>
+      <button class="muted" id="fill-cancel" data-testid="fill-cancel">取消</button>
+    </div>
+  </dialog>
   <dialog id="pass-dialog">
     <h3>确认通过？</h3>
     <p>通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
@@ -184,6 +205,62 @@
       if (/github_pr|is_draft/.test(raw)) return "还差：合并请求仍是草稿";
       if (/checks|conclusion/.test(raw)) return "还差：检查未全部通过";
       return "还差：" + raw;
+    }
+    const EVIDENCE_KIND_ZH = {
+      summary_md: "结论摘要",
+      artifact_uri: "可打开的产物",
+      report_md: "报告正文",
+      screenshot: "截图",
+      pr: "合并请求",
+      ci_check: "检查结果",
+    };
+    const FILL_KIND_OPTIONS = ["summary_md", "artifact_uri", "report_md", "screenshot", "pr", "ci_check"];
+    function normalizeEvidenceKind(kind) {
+      return String(kind ?? "").replace(/^evidence:/, "").trim();
+    }
+    function evidenceKindHumanLabel(kind) {
+      const code = normalizeEvidenceKind(kind);
+      if (!code) return "";
+      const zh = EVIDENCE_KIND_ZH[code];
+      return zh ? zh + " " + code : code;
+    }
+    function requiredKindsLine(kinds) {
+      const labels = (kinds || []).map(evidenceKindHumanLabel).filter(Boolean);
+      return labels.length ? "门禁要：" + labels.join("、") : "";
+    }
+    function missingKindsHumanMessage(kinds) {
+      const labels = (kinds || []).map(evidenceKindHumanLabel).filter(Boolean);
+      if (!labels.length) return "门禁要的证据种类对不上。";
+      return "门禁要的证据种类对不上。还差：" + labels.join("、");
+    }
+    function fillKindsWarnMessage(kinds) {
+      const labels = (kinds || []).map(evidenceKindHumanLabel).filter(Boolean);
+      if (!labels.length) return "";
+      return "还没勾上门禁要的种类：" + labels.join("、") + "。先补上再交。";
+    }
+    function parseMissingKinds(body) {
+      if (!body || typeof body !== "object") return [];
+      const details = body.details && typeof body.details === "object" ? body.details : {};
+      const error = body.error && typeof body.error === "object" ? body.error : {};
+      const errorDetails = error.details && typeof error.details === "object" ? error.details : {};
+      const raw = body.missing_kinds ?? details.missing_kinds ?? errorDetails.missing_kinds ?? details.missing ?? errorDetails.missing ?? body.missing;
+      return Array.isArray(raw) ? raw.map(normalizeEvidenceKind).filter(Boolean) : [];
+    }
+    function isPredicateEvidenceMismatch(body) {
+      if (!body || typeof body !== "object") return false;
+      const code = body.code || (body.error && body.error.code);
+      return code === "predicate_evidence_mismatch";
+    }
+    function uniqueKinds(list) {
+      const seen = new Set();
+      const out = [];
+      for (const raw of list || []) {
+        const k = normalizeEvidenceKind(raw);
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        out.push(k);
+      }
+      return out;
     }
     function relativeTime(iso) {
       if (!iso) return "";
@@ -267,7 +344,21 @@
           <ul class="desk-list" data-testid="desk-list">${(g.desks || []).map(deskRowHtml).join("")}</ul>
         </section>`).join("");
     }
-    function slotHtml(slot, goal) {
+    function collectRequiredKinds(goal, slotSet, slot) {
+      return uniqueKinds([
+        ...(goal && goal.required_evidence_kinds ? goal.required_evidence_kinds : []),
+        ...(slotSet && slotSet.required_evidence_kinds ? slotSet.required_evidence_kinds : []),
+        ...(slot && slot.required_evidence_kinds ? slot.required_evidence_kinds : []),
+      ]);
+    }
+    function kindChipsHtml(kinds) {
+      if (!kinds.length) return "";
+      return `<p class="required-kinds" data-testid="slot-required-kinds">${esc(requiredKindsLine(kinds))}
+        ${kinds.map((k) => `<span class="sr-only" data-testid="required-kind" data-kind="${esc(k)}">${esc(evidenceKindHumanLabel(k))}</span>`).join("")}
+      </p>`;
+    }
+    function slotHtml(slot, goal, requiredKinds) {
+      const kinds = requiredKinds || [];
       const who = slot.empty
         ? "还没人填"
         : slot.filler_kind === "human"
@@ -281,13 +372,16 @@
         ? `<a data-testid="slot-artifact" href="${esc(slot.artifact_uri)}">产物</a>`
         : `<span data-testid="slot-artifact">产物未交</span>`;
       const fillBtn = slot.empty
-        ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-dispatch-policy="${esc(goal.dispatch_policy || "coordinator_only")}" data-intent="${esc(goal.intent || goal.title || "")}">我来填</button>`
+        ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-dispatch-policy="${esc(goal.dispatch_policy || "coordinator_only")}" data-intent="${esc(goal.intent || goal.title || "")}" data-goal-title="${esc(sanitizeCardTitle(goal.title, goal.intent))}" data-required-kinds="${esc(kinds.join(","))}">我来填</button>`
         : "";
       return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}">
-        <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
-        <span data-testid="slot-progress">${esc(progress)}</span>
-        ${art}
-        ${fillBtn}
+        <div class="fill-slot-row">
+          <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
+          <span data-testid="slot-progress">${esc(progress)}</span>
+          ${art}
+          ${fillBtn}
+        </div>
+        ${kindChipsHtml(kinds)}
       </li>`;
     }
     async function loadOffice() {
@@ -312,13 +406,16 @@
       $("goals").innerHTML = goals.map((g, i) => {
         const title = sanitizeCardTitle(g.title, g.intent);
         const status = g.status_line || "等同事开工";
-        const slots = (slotSets[i] && slotSets[i].slots) || [{ empty: true, progress: "等同事填", outcome: g.intent }];
+        const slotSet = slotSets[i] || { slots: [] };
+        const slots = slotSet.slots && slotSet.slots.length
+          ? slotSet.slots
+          : [{ empty: true, progress: "等同事填", outcome: g.intent, required_evidence_kinds: g.required_evidence_kinds }];
         const team = String(g.team_group || "");
         const selected = selectedGoalId === g.id ? " is-selected" : "";
         return `<article class="goal-card${selected}" data-testid="goal-card" data-goal-id="${esc(g.id)}" data-team-group="${esc(team)}">
           <h3 class="goal-name" data-testid="goal-title">${esc(title)}</h3>
           <p class="goal-status" data-testid="goal-status">${esc(status)}</p>
-          <ul class="fill-board" data-testid="fill-board">${slots.map((s) => slotHtml(s, g)).join("")}</ul>
+          <ul class="fill-board" data-testid="fill-board">${slots.map((s) => slotHtml(s, g, collectRequiredKinds(g, slotSet, s))).join("")}</ul>
         </article>`;
       }).join("");
       const selected = goals.find((g) => g.id === selectedGoalId);
@@ -349,7 +446,45 @@
       await loadOffice();
       void body;
     };
-    $("goals").addEventListener("click", async (e) => {
+    let pendingFill = null;
+    function selectedFillKinds() {
+      return [...document.querySelectorAll("#fill-kind-choices input[type='checkbox']:checked")].map((el) => el.value);
+    }
+    function syncFillSubmitState() {
+      if (!pendingFill) return;
+      const missing = pendingFill.required.filter((k) => !selectedFillKinds().includes(k));
+      const warn = $("fill-kind-warn");
+      warn.textContent = fillKindsWarnMessage(missing);
+      warn.hidden = missing.length === 0;
+      $("fill-submit").disabled = missing.length > 0;
+    }
+    function openFillForm(btn) {
+      pendingFill = {
+        goalId: btn.dataset.goalId,
+        policy: btn.dataset.dispatchPolicy || "coordinator_only",
+        intent: (btn.dataset.intent || "").trim(),
+        title: btn.dataset.goalTitle || "未命名目标",
+        required: uniqueKinds((btn.dataset.requiredKinds || "").split(",")),
+      };
+      $("fill-goal-title").textContent = pendingFill.title;
+      $("fill-required-kinds").textContent = pendingFill.required.length
+        ? requiredKindsLine(pendingFill.required)
+        : "这项目标没有额外的门禁证据种类。";
+      const defaults = uniqueKinds([...pendingFill.required, "artifact_uri"]);
+      $("fill-kind-choices").innerHTML = FILL_KIND_OPTIONS.map((kind) => {
+        const need = pendingFill.required.includes(kind);
+        const checked = defaults.includes(kind) ? " checked" : "";
+        return `<label data-testid="fill-kind-option" data-kind="${esc(kind)}">
+          <input type="checkbox" name="evidence_kind" value="${esc(kind)}" data-testid="fill-kind-${esc(kind)}"${checked} />
+          <span>${esc(evidenceKindHumanLabel(kind))}${need ? " · 门禁要" : ""}</span>
+        </label>`;
+      }).join("");
+      $("fill-kind-error").hidden = true;
+      $("fill-kind-error").textContent = "";
+      syncFillSubmitState();
+      $("fill-dialog").showModal();
+    }
+    $("goals").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-act='human-fill']");
       if (!btn) {
         const card = e.target.closest("[data-testid='goal-card']");
@@ -361,15 +496,29 @@
         applyRosterFocus(card.dataset.teamGroup);
         return;
       }
+      openFillForm(btn);
+    });
+    $("fill-kind-choices").addEventListener("change", syncFillSubmitState);
+    $("fill-cancel").onclick = () => {
+      $("fill-dialog").close();
+      pendingFill = null;
+    };
+    $("fill-submit").onclick = async () => {
+      if (!pendingFill) return;
       const flash = $("goal-flash");
-      const goalId = btn.dataset.goalId;
-      const policy = btn.dataset.dispatchPolicy || "coordinator_only";
-      const intent = (btn.dataset.intent || "").trim();
-      btn.disabled = true;
+      const selected = selectedFillKinds();
+      const missing = pendingFill.required.filter((k) => !selected.includes(k));
+      if (missing.length) {
+        $("fill-kind-warn").textContent = fillKindsWarnMessage(missing);
+        $("fill-kind-warn").hidden = false;
+        $("fill-submit").disabled = true;
+        return;
+      }
+      $("fill-submit").disabled = true;
       try {
         let grantId;
-        if (policy !== "human_allowed") {
-          const grantRes = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/exception-grants", {
+        if (pendingFill.policy !== "human_allowed") {
+          const grantRes = await fetch("/v1/goals/" + encodeURIComponent(pendingFill.goalId) + "/exception-grants", {
             method: "POST",
             headers: headers(),
             body: JSON.stringify({ grantee: ACTOR, scope: "fill_assignment", max_uses: 1, ttl_seconds: 3600 }),
@@ -382,31 +531,43 @@
           }
           grantId = grantBody.id;
         }
-        const res = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/assignments", {
+        const res = await fetch("/v1/goals/" + encodeURIComponent(pendingFill.goalId) + "/assignments", {
           method: "POST",
           headers: headers(),
           body: JSON.stringify({
             pool_id: "pool_noop",
             brief: {
-              outcome: intent || "人填",
+              outcome: pendingFill.intent || "人填",
               constraints: [],
-              evidence_shape: ["summary_md", "artifact_uri"],
+              evidence_shape: selected,
             },
             exception_grant_id: grantId,
           }),
         });
+        const body = await res.json().catch(() => ({}));
         if (!res.ok) {
+          if (res.status === 422 || res.status === 400 || isPredicateEvidenceMismatch(body)) {
+            const kinds = parseMissingKinds(body);
+            const msg = kinds.length ? missingKindsHumanMessage(kinds) : "门禁要的证据种类对不上。";
+            $("fill-kind-error").textContent = msg;
+            $("fill-kind-error").hidden = false;
+            flash.textContent = msg;
+            flash.className = "flash show bad";
+            return;
+          }
           flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";
           flash.className = "flash show bad";
           return;
         }
+        $("fill-dialog").close();
+        pendingFill = null;
         flash.textContent = "这格你填了。填充板还是进度，不是派工台。";
         flash.className = "flash show";
         await loadOffice();
       } finally {
-        btn.disabled = false;
+        if (pendingFill) syncFillSubmitState();
       }
-    });
+    };
 
     /* —— Inbox drawer (same HITL queue as /inbox; not the home wall) —— */
     let filter = "ready";

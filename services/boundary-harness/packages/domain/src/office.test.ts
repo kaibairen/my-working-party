@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, type Harness } from "./db";
+import { HarnessError } from "./errors";
 import { createGoal, fillAssignment, listFillSlots, listGoals } from "./services";
 import type { Actor } from "./rbac";
 
@@ -25,6 +26,7 @@ describe("office home goals + fill slots", () => {
     expect(listed[0].status_line).toBe("等同事开工");
     expect(listed[0].title).toBe("周报交付验收");
     expect(listed[0].team_group).toBeNull();
+    expect(listed[0].required_evidence_kinds).toEqual(["summary_md"]);
   });
 
   it("stores optional team_group on Goal so the office can highlight that roster", () => {
@@ -54,7 +56,27 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].empty).toBe(true);
     expect(slots[0].progress).toBe("等同事填");
     expect(slots[0].outcome).toBe("写一份能读的周报");
+    expect(slots[0].required_evidence_kinds).toEqual(["summary_md"]);
     expect(JSON.stringify(slots)).not.toMatch(/指派给|开始跑|dispatch/);
+  });
+
+  it("surfaces missing_kinds when Fill evidence_shape misses the predicate", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, dm, { title: "周报交付验收", intent: "写一份能读的周报" });
+    expect(goal.required_evidence_kinds).toEqual(["summary_md"]);
+    try {
+      fillAssignment(harness, coord, goal.id, {
+        pool_id: "pool_noop",
+        brief: { outcome: "只交报告", constraints: [], evidence_shape: ["report_md"] },
+      });
+      throw new Error("expected predicate_evidence_mismatch");
+    } catch (err) {
+      expect(err).toBeInstanceOf(HarnessError);
+      const he = err as HarnessError;
+      expect(he.code).toBe("predicate_evidence_mismatch");
+      expect(he.status).toBe(422);
+      expect(he.details).toEqual({ missing: ["summary_md"], missing_kinds: ["summary_md"] });
+    }
   });
 
   it("projects who is filling after an assignment exists", () => {

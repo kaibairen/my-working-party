@@ -218,7 +218,22 @@ export function getGoal(h: Harness, id: string) {
     ordinal: d.ordinal,
     on_fail: d.onFail,
   }));
-  return { ...publicGoal(row), gate_defs: defs };
+  return { ...publicGoal(row), gate_defs: defs, required_evidence_kinds: requiredKindsForGoal(h, id) };
+}
+
+/** Predicate kinds the Ready gate will demand — Fill evidence_shape must cover these. */
+export function requiredKindsForGoal(h: Harness, goalId: string): string[] {
+  const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, goalId)).all();
+  const seen = new Set<string>();
+  const kinds: string[] = [];
+  for (const def of defs) {
+    for (const kind of requiredEvidenceKinds(def.predicateId, def.predicateVersion)) {
+      if (seen.has(kind)) continue;
+      seen.add(kind);
+      kinds.push(kind);
+    }
+  }
+  return kinds;
 }
 
 function goalStatusLine(
@@ -245,6 +260,7 @@ export function listGoals(h: Harness, actor: Actor) {
     .map((row) => ({
       ...publicGoal(row),
       status_line: goalStatusLine(row, assignmentRows, gateRows),
+      required_evidence_kinds: requiredKindsForGoal(h, row.id),
     }));
 }
 
@@ -422,8 +438,8 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
       throw new HarnessError(
         "predicate_evidence_mismatch",
         "predicate kinds must be ⊆ assignment evidence_shape",
-        400,
-        { missing },
+        422,
+        { missing, missing_kinds: missing },
       );
     }
   }
@@ -483,6 +499,7 @@ export type FillSlot = {
   progress: string;
   outcome: string | null;
   artifact_uri: string | null;
+  required_evidence_kinds: string[];
 };
 
 /**
@@ -494,6 +511,7 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
   const goal = h.db.select().from(goals).where(eq(goals.id, goalId)).get();
   if (!goal) throw new HarnessError("not_found", `goal ${goalId} not found`, 404);
 
+  const required_evidence_kinds = requiredKindsForGoal(h, goalId);
   const asgs = h.db.select().from(assignments).where(eq(assignments.goalId, goalId)).all();
   const poolRows = h.db.select().from(pools).all();
   const runRows = h.db.select().from(runs).all();
@@ -537,6 +555,7 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
       progress,
       outcome,
       artifact_uri: artifact?.uri ?? null,
+      required_evidence_kinds,
     };
   });
 
@@ -549,10 +568,11 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
       progress: "等同事填",
       outcome: goal.intent ?? null,
       artifact_uri: null,
+      required_evidence_kinds,
     });
   }
 
-  return { slots, readonly: true as const };
+  return { slots, readonly: true as const, required_evidence_kinds };
 }
 
 function collectReadyContext(h: Harness, goalId: string): ReadyContext {
