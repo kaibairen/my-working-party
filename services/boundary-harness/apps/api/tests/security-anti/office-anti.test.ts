@@ -109,13 +109,31 @@ describe("office anti-dispatch regressions", () => {
   });
 
   it("office_consumes_domain_status_line", () => {
-    expect(officeHtml).toContain("g.status_line");
+    expect(officeHtml).toContain("status_line");
+    expect(officeHtml).toContain("goalStatusLine");
     expect(officeHtml).toContain('data-testid="goal-status"');
-    expect(officeHtml).not.toMatch(/status\s*=\s*["'`]同事在填["'`]/);
+    expect(officeHtml).not.toMatch(/status_line\s*\|\|\s*["'`][^"'`]+["'`]/);
+    expect(officeHtml).not.toMatch(/["'`]待拍板["'`]/);
+    expect(officeHtml).not.toMatch(/["'`]同事在填["'`]/);
+    expect(officeHtml).not.toContain(STATUS_LINE_FILLING);
+    expect(officeHtml).not.toContain("待拍板");
+    expect(officeHtml).not.toContain(STATUS_LINE_DONE);
     expect(zhDM.statusWaiting).toBe(STATUS_LINE_WAITING);
     expect(zhDM.statusFilling).toBe(STATUS_LINE_FILLING);
     expect(zhDM.statusWaitingEvidence).toBe(STATUS_LINE_WAITING_EVIDENCE);
     expect(zhDM.statusPendingDecision).toBe(STATUS_LINE_PENDING_DECISION);
+    expect(zhDM.statusPendingDecision).toBe("等你拍板");
+    expect(zhDM.statusPendingDecision).not.toBe("待拍板");
     expect(zhDM.statusDone).toBe(STATUS_LINE_DONE);
+    expect(zhDM.statusDone).toBe("已交齐");
+    expect(zhDM.statusDone).not.toBe("已交产物");
+  });
+
+  it("office_desks_paint_domain_presence_only", () => {
+    expect(officeHtml).toContain("heartbeatFresh");
+    expect(officeHtml).toContain("deskPresence");
+    expect(officeHtml).toContain("last_heartbeat");
+    expect(officeHtml).not.toMatch(/presence\s*\|\|\s*["']busy["']/);
+    expect(officeHtml).toContain('data-presence="${esc(presence)}"');
   });
 });

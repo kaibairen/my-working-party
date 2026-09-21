@@ -11,6 +11,7 @@ import {
   STAGE_EDGE_MERGE_GATES,
   STAGE_STRIP_PLAYWRIGHT_GATES,
   STATUS_LINE_MERGE_GATES,
+  STATUS_LINE_PLAYWRIGHT_GATES,
 } from "./required-cases";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,19 @@ describe("Security acceptance case registry", () => {
       expect(officeDomainSrc, `missing it("${name}") in office.test.ts`).toContain(`it("${name}"`);
     }
     expect(STATUS_LINE_MERGE_GATES).toEqual(["status_line_all_slots_done_not_filling"]);
+  });
+
+  it("registers office status_line Playwright titles", () => {
+    const officeHomePw = readFileSync(
+      join(here, "../../../web/e2e/gate-inbox/office-home.spec.ts"),
+      "utf8",
+    );
+    for (const name of STATUS_LINE_PLAYWRIGHT_GATES) {
+      expect(officeHomePw, `missing test("${name}") in office-home.spec.ts`).toContain(`test("${name}"`);
+    }
+    expect(officeHomePw).toContain("toHaveText(apiLine)");
+    expect(officeHomePw).toContain("等你拍板");
+    expect(STATUS_LINE_PLAYWRIGHT_GATES).toEqual(["status_line_all_slots_done_not_filling"]);
   });
 
   it("registers office stage-strip Playwright titles", () => {

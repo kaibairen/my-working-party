@@ -1,3 +1,11 @@
+import {
+  STATUS_LINE_DONE,
+  STATUS_LINE_FILLING,
+  STATUS_LINE_PENDING_DECISION,
+  STATUS_LINE_WAITING,
+  STATUS_LINE_WAITING_EVIDENCE,
+} from "../../../packages/domain/src/index";
+
 /** Decision-maker copy — Office Home P0 + G1 inbox drawer (R17–R25). */
 export const zhDM = {
   officeTitle: "AI 办公室",
@@ -7,12 +15,12 @@ export const zhDM = {
   goalName: "名称",
   goalIntent: "一句话要什么",
   officeEmpty: "还没有目标。建一个，同事才会开工。",
-  /** Office goal status_line — mirrors Domain SoT; Frontend must render Domain, not invent filling. */
-  statusWaiting: "等同事开工",
-  statusFilling: "同事在填",
-  statusWaitingEvidence: "等证据",
-  statusPendingDecision: "等你拍板",
-  statusDone: "已交齐",
+  /** Office goal status_line — imported Domain STATUS_LINE_* SoT. Never invent filling. */
+  statusWaiting: STATUS_LINE_WAITING,
+  statusFilling: STATUS_LINE_FILLING,
+  statusWaitingEvidence: STATUS_LINE_WAITING_EVIDENCE,
+  statusPendingDecision: STATUS_LINE_PENDING_DECISION,
+  statusDone: STATUS_LINE_DONE,
   inboxTitle: "待办",
   inboxCount: (n: number) => (n > 0 ? `待办 · ${n}` : "待办"),
   desksEntry: "工位心跳",
