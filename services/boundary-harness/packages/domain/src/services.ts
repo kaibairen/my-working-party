@@ -60,6 +60,14 @@ export const STAGE_LOCKED_HUMAN = "阶段未解锁：先完成上一道门禁";
 export const STAGE_NEED_PRIOR_GATE = "需先通过上一道门禁";
 export const STAGE_UNREADY = "阶段信息未就绪";
 
+/** Office goal list status_line — Domain SoT. Frontend must consume these, not invent filling. */
+export const STATUS_LINE_WAITING = "等同事开工";
+export const STATUS_LINE_FILLING = "同事在填";
+export const STATUS_LINE_WAITING_EVIDENCE = "等证据";
+/** Pending-decision copy (zhDM.statusPendingDecision). Ready GateInstance wins over filling. */
+export const STATUS_LINE_PENDING_DECISION = "待拍板";
+export const STATUS_LINE_DONE = "已交齐";
+
 export const STAGE_LABELS: Record<string, string> = {
   research: "调研",
   deliver: "交付",
@@ -414,16 +422,41 @@ export function getGoal(h: Harness, id: string) {
   return { ...publicGoal(row), gate_defs: defs };
 }
 
+function deliveredArtifact(
+  assignmentId: string,
+  evRows: Array<typeof evidenceItems.$inferSelect>,
+) {
+  return evRows.find((e) => e.assignmentId === assignmentId && e.kind === "artifact_uri" && !e.shadow);
+}
+
+function fillSlotDone(
+  asg: typeof assignments.$inferSelect,
+  evRows: Array<typeof evidenceItems.$inferSelect>,
+): boolean {
+  if (deliveredArtifact(asg.id, evRows)) return true;
+  if (asg.status !== "succeeded") return false;
+  const brief = parseJson<{ evidence_shape?: string[] }>(asg.briefJson);
+  const required = (brief?.evidence_shape ?? []).filter((k) => typeof k === "string" && k.length > 0);
+  if (required.length === 0) return false;
+  const ev = evRows.filter((e) => e.assignmentId === asg.id && !e.shadow);
+  return required.every((kind) => ev.some((e) => e.kind === kind));
+}
+
 function goalStatusLine(
   goal: typeof goals.$inferSelect,
   assignmentRows: Array<typeof assignments.$inferSelect>,
   gateRows: Array<typeof gateInstances.$inferSelect>,
+  evidenceRows: Array<typeof evidenceItems.$inferSelect>,
 ): string {
   const gates = gateRows.filter((g) => g.goalId === goal.id);
-  if (gates.some((g) => g.status === "ready")) return "等你拍板";
-  if (gates.some((g) => g.status === "pending")) return "等证据";
-  if (assignmentRows.some((a) => a.goalId === goal.id)) return "同事在填";
-  return "等同事开工";
+  const asgs = assignmentRows.filter((a) => a.goalId === goal.id);
+  const ev = evidenceRows.filter((e) => e.goalId === goal.id);
+  const allSlotsDone = asgs.length > 0 && asgs.every((a) => fillSlotDone(a, ev));
+  if (gates.some((g) => g.status === "ready")) return STATUS_LINE_PENDING_DECISION;
+  if (allSlotsDone) return STATUS_LINE_DONE;
+  if (gates.some((g) => g.status === "pending")) return STATUS_LINE_WAITING_EVIDENCE;
+  if (asgs.length > 0) return STATUS_LINE_FILLING;
+  return STATUS_LINE_WAITING;
 }
 
 /** Decision-maker office list: human titles + one-line status. */
@@ -432,12 +465,13 @@ export function listGoals(h: Harness, actor: Actor) {
   const goalRows = h.db.select().from(goals).all();
   const assignmentRows = h.db.select().from(assignments).all();
   const gateRows = h.db.select().from(gateInstances).all();
+  const evidenceRows = h.db.select().from(evidenceItems).all();
   return goalRows
     .slice()
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
     .map((row) => ({
       ...publicGoal(row),
-      status_line: goalStatusLine(row, assignmentRows, gateRows),
+      status_line: goalStatusLine(row, assignmentRows, gateRows, evidenceRows),
     }));
 }
 
@@ -717,7 +751,7 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
     const pool = poolRows.find((p) => p.id === asg.poolId);
     const runsFor = runRows.filter((r) => r.assignmentId === asg.id);
     const gatesFor = gateRows.filter((g) => g.assignmentId === asg.id);
-    const artifact = evRows.find((e) => e.assignmentId === asg.id && e.kind === "artifact_uri" && !e.shadow);
+    const artifact = deliveredArtifact(asg.id, evRows);
     const liveRun = runsFor.some((r) =>
       r.status === "queued" || r.status === "running" || r.status === "in_progress" || r.status === "dispatched",
     );

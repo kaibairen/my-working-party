@@ -7,6 +7,12 @@ export const zhDM = {
   goalName: "名称",
   goalIntent: "一句话要什么",
   officeEmpty: "还没有目标。建一个，同事才会开工。",
+  /** Office goal status_line — mirrors Domain SoT; Frontend must render Domain, not invent filling. */
+  statusWaiting: "等同事开工",
+  statusFilling: "同事在填",
+  statusWaitingEvidence: "等证据",
+  statusPendingDecision: "待拍板",
+  statusDone: "已交齐",
   inboxTitle: "待办",
   inboxCount: (n: number) => (n > 0 ? `待办 · ${n}` : "待办"),
   desksEntry: "工位心跳",

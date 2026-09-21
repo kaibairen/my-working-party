@@ -1,6 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, type Harness } from "./db";
-import { createGoal, fillAssignment, listFillSlots, listGoals, STAGE_LOCKED_HUMAN } from "./services";
+import { evidenceItems } from "./schema";
+import {
+  attachEvidence,
+  createGoal,
+  dispatchAssignment,
+  fillAssignment,
+  listFillSlots,
+  listGoals,
+  STAGE_LOCKED_HUMAN,
+  STATUS_LINE_DONE,
+  STATUS_LINE_FILLING,
+  STATUS_LINE_PENDING_DECISION,
+  STATUS_LINE_WAITING,
+} from "./services";
 import type { Actor } from "./rbac";
 
 const dm: Actor = { id: "you", role: "decision_maker" };
@@ -22,7 +35,7 @@ describe("office home goals + fill slots", () => {
     expect(goal.coordinator_ref).toBe("coord-1");
     const listed = listGoals(harness, dm);
     expect(listed).toHaveLength(1);
-    expect(listed[0].status_line).toBe("等同事开工");
+    expect(listed[0].status_line).toBe(STATUS_LINE_WAITING);
     expect(listed[0].title).toBe("周报交付验收");
     expect(listed[0].team_group).toBeNull();
   });
@@ -76,7 +89,7 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].filler).not.toMatch(/同事/);
     expect(JSON.stringify(slots)).not.toMatch(/交付同事|Cursor 同事|Bot 填/);
     expect(slots[0].progress).toBe("在填");
-    expect(listGoals(harness, dm)[0].status_line).toBe("同事在填");
+    expect(listGoals(harness, dm)[0].status_line).toBe(STATUS_LINE_FILLING);
   });
 
   it("fill_slots_pool_labels_not_colleague", () => {
@@ -139,5 +152,64 @@ describe("office home goals + fill slots", () => {
     expect(locked?.progress).toBe(STAGE_LOCKED_HUMAN);
     expect(locked?.unlock_after_gate_def_id).toBe(stage_strip.stages[1].unlock_after_gate_def_id);
     expect(JSON.stringify({ slots, stage_strip })).not.toMatch(/强制开工|指派给|开始跑|dispatch/);
+  });
+
+  it("status_line_all_slots_done_not_filling", async () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, coord, {
+      title: "五槽交齐",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+      intent: "交齐五份产物",
+    });
+    const asgs = [1, 2, 3, 4, 5].map((n) =>
+      fillAssignment(harness!, coord, goal.id, {
+        pool_id: "pool_noop",
+        brief: { outcome: `槽 ${n}`, constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    );
+    expect(listGoals(harness, dm)[0].status_line).toBe(STATUS_LINE_FILLING);
+
+    for (const [i, asg] of asgs.entries()) {
+      harness.db.insert(evidenceItems).values({
+        id: harness.newId(),
+        runId: null,
+        goalId: goal.id,
+        assignmentId: asg.id,
+        kind: "artifact_uri",
+        uri: `file://slot-${i + 1}.tgz`,
+        sha256: null,
+        shadow: false,
+        createdAt: harness.now(),
+      }).run();
+    }
+
+    const { slots } = listFillSlots(harness, dm, goal.id);
+    const delivered = slots.filter((s) => !s.empty && !s.stage_locked);
+    expect(delivered).toHaveLength(5);
+    expect(delivered.every((s) => s.progress === "已交产物" && s.artifact_uri)).toBe(true);
+
+    const line = listGoals(harness, dm)[0].status_line;
+    expect(line).not.toMatch(/同事在填|filling/i);
+    expect(line).toBe(STATUS_LINE_DONE);
+
+    const readyGoal = createGoal(harness, coord, {
+      title: "待拍板目标",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+      intent: "交产物后拍板",
+    });
+    const readyAsg = fillAssignment(harness, coord, readyGoal.id, {
+      pool_id: "pool_noop",
+      brief: { outcome: "交产物后拍板", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    });
+    const run = await dispatchAssignment(harness, coord, readyAsg.id, "status-line-ready");
+    attachEvidence(harness, { id: "exec-1", role: "executor" }, run.id, [
+      { kind: "summary_md", uri: "file://summary.md" },
+      { kind: "artifact_uri", uri: "file://out.tgz" },
+    ]);
+    const readyLine = listGoals(harness, dm).find((g) => g.id === readyGoal.id)?.status_line ?? "";
+    expect(readyLine).not.toMatch(/同事在填|filling/i);
+    expect(readyLine).toBe(STATUS_LINE_PENDING_DECISION);
   });
 });

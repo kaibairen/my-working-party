@@ -374,7 +374,7 @@
       ));
       $("goals").innerHTML = goals.map((g, i) => {
         const title = sanitizeCardTitle(g.title, g.intent);
-        const status = g.status_line || "等同事开工";
+        const status = g.status_line || "等同事开工"; // Domain SoT — do not invent 同事在填 from slots
         const pack = slotSets[i] || {};
         const slots = pack.slots || [{ empty: true, progress: "等同事填", outcome: g.intent }];
         const strip = pack.stage_strip;

@@ -43,6 +43,11 @@ export const STAGE_EDGE_MERGE_GATES = [
   "stage_unlock_after_gate_pass",
 ] as const;
 
+/** Office goal status_line — `it("…")` titles must match exactly. */
+export const STATUS_LINE_MERGE_GATES = [
+  "status_line_all_slots_done_not_filling",
+] as const;
+
 /** Office stage strip — Playwright `test("…")` titles must match exactly. */
 export const STAGE_STRIP_PLAYWRIGHT_GATES = [
   "stage_strip_shows_locked_downstream",
