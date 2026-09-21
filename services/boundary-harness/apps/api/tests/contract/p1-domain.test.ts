@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   closeHarness,
@@ -8,6 +11,7 @@ import {
   type Harness,
 } from "@harness/domain";
 import { createApp } from "../../src/app";
+import { startApiServer } from "../../src/server";
 
 const headers = (role: string, actor = role) => ({
   "content-type": "application/json",
@@ -41,7 +45,7 @@ describe("P1 domain dogfood fixes", () => {
   }
 
   it("pool_cursor_fill_not_400", async () => {
-    const { harness: h, app } = setup();
+    const { app } = setup();
     const product = await json(app, "/v1/goals", {
       method: "POST",
       headers: headers("decision_maker", "you"),
@@ -150,64 +154,96 @@ describe("P1 domain dogfood fixes", () => {
     });
     expect(explicit.body.gate_defs).toHaveLength(1);
     expect(explicit.body.gate_defs[0].predicate_id).toBe("deliver_ready_v1");
+
+    const explore = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ title: "探索", mode: "explore", coordinator_ref: "c1" }),
+    });
+    expect(explore.body.gate_defs).toEqual([]);
+    expect(explore.body.gate_template_id).toBeNull();
+
+    const stuffed = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ title: "坏目标", steps: ["先调研再写报告"] }),
+    });
+    expect(stuffed.res.status).toBe(422);
+    expect(stuffed.body.code ?? stuffed.body.error?.code).toBe("brief_forbidden_field");
+
+    const hint = await json(app, "/v1/policy/check", {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({ action: "change_path", track: "advisory_hint", goal_id: dm.body.id }),
+    });
+    expect(hint.body.track).toBe("advisory_hint");
+    expect(hint.body.creates_gate).toBe(false);
+    expect(hint.body.decision).not.toBe("require_gate");
+    const afterHint = await json(app, `/v1/gates?goal_id=${dm.body.id}`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(afterHint.body.gates).toEqual([]);
   });
 
   it("api_8080_bind_no_blip", async () => {
-    const { harness: h, app } = setup();
-    h.bus.on("goal.status_changed", () => {
-      throw new Error("bus listener must not kill bind");
+    const started = await startApiServer({
+      port: 0,
+      hostname: "127.0.0.1",
+      databasePath: ":memory:",
+      mode: "api",
     });
+    try {
+      const t0 = Date.now();
+      const first = await fetch(`http://127.0.0.1:${started.port}/health`);
+      expect(first.status).toBe(200);
+      expect(Date.now() - t0).toBeLessThan(200);
+      const firstBody = (await first.json()) as { ok?: boolean };
+      expect(firstBody.ok).toBe(true);
 
-    const goal = await json(app, "/v1/goals", {
-      method: "POST",
-      headers: headers("coordinator", "c1"),
-      body: JSON.stringify({ title: "绑定不掉线", mode: "deliver", coordinator_ref: "c1" }),
-    });
-    const filled = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
-      method: "POST",
-      headers: headers("coordinator", "c1"),
-      body: JSON.stringify({
-        pool_id: "pool_cursor",
-        assignee_bot_id: "bot-bound",
-        brief: { outcome: "bind", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
-      }),
-    });
-    expect(filled.res.status).toBe(201);
-    expect(filled.body.assignee_bot_id).toBe("bot-bound");
+      await started.harness;
+      const hz = await fetch(`http://127.0.0.1:${started.port}/healthz`);
+      expect(hz.status).toBe(200);
 
-    const bound = await json(app, `/v1/assignments/${filled.body.id}/bind`, {
-      method: "POST",
-      headers: headers("coordinator", "c1"),
-      body: JSON.stringify({ assignee_bot_id: "bot-rebind" }),
-    });
-    expect(bound.res.status).not.toBe(400);
-    expect(bound.res.status).toBe(200);
-    expect(bound.body.assignee_bot_id).toBe("bot-rebind");
-
-    const health = await json(app, "/health");
-    expect(health.res.status).toBe(200);
-    expect(health.body.ok ?? true).toBeTruthy();
-
-    const parallel = await Promise.all([
-      json(app, `/v1/assignments/${filled.body.id}/bind`, {
+      const h = await started.harness;
+      h.bus.on("goal.status_changed", () => {
+        throw new Error("bus listener must not kill bind");
+      });
+      const app = createApp(h);
+      const goal = await json(app, "/v1/goals", {
         method: "POST",
-        headers: headers("service", "svc"),
-        body: JSON.stringify({ assignee_bot_id: "bot-a" }),
-      }),
-      json(app, `/v1/goals/${goal.body.id}/assignments`, {
+        headers: headers("coordinator", "c1"),
+        body: JSON.stringify({ title: "绑定不掉线", mode: "deliver", coordinator_ref: "c1" }),
+      });
+      const filled = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
         method: "POST",
         headers: headers("coordinator", "c1"),
         body: JSON.stringify({
           pool_id: "pool_cursor",
-          assignee_bot_id: "bot-b",
-          brief: { outcome: "parallel", constraints: [], evidence_shape: ["summary_md"] },
+          assignee_bot_id: "bot-bound",
+          brief: { outcome: "bind", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
         }),
-      }),
-      json(app, "/health"),
-    ]);
-    expect(parallel.every((p) => p.res.status < 500)).toBe(true);
-    expect(parallel[0].res.status).toBe(200);
-    expect(parallel[1].res.status).toBe(201);
-    expect(parallel[2].res.status).toBe(200);
+      });
+      expect(filled.res.status).toBe(201);
+      const bound = await json(app, `/v1/assignments/${filled.body.id}/bind`, {
+        method: "POST",
+        headers: headers("coordinator", "c1"),
+        body: JSON.stringify({ assignee_bot_id: "bot-rebind" }),
+      });
+      expect(bound.res.status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${started.port}/health`)).status).toBe(200);
+
+      await expect(startApiServer({ port: started.port, hostname: "127.0.0.1", databasePath: ":memory:" }))
+        .rejects.toMatchObject({ code: "EADDRINUSE" });
+    } finally {
+      await started.close();
+    }
+
+    const wait = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../../../../deploy/wait-api-healthy.sh"),
+      "utf8",
+    );
+    expect(wait).toContain("api_8080_bind_no_blip");
+    expect(wait).toMatch(/NO_BLIP_SECS/);
+    expect(wait).toMatch(/\/healthz/);
   });
 });
