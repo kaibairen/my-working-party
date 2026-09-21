@@ -436,6 +436,8 @@ describe("P1 domain dogfood fixes", () => {
 
     const indexSrc = readFileSync(join(here, "../../src/index.ts"), "utf8");
     expect(indexSrc).toContain("startApiServer({ exitOnBusy: true })");
+    expect(indexSrc).toContain("logEaddrInUse");
+    expect(indexSrc).toContain("wait-api-healthy");
     expect(indexSrc).toMatch(/EADDRINUSE/);
     expect(indexSrc).toMatch(/process\.exit\(2\)/);
     expect(indexSrc).not.toMatch(/createHarness\s*\(/);
