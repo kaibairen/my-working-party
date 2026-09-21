@@ -6,6 +6,9 @@ import {
   closeHarness,
   createHarness,
   DEFAULT_DELIVER_GATE_TEMPLATE,
+  evaluateReady,
+  requiredEvidenceKinds,
+  RESEARCH_READY_V1,
   STAGE_KEY_DELIVER,
   STAGE_KEY_RESEARCH,
   type Harness,
@@ -31,6 +34,18 @@ async function json(app: ReturnType<typeof createApp>, path: string, init?: Requ
   }
   return { res, body };
 }
+
+function errCode(body: Record<string, any>): string {
+  return String(body.code ?? body.error?.code ?? "");
+}
+
+const emptyReady = {
+  evidence: [],
+  githubSnapshots: [],
+  policyEvents: [],
+  noopOrOfflineContract: false,
+  runFinished: false,
+};
 
 describe("P1 domain dogfood fixes", () => {
   let harness: Harness | undefined;
@@ -120,6 +135,33 @@ describe("P1 domain dogfood fixes", () => {
         [STAGE_KEY_RESEARCH, "research_ready_v1"],
         [STAGE_KEY_DELIVER, "deliver_ready_v1"],
       ]);
+    expect(dm.body.gate_defs[0].predicate_version).toBe(1);
+    expect(dm.body.gate_defs).not.toHaveLength(0);
+    const researchDef = dm.body.gate_defs.find((d: { stage_key: string }) => d.stage_key === STAGE_KEY_RESEARCH);
+    const deliverDef = dm.body.gate_defs.find((d: { stage_key: string }) => d.stage_key === STAGE_KEY_DELIVER);
+    expect(researchDef?.id).toBeTruthy();
+    expect(deliverDef?.id).toBeTruthy();
+
+    expect(requiredEvidenceKinds("research_ready_v1", 1)).toEqual(["report_md"]);
+    expect(RESEARCH_READY_V1.all).toEqual([{ type: "evidence_present", kinds: ["report_md"] }]);
+    expect(evaluateReady("research_ready_v1", 1, {
+      ...emptyReady,
+      evidence: [{ kind: "report_md", uri: "file://research.md" }],
+    }, "t").ok).toBe(true);
+    expect(evaluateReady("research_ready_v1", 1, {
+      ...emptyReady,
+      evidence: [{ kind: "screenshot", uri: "file://oral.png" }],
+    }, "t").ok).toBe(false);
+    expect(evaluateReady("research_ready_v1", 1, {
+      ...emptyReady,
+      evidence: [{ kind: "summary_md", uri: "file://summary.md" }],
+    }, "t").ok).toBe(false);
+    expect(evaluateReady("deliver_ready_v1", 1, {
+      ...emptyReady,
+      evidence: [{ kind: "report_md", uri: "file://research.md" }],
+      noopOrOfflineContract: true,
+      runFinished: true,
+    }, "t").ok).toBe(false);
 
     const coord = await json(app, "/v1/goals", {
       method: "POST",
@@ -141,6 +183,90 @@ describe("P1 domain dogfood fixes", () => {
     expect(open[0].stage_key).toBe("research");
     expect(open[0].stage_locked).not.toBe(true);
     expect(slots.body.slots.some((s: { stage_locked?: boolean; stage_key?: string }) => s.stage_locked && s.stage_key === "deliver")).toBe(true);
+    const lockedDeliver = slots.body.slots.find((s: { stage_locked?: boolean; stage_key?: string }) => s.stage_locked && s.stage_key === "deliver");
+    expect(lockedDeliver.unlock_after_gate_def_id).toBe(researchDef.id);
+
+    const researchAsg = await json(app, `/v1/goals/${dm.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "调研纪要", constraints: [], evidence_shape: ["report_md"] },
+      }),
+    });
+    expect(researchAsg.res.status).toBe(201);
+    const researchRun = await json(app, `/v1/assignments/${researchAsg.body.id}/dispatch`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ idempotency_key: "research-lock-1" }),
+    });
+    expect(researchRun.res.status).toBe(201);
+
+    await json(app, `/v1/runs/${researchRun.body.id}/evidence`, {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({ items: [{ kind: "screenshot", uri: "file://oral-done.png" }] }),
+    });
+    const shotReady = await json(app, `/v1/gates?status=ready&goal_id=${dm.body.id}`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(shotReady.body.gates).toEqual([]);
+
+    await json(app, `/v1/runs/${researchRun.body.id}/evidence`, {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({ items: [{ kind: "report_md", uri: "file://research.md" }] }),
+    });
+    const researchReady = await json(app, `/v1/gates?status=ready&goal_id=${dm.body.id}`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(researchReady.body.gates).toHaveLength(1);
+    expect(researchReady.body.gates[0].predicate_id).toBe("research_ready_v1");
+    expect(researchReady.body.gates.some((g: { predicate_id: string }) => g.predicate_id === "deliver_ready_v1")).toBe(false);
+
+    const readyNotPass = await json(app, `/v1/goals/${dm.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "交付", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+        unlock_after_gate_def_id: researchDef.id,
+      }),
+    });
+    expect(readyNotPass.res.status).toBe(423);
+    expect(errCode(readyNotPass.body)).toBe("stage_locked");
+
+    const decided = await json(app, `/v1/gates/${researchReady.body.gates[0].id}/decide`, {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ decision: "pass", version: researchReady.body.gates[0].version }),
+    });
+    expect(decided.res.status).toBe(200);
+
+    const afterPassReady = await json(app, `/v1/gates?status=ready&goal_id=${dm.body.id}`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(afterPassReady.body.gates).toEqual([]);
+
+    const unlocked = await json(app, `/v1/goals/${dm.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "交付", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+        unlock_after_gate_def_id: researchDef.id,
+      }),
+    });
+    expect(unlocked.res.status).toBe(201);
+    expect(unlocked.body.unlock_after_gate_def_id).toBe(researchDef.id);
+
+    const afterUnlockSlots = await json(app, `/v1/goals/${dm.body.id}/assignments`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(afterUnlockSlots.body.stage_strip.stages.map((s: { stage_key: string; state: string }) => [s.stage_key, s.state]))
+      .toEqual([["research", "done"], ["deliver", "current"]]);
+    expect(afterUnlockSlots.body.stage_strip.stages.find((s: { stage_key: string }) => s.stage_key === "deliver")?.gate_status)
+      .not.toBe("pass");
 
     const explicit = await json(app, "/v1/goals", {
       method: "POST",
