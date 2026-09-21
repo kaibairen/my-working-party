@@ -112,6 +112,7 @@ export async function seedDeliverPending(baseURL: string, title = HUMAN_GOAL.del
       headers: headers.coordinator,
       body: JSON.stringify({
         pool_id: "pool_noop",
+        assignee_bot_id: "bot-deliver",
         brief: { outcome: "pending only", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
       }),
     }),
@@ -245,7 +246,7 @@ export async function seedHeartbeat(
 }
 
 /** Fill an assignment without dispatch so a bound heartbeat desk projects 在忙. */
-export async function seedBusyDesk(baseURL: string, poolId = "pool_cursor") {
+export async function seedBusyDesk(baseURL: string, poolId = "pool_cursor", assigneeBotId = "bot-cursor") {
   const goal = await requireOk(
     "create busy-desk goal",
     await api<{ id: string }>(baseURL, "/v1/goals", {
@@ -265,6 +266,7 @@ export async function seedBusyDesk(baseURL: string, poolId = "pool_cursor") {
       headers: headers.coordinator,
       body: JSON.stringify({
         pool_id: poolId,
+        assignee_bot_id: assigneeBotId,
         brief: { outcome: "presence only", constraints: [], evidence_shape: ["summary_md"] },
       }),
     }),

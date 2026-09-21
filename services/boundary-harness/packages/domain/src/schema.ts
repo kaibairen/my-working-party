@@ -69,6 +69,8 @@ export const assignments = sqliteTable("assignments", {
   fillerKind: text("filler_kind"),
   /** Prior GateDef that must be decided pass before this assignment may fill/dispatch. */
   unlockAfterGateDefId: text("unlock_after_gate_def_id"),
+  /** Bound executor bot actor id. Coordinator/service set; optional extra (applyCompat). */
+  assigneeBotId: text("assignee_bot_id"),
 });
 
 export const runs = sqliteTable("runs", {

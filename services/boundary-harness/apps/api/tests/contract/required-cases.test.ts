@@ -11,6 +11,7 @@ import {
   OFFICE_ROSTER_MERGE_GATES,
   STAGE_EDGE_MERGE_GATES,
   STAGE_STRIP_PLAYWRIGHT_GATES,
+  P0_B_MERGE_GATES,
   STATUS_LINE_MERGE_GATES,
   STATUS_LINE_PLAYWRIGHT_GATES,
 } from "./required-cases";
@@ -82,6 +83,26 @@ describe("Security acceptance case registry", () => {
     expect(STAGE_EDGE_MERGE_GATES).toEqual([
       "stage_locked_blocks_downstream_dispatch",
       "stage_unlock_after_gate_pass",
+    ]);
+  });
+
+  it("registers P0-B assignee bind + desk busy merge gates", () => {
+    const desksDomainSrc = readFileSync(
+      join(here, "../../../../packages/domain/src/desks.test.ts"),
+      "utf8",
+    );
+    const webhookSrc = readFileSync(
+      join(here, "../../../../packages/domain/src/webhook.test.ts"),
+      "utf8",
+    );
+    const p0bSrc = [p0Src, desksDomainSrc, webhookSrc].join("\n");
+    for (const name of P0_B_MERGE_GATES) {
+      expect(p0bSrc, `missing it("${name}") in P0-B freeze sources`).toContain(`it("${name}"`);
+    }
+    expect(P0_B_MERGE_GATES).toEqual([
+      "assignment_binds_bot_id",
+      "desk_busy_from_assignee_heartbeat",
+      "outbound_publisher_posts_domain_events",
     ]);
   });
 

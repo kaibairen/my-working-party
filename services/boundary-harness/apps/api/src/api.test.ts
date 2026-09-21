@@ -33,7 +33,7 @@ describe("domain API", () => {
     const { res, body } = await json(app, "/health");
     expect(res.status).toBe(200);
     expect(body.ok).toBe(true);
-    expect(body.schema_version).toBe(2);
+    expect(body.schema_version).toBe(3);
     expect(body.adapter).toBe("noop");
   });
 

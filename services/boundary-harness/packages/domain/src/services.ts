@@ -46,6 +46,8 @@ export type FillAssignmentInput = {
   exception_grant_id?: string;
   /** Prior GateDef that must already be decided pass. Jumping ahead → 423 stage_locked. */
   unlock_after_gate_def_id?: string | null;
+  /** Bind a concrete bot actor. Coordinator/service only — not an office DM assign. */
+  assignee_bot_id?: string | null;
 };
 
 export const STAGE_KEY_RESEARCH = "research";
@@ -192,9 +194,70 @@ function publicAssignment(row: typeof assignments.$inferSelect) {
     status: row.status,
     risk: row.risk,
     unlock_after_gate_def_id: row.unlockAfterGateDefId ?? null,
+    assignee_bot_id: row.assigneeBotId ?? null,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
+}
+
+function normalizeAssigneeBotId(raw?: string | null): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.slice(0, 128) : null;
+}
+
+/** Coordinator/service may bind. Office decision-maker / executor cannot. */
+function resolveAssigneeBind(actor: Actor, raw?: string | null): string | null {
+  const bound = normalizeAssigneeBotId(raw);
+  if (!bound) return null;
+  if (actor.role !== "coordinator" && actor.role !== "service") {
+    throw new HarnessError("forbidden", "only coordinator or service may bind assignee_bot_id", 403);
+  }
+  return bound;
+}
+
+function boundAssigneeBotId(
+  row?: { assigneeBotId?: string | null } | null,
+): { assignee_bot_id?: string } {
+  const id = row?.assigneeBotId?.trim();
+  return id ? { assignee_bot_id: id } : {};
+}
+
+function firstBoundAssigneeBotId(
+  rows: Array<{ assigneeBotId?: string | null }>,
+): { assignee_bot_id?: string } {
+  const row = rows.find((r) => r.assigneeBotId?.trim());
+  return boundAssigneeBotId(row);
+}
+
+function enqueueOutbox(h: Harness, type: string, payload: Record<string, unknown>) {
+  const outboxId = h.newId();
+  const full = { ...payload, outbox_id: outboxId };
+  h.db.insert(outbox).values({
+    id: outboxId,
+    type,
+    payload: JSON.stringify(full),
+    createdAt: h.now(),
+    publishedAt: null,
+    attempts: 0,
+    lastError: null,
+    nextAttemptAt: null,
+  }).run();
+  h.bus.emit(type, full);
+  return full;
+}
+
+function publishGoalStatusChanged(h: Harness, goalId: string) {
+  const goal = h.db.select().from(goals).where(eq(goals.id, goalId)).get();
+  if (!goal) return;
+  const assignmentRows = h.db.select().from(assignments).where(eq(assignments.goalId, goalId)).all();
+  const gateRows = h.db.select().from(gateInstances).where(eq(gateInstances.goalId, goalId)).all();
+  const evidenceRows = h.db.select().from(evidenceItems).where(eq(evidenceItems.goalId, goalId)).all();
+  enqueueOutbox(h, "goal.status_changed", {
+    goal_id: goalId,
+    status_line: goalStatusLine(goal, assignmentRows, gateRows, evidenceRows),
+    ...firstBoundAssigneeBotId(assignmentRows),
+  });
 }
 
 function publicRun(row: typeof runs.$inferSelect) {
@@ -652,8 +715,10 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
     }
   }
 
+  const assigneeBotId = resolveAssigneeBind(actor, input.assignee_bot_id);
+
   let status = "accepted";
-  if (actor.role === "coordinator") {
+  if (actor.role === "coordinator" || actor.role === "service") {
     // ok
   } else if (actor.role === "executor") {
     status = "proposed";
@@ -689,9 +754,36 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
     createdBy: actor.id,
     fillerKind,
     unlockAfterGateDefId: unlockAfter,
+    assigneeBotId,
   }).run();
-  audit(h, actor, status === "proposed" ? "propose_assignment" : "fill_assignment", "assignment", id);
+  audit(h, actor, status === "proposed" ? "propose_assignment" : "fill_assignment", "assignment", id, {
+    assignee_bot_id: assigneeBotId,
+  });
+  publishGoalStatusChanged(h, goalId);
   return getAssignment(h, id);
+}
+
+export function bindAssignment(
+  h: Harness,
+  actor: Actor,
+  assignmentId: string,
+  assigneeBotIdRaw: string | null | undefined,
+) {
+  requireRole(actor, ["coordinator", "service"]);
+  const row = h.db.select().from(assignments).where(eq(assignments.id, assignmentId)).get();
+  if (!row) throw new HarnessError("not_found", `assignment ${assignmentId} not found`, 404);
+  const assigneeBotId = resolveAssigneeBind(actor, assigneeBotIdRaw);
+  if (!assigneeBotId) {
+    throw new HarnessError("assignee_bot_id_invalid", "assignee_bot_id is required", 422);
+  }
+  h.db
+    .update(assignments)
+    .set({ assigneeBotId, updatedAt: h.now() })
+    .where(eq(assignments.id, assignmentId))
+    .run();
+  audit(h, actor, "bind_assignment", "assignment", assignmentId, { assignee_bot_id: assigneeBotId });
+  publishGoalStatusChanged(h, row.goalId);
+  return getAssignment(h, assignmentId);
 }
 
 export function getAssignment(h: Harness, id: string) {
@@ -708,6 +800,7 @@ export type FillSlot = {
   progress: string;
   outcome: string | null;
   artifact_uri: string | null;
+  assignee_bot_id?: string | null;
   stage_key?: string | null;
   stage_locked?: boolean;
   unlock_after_gate_def_id?: string | null;
@@ -722,6 +815,7 @@ function emptySlot(partial: Partial<FillSlot> & Pick<FillSlot, "progress">): Fil
     filler_kind: null,
     outcome: null,
     artifact_uri: null,
+    assignee_bot_id: null,
     stage_key: null,
     stage_locked: false,
     unlock_after_gate_def_id: null,
@@ -790,6 +884,7 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
       progress: stage_locked ? STAGE_LOCKED_HUMAN : progress,
       outcome,
       artifact_uri: artifact?.uri ?? null,
+      assignee_bot_id: asg.assigneeBotId ?? null,
       stage_key: target?.stageKey ?? node?.stage_key ?? null,
       stage_locked,
       unlock_after_gate_def_id: unlockAfter,
@@ -885,19 +980,16 @@ function evaluatePendingDeliverGates(h: Harness, goalId: string): void {
         })
         .where(and(eq(gateInstances.id, inst.id), eq(gateInstances.status, "pending"), eq(gateInstances.version, inst.version)))
         .run();
-      const outboxId = h.newId();
-      const payload = { gate_instance_id: inst.id, goal_id: goalId, result, outbox_id: outboxId };
-      h.db.insert(outbox).values({
-        id: outboxId,
-        type: "gate.ready",
-        payload: JSON.stringify(payload),
-        createdAt: h.now(),
-        publishedAt: null,
-        attempts: 0,
-        lastError: null,
-        nextAttemptAt: null,
-      }).run();
-      h.bus.emit("gate.ready", payload);
+      const asg = inst.assignmentId
+        ? h.db.select().from(assignments).where(eq(assignments.id, inst.assignmentId)).get()
+        : undefined;
+      enqueueOutbox(h, "gate.ready", {
+        gate_instance_id: inst.id,
+        goal_id: goalId,
+        result,
+        ...boundAssigneeBotId(asg),
+      });
+      publishGoalStatusChanged(h, goalId);
     } else {
       h.db
         .update(gateInstances)
@@ -1167,19 +1259,16 @@ export function policyCheck(
           readyResultJson: JSON.stringify(readyResult),
           version: 0,
         }).run();
-        const outboxId = h.newId();
-        const payload = { gate_instance_id: instId, goal_id: goal.id, result: readyResult, outbox_id: outboxId };
-        h.db.insert(outbox).values({
-          id: outboxId,
-          type: "gate.ready",
-          payload: JSON.stringify(payload),
-          createdAt: h.now(),
-          publishedAt: null,
-          attempts: 0,
-          lastError: null,
-          nextAttemptAt: null,
-        }).run();
-        h.bus.emit("gate.ready", payload);
+        const bound = input.assignment_id
+          ? h.db.select().from(assignments).where(eq(assignments.id, input.assignment_id)).get()
+          : undefined;
+        enqueueOutbox(h, "gate.ready", {
+          gate_instance_id: instId,
+          goal_id: goal.id,
+          result: readyResult,
+          ...boundAssigneeBotId(bound),
+        });
+        publishGoalStatusChanged(h, goal.id);
         const inst = h.db.select().from(gateInstances).where(eq(gateInstances.id, instId)).get();
         if (inst) gate_instance = publicGate(inst, safetyDef, goal.title);
       }
@@ -1349,7 +1438,10 @@ export function listGithubSnapshots(h: Harness, goalId?: string) {
 
 /**
  * Exactly-once attempt: claim by incrementing attempts, mark published_at
- * only after a successful webhook (or local ack when WEBHOOK_URL is unset).
+ * only after a successful webhook (or local ack when WEBHOOK_URL / DOMAIN_EVENTS_URL
+ * is unset). Envelope is `{ id, type, created_at, payload }` for Bridge
+ * `POST /hooks/domain-events` (CONTRACT_DOMAIN_OUTBOUND_EVENTS_P0D_v0).
+ * Missing assignee_bot_id still publishes the outbox (human SSE); Bridge skips wake.
  * Failed deliveries stay unpublished and retry after backoff.
  */
 export async function publishOutbox(h: Harness, limit = 50): Promise<number> {

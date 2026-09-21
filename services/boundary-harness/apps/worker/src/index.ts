@@ -9,7 +9,7 @@ if (databasePath !== ":memory:") {
 
 const harness = createHarness({
   databasePath,
-  webhookUrl: process.env.WEBHOOK_URL,
+  webhookUrl: process.env.WEBHOOK_URL ?? process.env.DOMAIN_EVENTS_URL,
 });
 const interval = Number(process.env.WORKER_INTERVAL_MS ?? 500);
 console.log(`harness worker listening db=${databasePath} interval=${interval}ms webhook=${harness.webhookUrl ?? "off"}`);

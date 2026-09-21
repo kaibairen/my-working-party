@@ -14,6 +14,7 @@ import {
   decideGate,
   dispatchAssignment,
   fillAssignment,
+  bindAssignment,
   getAdminFreeze,
   getAssignment,
   getGoal,
@@ -319,6 +320,7 @@ export function createApp(harness: Harness) {
         budget: body.budget,
         exception_grant_id: body.exception_grant_id as string | undefined,
         unlock_after_gate_def_id: body.unlock_after_gate_def_id as string | undefined,
+        assignee_bot_id: (body.assignee_bot_id as string | undefined) ?? null,
       }),
       201,
     );
@@ -330,6 +332,13 @@ export function createApp(harness: Harness) {
   });
 
   v1.get("/assignments/:id", (c) => c.json(getAssignment(c.get("harness"), c.req.param("id"))));
+
+  v1.post("/assignments/:id/bind", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { assignee_bot_id?: string };
+    return c.json(
+      bindAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), body.assignee_bot_id),
+    );
+  });
 
   v1.post("/assignments/:id/dispatch", async (c) => {
     assertMcpEntry(c.req.header("x-harness-entry"), c.req.path);

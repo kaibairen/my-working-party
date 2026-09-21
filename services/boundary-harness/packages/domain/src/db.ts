@@ -158,6 +158,9 @@ function applyCompat(sqlite: Database.Database): void {
     if (!cols.includes("unlock_after_gate_def_id")) {
       sqlite.exec("ALTER TABLE assignments ADD COLUMN unlock_after_gate_def_id TEXT");
     }
+    if (!cols.includes("assignee_bot_id")) {
+      sqlite.exec("ALTER TABLE assignments ADD COLUMN assignee_bot_id TEXT");
+    }
   }
   if (tableExists(sqlite, "gate_defs") && !columnNames(sqlite, "gate_defs").includes("stage_key")) {
     sqlite.exec("ALTER TABLE gate_defs ADD COLUMN stage_key TEXT");
@@ -225,8 +228,8 @@ export function createHarness(opts?: {
       cursor: opts?.adapters?.cursor ?? createCursorAdapter(),
     },
     bus: new EventEmitter(),
-    webhookUrl: opts?.webhookUrl ?? process.env.WEBHOOK_URL,
-    webhookSecret: opts?.webhookSecret ?? process.env.WEBHOOK_SIGNING_SECRET,
+    webhookUrl: opts?.webhookUrl ?? process.env.WEBHOOK_URL ?? process.env.DOMAIN_EVENTS_URL,
+    webhookSecret: opts?.webhookSecret ?? process.env.WEBHOOK_SIGNING_SECRET ?? process.env.HARNESS_WEBHOOK_SECRET,
     now,
     newId: opts?.newId ?? (() => crypto.randomUUID()),
   };

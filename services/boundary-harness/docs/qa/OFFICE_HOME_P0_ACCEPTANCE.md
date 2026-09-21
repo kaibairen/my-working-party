@@ -54,6 +54,18 @@ Registries in `apps/api/tests/contract/required-cases.ts`. CI red if a freeze na
 
 Shell imports/mirrors Domain `STATUS_LINE_*` (`等你拍板` · `已交齐`). Paints `goal.status_line` as-is. Missing line → empty. Never invent `待拍板` / `同事在填` / `已交产物` as status_line. Desks paint Domain `presence` + fresh heartbeat; no fake busy; no dispatch UI.
 
+### P0-B assignee bind + desk busy (`P0_B_MERGE_GATES`)
+
+| Gate | Title | File |
+|------|-------|------|
+| Assignment binds a concrete bot | `assignment_binds_bot_id` | `p0-linkage.test.ts` |
+| Desk busy only from bound assignee heartbeat | `desk_busy_from_assignee_heartbeat` | `p0-linkage.test.ts` · `desks.test.ts` |
+| Domain outbox POSTs Bridge envelope | `outbound_publisher_posts_domain_events` | `webhook.test.ts` |
+
+Coordinator/service set `assignee_bot_id`. No new office DM assign/dispatch write routes. Expired heartbeat ≠ busy. Fake seed names stay hidden.
+
+Publisher: [CONTRACT_DOMAIN_OUTBOUND_EVENTS_P0D_v0.md](../m4/CONTRACT_DOMAIN_OUTBOUND_EVENTS_P0D_v0.md).
+
 Extra (not this freeze): `fill_slots_pool_labels_not_colleague`. English 2048 merge smokes stay as non-gate cases.
 
 M4 MCP glove dogfood: [DOGFOOD_GROKBOT_MCP_SOP.md](../DOGFOOD_GROKBOT_MCP_SOP.md).

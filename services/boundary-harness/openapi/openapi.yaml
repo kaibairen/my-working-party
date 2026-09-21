@@ -417,6 +417,27 @@ paths:
       responses:
         "200":
           description: OK
+  /v1/assignments/{id}/bind:
+    post:
+      summary: Bind assignee_bot_id (coordinator/service). Not an office DM assign.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignee_bot_id]
+              properties:
+                assignee_bot_id: { type: string }
+      responses:
+        "200":
+          description: Bound
+        "403":
+          description: decision_maker / executor cannot bind
+        "422":
+          description: assignee_bot_id_invalid
   /v1/assignments/{id}/dispatch:
     post:
       summary: Create Run; Idempotency-Key; blocked when freeze_active or stage_locked
@@ -806,6 +827,10 @@ components:
           type: string
           nullable: true
           description: Prior GateDef that must be decided pass. If uncleared, fill → 423 stage_locked.
+        assignee_bot_id:
+          type: string
+          nullable: true
+          description: Bind a concrete bot actor id. Coordinator/service only — not an office DM assign.
     GateDef:
       type: object
       properties:
