@@ -30,7 +30,12 @@ async function seedReadyGate(baseURL: string) {
   const goal = await (await fetch(`${baseURL}/v1/goals`, {
     method: "POST",
     headers: h,
-    body: JSON.stringify({ title: "周报交付验收", mode: "deliver", coordinator_ref: "coord-1" }),
+    body: JSON.stringify({
+      title: "周报交付验收",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+      gate_template_id: "deliver_ready_v1",
+    }),
   })).json();
   const asg = await (await fetch(`${baseURL}/v1/goals/${goal.id}/assignments`, {
     method: "POST",

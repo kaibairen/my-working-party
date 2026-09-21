@@ -102,6 +102,7 @@ export async function seedDeliverPending(baseURL: string, title = HUMAN_GOAL.del
         title,
         mode: "deliver",
         coordinator_ref: "coord-1",
+        gate_template_id: "deliver_ready_v1",
       }),
     }),
   );

@@ -44,10 +44,12 @@ test.describe("E2E office home P0", () => {
     await page.getByTestId("new-goal").click();
     const card = page.getByTestId("goal-card").filter({ hasText: title });
     await expect(card).toBeVisible();
-    await expect(card.getByTestId("fill-slot")).toBeVisible();
-    await expect(card.getByTestId("slot-progress")).toContainText(/等同事填|在填|等证据|已交产物/);
-    await expect(card.getByTestId("human-fill")).toHaveText("我来填");
-    await card.getByTestId("human-fill").click();
+    const openSlot = card.locator('[data-testid="fill-slot"][data-stage-locked="false"]');
+    await expect(openSlot).toBeVisible();
+    await expect(card.locator('[data-testid="fill-slot"][data-stage-locked="true"]')).toBeVisible();
+    await expect(openSlot.getByTestId("slot-progress")).toContainText(/等同事填|在填|等证据|已交产物/);
+    await expect(openSlot.getByTestId("human-fill")).toHaveText("我来填");
+    await openSlot.getByTestId("human-fill").click();
     await expect(card.getByTestId("slot-filler")).toContainText("人填");
     await expect(card.getByRole("button", { name: /指派|开跑|dispatch/i })).toHaveCount(0);
 
