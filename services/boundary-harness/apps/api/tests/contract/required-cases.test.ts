@@ -7,6 +7,7 @@ import {
   DESKS_GROUP_MERGE_GATES,
   FORBIDDEN_ERROR_ALIASES,
   GAME_2048_MERGE_GATES,
+  HUMAN_EVIDENCE_MERGE_GATES,
   OFFICE_ROSTER_MERGE_GATES,
 } from "./required-cases";
 
@@ -50,6 +51,16 @@ describe("Security acceptance case registry", () => {
       "desks_group_no_drag_assign",
       "desks_group_no_fake_seeds",
       "desks_ungrouped_bucket",
+    ]);
+  });
+
+  it("registers QA human evidence attach freeze names", () => {
+    for (const name of HUMAN_EVIDENCE_MERGE_GATES) {
+      expect(p0Src, `missing it("${name}") in p0-linkage.test.ts`).toContain(`it("${name}"`);
+    }
+    expect(HUMAN_EVIDENCE_MERGE_GATES).toEqual([
+      "bot_attach_requires_mcp_entry",
+      "human_attach_bearer_allowed",
     ]);
   });
 

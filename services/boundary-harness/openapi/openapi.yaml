@@ -452,7 +452,7 @@ paths:
   /v1/runs/{id}/evidence:
     post:
       summary: Unique completion entry. shadow=true is Path B and cannot write Gate.
-      description: Bot completion write. Missing X-Harness-Entry mcp → 403 mcp_entry_required.
+      description: Unique completion entry. Bot/executor require X-Harness-Entry mcp. decision_maker and coordinator may attach with Bearer only (human 兜底; audit actor_kind=human). Dispatch is unchanged (still MCP-gated).
       parameters:
         - $ref: "#/components/parameters/Id"
         - $ref: "#/components/parameters/HarnessEntry"
@@ -574,7 +574,7 @@ components:
       schema:
         type: string
         enum: [mcp]
-      description: MCP proxy injects `mcp` on Domain writes. Missing on dispatch/evidence → 403 mcp_entry_required.
+      description: MCP proxy injects `mcp` on Bot/executor Domain writes. Missing on dispatch or executor evidence → 403 mcp_entry_required. decision_maker / coordinator evidence attach does not require this header.
     HarnessTimestamp:
       name: X-Harness-Timestamp
       in: header

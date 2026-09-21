@@ -5,7 +5,7 @@ import { parseBriefV1, parseBudget, BRIEF_FORBIDDEN_KEYS, EVIDENCE_KINDS, type E
 import { HarnessError } from "./errors";
 import { signHarnessWebhook } from "./hmac";
 import type { Actor, Dial, Role } from "./rbac";
-import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
+import { DIALS, assertSecretRef, isHumanEvidenceRole, redactPayload, requirePoolAccess, requireRole } from "./rbac";
 import { executionPoolName, normalizeDeskGroup } from "./desks";
 import type { Harness } from "./db";
 import {
@@ -149,10 +149,29 @@ function publicRun(row: typeof runs.$inferSelect) {
   };
 }
 
+function latestRunIdForAssignment(h: Harness, assignmentId: string | null | undefined): string | null {
+  if (!assignmentId) return null;
+  const rows = h.db.select().from(runs).where(eq(runs.assignmentId, assignmentId)).all();
+  if (!rows.length) return null;
+  return rows.reduce((a, b) => (a.createdAt >= b.createdAt ? a : b)).id;
+}
+
+function evidenceForAssignment(h: Harness, assignmentId: string | null | undefined) {
+  if (!assignmentId) return [];
+  return h.db
+    .select()
+    .from(evidenceItems)
+    .where(eq(evidenceItems.assignmentId, assignmentId))
+    .all()
+    .filter((e) => !e.shadow)
+    .map((e) => ({ id: e.id, kind: e.kind, uri: e.uri }));
+}
+
 function publicGate(
   row: typeof gateInstances.$inferSelect,
   def?: typeof gateDefs.$inferSelect | null,
   goalTitle?: string | null,
+  extra?: { run_id?: string | null; evidence?: Array<{ id: string; kind: string; uri: string }> },
 ) {
   const ready = parseJson<{
     missing?: string[];
@@ -165,6 +184,8 @@ function publicGate(
     goal_title: goalTitle ?? null,
     gate_def_id: row.gateDefId,
     assignment_id: row.assignmentId,
+    run_id: extra?.run_id ?? null,
+    evidence: extra?.evidence ?? [],
     status: row.status,
     ready_at: row.readyAt,
     decided_at: row.decidedAt,
@@ -477,12 +498,14 @@ export function getAssignment(h: Harness, id: string) {
 
 export type FillSlot = {
   assignment_id: string | null;
+  run_id: string | null;
   empty: boolean;
   filler: string | null;
   filler_kind: "bot" | "human" | null;
   progress: string;
   outcome: string | null;
   artifact_uri: string | null;
+  evidence: Array<{ id: string; kind: string; uri: string }>;
 };
 
 /**
@@ -504,7 +527,14 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
     const pool = poolRows.find((p) => p.id === asg.poolId);
     const runsFor = runRows.filter((r) => r.assignmentId === asg.id);
     const gatesFor = gateRows.filter((g) => g.assignmentId === asg.id);
-    const artifact = evRows.find((e) => e.assignmentId === asg.id && e.kind === "artifact_uri" && !e.shadow);
+    const liveEvidence = evRows
+      .filter((e) => e.assignmentId === asg.id && !e.shadow)
+      .map((e) => ({ id: e.id, kind: e.kind, uri: e.uri }));
+    const artifact = liveEvidence.find((e) => e.kind === "artifact_uri");
+    const latestRun = runsFor.reduce<typeof runsFor[number] | null>(
+      (acc, row) => (!acc || row.createdAt >= acc.createdAt ? row : acc),
+      null,
+    );
     const liveRun = runsFor.some((r) =>
       r.status === "queued" || r.status === "running" || r.status === "in_progress" || r.status === "dispatched",
     );
@@ -531,24 +561,28 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
           : "执行池";
     return {
       assignment_id: asg.id,
+      run_id: latestRun?.id ?? null,
       empty: false,
       filler,
       filler_kind,
       progress,
       outcome,
       artifact_uri: artifact?.uri ?? null,
+      evidence: liveEvidence,
     };
   });
 
   if (slots.length === 0) {
     slots.push({
       assignment_id: null,
+      run_id: null,
       empty: true,
       filler: null,
       filler_kind: null,
       progress: "等同事填",
       outcome: goal.intent ?? null,
       artifact_uri: null,
+      evidence: [],
     });
   }
 
@@ -772,7 +806,7 @@ export function attachEvidence(
   runId: string,
   items: EvidenceAttachItem[],
 ) {
-  requireRole(actor, ["coordinator", "executor", "service"]);
+  requireRole(actor, ["decision_maker", "coordinator", "executor", "service"]);
   const run = h.db.select().from(runs).where(eq(runs.id, runId)).get();
   if (!run) throw new HarnessError("not_found", `run ${runId} not found`, 404);
   const assignment = h.db.select().from(assignments).where(eq(assignments.id, run.assignmentId)).get();
@@ -813,7 +847,10 @@ export function attachEvidence(
     evaluatePendingDeliverGates(h, assignment.goalId);
   }
 
-  audit(h, actor, "attach_evidence", "run", runId, { count: created.length });
+  audit(h, actor, "attach_evidence", "run", runId, {
+    count: created.length,
+    actor_kind: isHumanEvidenceRole(actor.role) ? "human" : "bot",
+  });
   return { run_id: runId, items: created };
 }
 
@@ -933,7 +970,10 @@ export function listGateInstances(
   return rows.map((r) => {
     const def = h.db.select().from(gateDefs).where(eq(gateDefs.id, r.gateDefId)).get();
     const goal = h.db.select().from(goals).where(eq(goals.id, r.goalId)).get();
-    return publicGate(r, def, goal?.title);
+    return publicGate(r, def, goal?.title, {
+      run_id: latestRunIdForAssignment(h, r.assignmentId),
+      evidence: evidenceForAssignment(h, r.assignmentId),
+    });
   });
 }
 

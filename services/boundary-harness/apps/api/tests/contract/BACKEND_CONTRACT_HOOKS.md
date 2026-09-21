@@ -29,3 +29,8 @@ Forbidden aliases: `webhook_timestamp_skew`, `webhook_signature_invalid`, `pool_
 - `dial_whitelist_not_overbroad`
 
 File: `acceptance.test.ts` plus `required-cases.test.ts` (merge-blocking name registry).
+
+Human evidence attach freeze (`HUMAN_EVIDENCE_MERGE_GATES` in `p0-linkage.test.ts`):
+
+- `bot_attach_requires_mcp_entry`
+- `human_attach_bearer_allowed`

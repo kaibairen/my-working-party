@@ -261,7 +261,9 @@ function completionWriteTemplatePath(path: string): string {
 
 /**
  * Bot completion writes (dispatch / attach_evidence) must come through the MCP glove.
- * Coordinators hitting Domain HTTP without the header are treated as a bypass.
+ * Coordinators hitting Domain HTTP without the header are treated as a bypass
+ * unless the caller is a human office role on the evidence path (see
+ * {@link assertEvidenceWriteEntry}).
  */
 export function assertMcpEntry(entry: string | undefined, path: string): void {
   if (entry?.trim().toLowerCase() !== MCP_ENTRY_VALUE) {
@@ -269,4 +271,25 @@ export function assertMcpEntry(entry: string | undefined, path: string): void {
       path: completionWriteTemplatePath(path),
     });
   }
+}
+
+/** Office humans may POST evidence with Bearer only (no MCP glove). */
+export const HUMAN_EVIDENCE_ROLES = ["decision_maker", "coordinator"] as const;
+
+export function isHumanEvidenceRole(role: Role): boolean {
+  return (HUMAN_EVIDENCE_ROLES as readonly Role[]).includes(role);
+}
+
+/**
+ * Evidence attach: Bot/executor/service still require `x-harness-entry: mcp`.
+ * decision_maker and coordinator may attach with Bearer only — office 人兜底.
+ * Dispatch stays MCP-gated for every role (do not open a bot bypass).
+ */
+export function assertEvidenceWriteEntry(
+  entry: string | undefined,
+  path: string,
+  actor: Actor,
+): void {
+  if (isHumanEvidenceRole(actor.role)) return;
+  assertMcpEntry(entry, path);
 }

@@ -8,7 +8,7 @@
 | fill/扇出 Assignment | 否（除非 exception_grant / human_allowed） | 可 | 否（仅 propose） | 否 | 否 |
 | dispatch | 否 | 可 | **禁止** | 否 | 可（worker） |
 | propose Assignment | 否 | 可 | 可 | 否 | 否 |
-| attach_evidence | 否 | 可 | 可 | 否 | 可 |
+| attach_evidence | 可（Bearer 人兜底；audit human） | 可（Bearer 人兜底或 MCP） | 可（须 MCP） | 否 | 可（须 MCP） |
 | policy_check | 可 | 可 | 可 | 否 | 可 |
 | list ready GateInstance | 可 | 可 | 否 | 可 | 可 |
 | decide GateInstance | **可** | 否 | 否 | 否 | 否 |

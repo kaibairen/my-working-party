@@ -26,7 +26,8 @@
     .goal-name { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
     .goal-status { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
     .fill-board { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-    .fill-slot { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
+    .fill-slot { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--muted); background: #0c1218; border-radius: 10px; padding: 8px 10px; }
+    .fill-slot-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; }
     .fill-slot button.human-fill { font: inherit; font-size: 13px; font-weight: 600; border-radius: 999px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 5px 10px; cursor: pointer; }
     .fill-slot .who { color: var(--ink); font-weight: 600; }
     .fill-slot a { color: var(--accent); }
@@ -75,6 +76,17 @@
     button.ok { background: #163526; border-color: #245c3d; color: var(--ok); }
     button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
     button.muted { background: #1a222c; color: var(--muted); }
+    .evidence-area { margin: 12px 0 8px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; }
+    .evidence-area.weak { border-style: dotted; opacity: .92; }
+    .evidence-area ul { margin: 6px 0 10px; padding-left: 18px; }
+    .attach-hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+    button.attach-from-file.weak { background: #1a222c; color: var(--muted); border-color: var(--line); font-weight: 500; }
+    #attach-kind.is-required, #attach-kind option.kind-required { color: var(--warn); font-weight: 650; }
+    .attach-error { color: var(--bad); font-size: 13px; margin: 8px 0; }
+    dialog label { display: block; margin: 8px 0; }
+    dialog input[type="file"], dialog select { width: 100%; margin-top: 4px; }
+    body[data-human-attach="false"] [data-testid="attach-from-file"],
+    body[data-human-attach="false"] [data-testid="attach-hint"] { display: none !important; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .inbox-flash { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: #163526; color: var(--ok); display: none; }
     .inbox-flash.show { display: block; }
@@ -90,7 +102,7 @@
     .close { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; }
   </style>
 </head>
-<body>
+<body data-testid="office-body" data-shell-role="decision_maker" data-human-attach="true">
   <header class="top">
     <h1>AI 办公室</h1>
     <button type="button" class="count" id="count-link" data-testid="open-inbox" aria-controls="inbox-drawer">
@@ -140,6 +152,19 @@
       <div id="list" data-testid="gate-list"></div>
     </main>
   </aside>
+  <dialog id="attach-dialog" data-testid="attach-dialog">
+    <h3>从附件入账</h3>
+    <p class="attach-hint" data-testid="attach-dialog-hint">Bot 回写请戴 MCP 手套；这里只给人补挂已有文件。</p>
+    <label>文件 <input type="file" id="attach-file" data-testid="attach-file" /></label>
+    <label>种类
+      <select id="attach-kind" data-testid="attach-kind"></select>
+    </label>
+    <p class="attach-error" id="attach-error" data-testid="attach-error" hidden></p>
+    <div class="row">
+      <button class="ok" id="attach-confirm" data-testid="attach-confirm">确认入账</button>
+      <button class="muted" id="attach-cancel" data-testid="attach-cancel">取消</button>
+    </div>
+  </dialog>
   <dialog id="pass-dialog">
     <h3>确认通过？</h3>
     <p>通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
@@ -161,10 +186,14 @@
       <button class="muted" id="revise-cancel">取消</button>
     </div>
   </dialog>
+  <script src="/human-attach.js"></script>
   <script>
     /* G1 copy lock / R17–R25 — keep in sync with inbox.html (drawer is the same HITL). */
-    const ROLE = "decision_maker";
-    const ACTOR = "you";
+    const ROLE = HarnessAttach.resolveShellRole(new URLSearchParams(location.search).get("role"));
+    const ACTOR = HarnessAttach.actorForRole(ROLE);
+    const CAN_HUMAN_ATTACH = HarnessAttach.canHumanAttach(ROLE);
+    document.body.dataset.shellRole = ROLE;
+    document.body.dataset.humanAttach = CAN_HUMAN_ATTACH ? "true" : "false";
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     function isHumanTitle(name) {
       const raw = String(name ?? "").trim();
@@ -184,6 +213,95 @@
       if (/github_pr|is_draft/.test(raw)) return "还差：合并请求仍是草稿";
       if (/checks|conclusion/.test(raw)) return "还差：检查未全部通过";
       return "还差：" + raw;
+    }
+    function requiredKindsForGate(g) {
+      return HarnessAttach.requiredKindsFromContext({
+        predicate_id: g.predicate_id || (g.ready_result && g.ready_result.predicate_id),
+        missing: (g.ready_result && g.ready_result.missing) || [],
+      });
+    }
+    function evidenceListHtml(evidence) {
+      const items = evidence || [];
+      if (!items.length) {
+        return `<li class="meta" data-testid="evidence-empty">还没有挂上的文件</li>`;
+      }
+      return items.map((e) =>
+        `<li data-testid="evidence-item" data-kind="${esc(e.kind)}">${esc(HarnessAttach.evidenceKindHumanLabel(e.kind))} · ${esc(e.uri)}</li>`
+      ).join("");
+    }
+    function evidenceAreaHtml(ctx) {
+      const required = ctx.requiredKinds || ["summary_md"];
+      const runId = ctx.runId || "";
+      const weak = ctx.weak ? " weak" : "";
+      const btn = CAN_HUMAN_ATTACH && runId
+        ? `<button type="button" class="attach-from-file${ctx.weak ? " weak" : ""}" data-act="attach-open" data-testid="attach-from-file" data-run-id="${esc(runId)}" data-assignment-id="${esc(ctx.assignmentId || "")}" data-required-kinds="${esc(required.join(","))}">从附件入账</button>`
+        : "";
+      const hint = CAN_HUMAN_ATTACH
+        ? `<p class="attach-hint" data-testid="attach-hint">Bot 回写请戴 MCP 手套；这里只给人补挂已有文件。</p>`
+        : "";
+      return `<section class="evidence-area${weak}" data-testid="evidence-area">
+        <p class="meta">证据</p>
+        <ul data-testid="evidence-list">${evidenceListHtml(ctx.evidence)}</ul>
+        ${btn}
+        ${hint}
+      </section>`;
+    }
+    function populateAttachKinds(requiredKinds) {
+      const required = HarnessAttach.uniqueKinds(["summary_md"].concat(requiredKinds || []));
+      const kinds = HarnessAttach.uniqueKinds(required.concat(HarnessAttach.ATTACH_KIND_OPTIONS));
+      $("attach-kind").innerHTML = kinds.map((kind) => {
+        const need = required.includes(kind);
+        return `<option value="${esc(kind)}" data-required="${need ? "true" : "false"}" class="${need ? "kind-required" : ""}" data-testid="attach-kind-option">${esc(HarnessAttach.evidenceKindHumanLabel(kind))}${need ? " · 门禁要" : ""}</option>`;
+      }).join("");
+      $("attach-kind").value = required.includes("summary_md") ? "summary_md" : required[0];
+      $("attach-kind").classList.toggle("is-required", true);
+    }
+    let pendingAttach = null;
+    function openAttachFromButton(btn) {
+      pendingAttach = {
+        runId: btn.dataset.runId || "",
+        assignmentId: btn.dataset.assignmentId || "",
+        required: HarnessAttach.uniqueKinds((btn.dataset.requiredKinds || "").split(",")),
+      };
+      populateAttachKinds(pendingAttach.required);
+      $("attach-error").hidden = true;
+      $("attach-error").textContent = "";
+      $("attach-file").value = "";
+      $("attach-dialog").showModal();
+    }
+    async function confirmAttach() {
+      if (!pendingAttach || !pendingAttach.runId) {
+        $("attach-error").textContent = "还没有可挂的工单。";
+        $("attach-error").hidden = false;
+        return;
+      }
+      const file = $("attach-file").files && $("attach-file").files[0];
+      if (!file) {
+        $("attach-error").textContent = "先选一个文件。";
+        $("attach-error").hidden = false;
+        return;
+      }
+      const kind = $("attach-kind").value || "summary_md";
+      const headers = HarnessAttach.humanAttachHeaders(ROLE, ACTOR);
+      delete headers["x-harness-entry"];
+      const res = await fetch("/v1/runs/" + encodeURIComponent(pendingAttach.runId) + "/evidence", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          items: [{ kind, uri: HarnessAttach.fileToEvidenceUri(file) }],
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        $("attach-error").textContent = HarnessAttach.humanizeAttachError(body);
+        $("attach-error").hidden = false;
+        return;
+      }
+      $("attach-dialog").close();
+      pendingAttach = null;
+      if (typeof inboxFlash === "function") inboxFlash("已从附件入账。");
+      if (typeof loadInbox === "function" && $("inbox-drawer").classList.contains("open")) await loadInbox();
+      await loadOffice();
     }
     function relativeTime(iso) {
       if (!iso) return "";
@@ -283,11 +401,26 @@
       const fillBtn = slot.empty
         ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-dispatch-policy="${esc(goal.dispatch_policy || "coordinator_only")}" data-intent="${esc(goal.intent || goal.title || "")}">我来填</button>`
         : "";
+      const required = HarnessAttach.requiredKindsFromContext({
+        missing: slot.progress === "等证据" ? ["summary_md"] : [],
+      });
+      const attach = !slot.empty
+        ? evidenceAreaHtml({
+            runId: slot.run_id,
+            assignmentId: slot.assignment_id,
+            evidence: slot.evidence,
+            requiredKinds: required,
+            weak: true,
+          })
+        : "";
       return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}">
-        <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
-        <span data-testid="slot-progress">${esc(progress)}</span>
-        ${art}
-        ${fillBtn}
+        <div class="fill-slot-row">
+          <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
+          <span data-testid="slot-progress">${esc(progress)}</span>
+          ${art}
+          ${fillBtn}
+        </div>
+        ${attach}
       </li>`;
     }
     async function loadOffice() {
@@ -295,10 +428,10 @@
         fetch("/v1/goals", { headers: headers() }),
         fetch("/v1/desks", { headers: headers() }),
       ]);
-      const goalsBody = await goalsRes.json();
-      const desksBody = await desksRes.json();
+      const goalsBody = await goalsRes.json().catch(() => ({ goals: [] }));
+      const desksBody = await desksRes.json().catch(() => ({ desks: [], groups: [] }));
       renderRoster(desksBody.desks || [], desksBody.groups || []);
-      const goals = goalsBody.goals || [];
+      const goals = goalsRes.ok ? (goalsBody.goals || []) : [];
       $("office-empty").hidden = goals.length > 0;
       if (!goals.length) {
         $("goals").innerHTML = "";
@@ -350,6 +483,12 @@
       void body;
     };
     $("goals").addEventListener("click", async (e) => {
+      const attachBtn = e.target.closest("[data-act='attach-open']");
+      if (attachBtn) {
+        e.stopPropagation();
+        openAttachFromButton(attachBtn);
+        return;
+      }
       const btn = e.target.closest("[data-act='human-fill']");
       if (!btn) {
         const card = e.target.closest("[data-testid='goal-card']");
@@ -474,6 +613,13 @@
           <p class="meta">${rel ? "就绪 · " + rel : ""}</p>
           ${filter === "ready" ? missingHtml(missing) : ""}
           ${filter === "ready" && !missing.length ? `<p class="meta">同事已交：摘要 / 产物链接</p>` : ""}
+          ${evidenceAreaHtml({
+            runId: g.run_id,
+            assignmentId: g.assignment_id,
+            evidence: g.evidence,
+            requiredKinds: requiredKindsForGate(g),
+            weak: false,
+          })}
           ${actions}
           <details>
             <summary>工程详情</summary>
@@ -514,9 +660,15 @@
       else inboxFlash("已搁下，需要时还会出现。");
       await loadInbox();
     }
+    $("attach-confirm").onclick = confirmAttach;
+    $("attach-cancel").onclick = () => { $("attach-dialog").close(); pendingAttach = null; };
     $("list").addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-act]");
       if (!btn || btn.disabled) return;
+      if (btn.dataset.act === "attach-open") {
+        openAttachFromButton(btn);
+        return;
+      }
       const card = btn.closest(".card");
       const id = card.dataset.id;
       const version = Number(card.dataset.version);

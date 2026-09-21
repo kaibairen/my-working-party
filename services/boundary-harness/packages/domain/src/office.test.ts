@@ -76,6 +76,8 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].filler).not.toMatch(/同事/);
     expect(JSON.stringify(slots)).not.toMatch(/交付同事|Cursor 同事|Bot 填/);
     expect(slots[0].progress).toBe("在填");
+    expect(slots[0].run_id).toBeNull();
+    expect(slots[0].evidence).toEqual([]);
     expect(listGoals(harness, dm)[0].status_line).toBe("同事在填");
   });
 
