@@ -70,6 +70,9 @@ describe("office anti-dispatch regressions", () => {
     expect(officeHtml).not.toMatch(/>(开始跑|开跑)</);
     expect(officeHtml).not.toContain('data-testid="start-run"');
     expect(officeHtml).toContain("exception-grants");
+    expect(officeHtml).toContain("从附件入账");
+    expect(officeHtml).toContain("humanAttachHeaders");
+    expect(officeHtml).not.toMatch(/x-harness-entry["']\s*:\s*["']mcp/);
   });
 
   it("fill_board_not_dispatch_console", async () => {

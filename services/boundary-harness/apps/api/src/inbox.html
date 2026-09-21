@@ -29,6 +29,15 @@
     button.ok { background: #163526; border-color: #245c3d; color: var(--ok); }
     button.warn { background: #3a2e14; border-color: #6b5420; color: var(--warn); }
     button.muted { background: #1a222c; color: var(--muted); }
+    .evidence-area { margin: 12px 0 8px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; }
+    .evidence-area ul { margin: 6px 0 10px; padding-left: 18px; }
+    .attach-hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+    #attach-kind.is-required, #attach-kind option.kind-required { color: var(--warn); font-weight: 650; }
+    .attach-error { color: var(--bad); font-size: 13px; margin: 8px 0; }
+    dialog label { display: block; margin: 8px 0; }
+    dialog input[type="file"], dialog select { width: 100%; margin-top: 4px; }
+    body[data-human-attach="false"] [data-testid="attach-from-file"],
+    body[data-human-attach="false"] [data-testid="attach-hint"] { display: none !important; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .flash { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: #163526; color: var(--ok); display: none; }
     .flash.show { display: block; }
@@ -45,7 +54,7 @@
     dialog textarea { width: 100%; margin: 10px 0; }
   </style>
 </head>
-<body>
+<body data-testid="inbox-body" data-shell-role="decision_maker" data-human-attach="true">
   <header>
     <a href="/">AI 办公室</a>
     <h1 id="heading" data-testid="inbox-heading">待办</h1>
@@ -61,6 +70,19 @@
     <button id="reload" data-testid="reload-ready" tabindex="-1">刷新</button>
     <div id="list" data-testid="gate-list"></div>
   </main>
+  <dialog id="attach-dialog" data-testid="attach-dialog">
+    <h3>从附件入账</h3>
+    <p class="attach-hint" data-testid="attach-dialog-hint">Bot 回写请戴 MCP 手套；这里只给人补挂已有文件。</p>
+    <label>文件 <input type="file" id="attach-file" data-testid="attach-file" /></label>
+    <label>种类
+      <select id="attach-kind" data-testid="attach-kind"></select>
+    </label>
+    <p class="attach-error" id="attach-error" data-testid="attach-error" hidden></p>
+    <div class="row">
+      <button class="ok" id="attach-confirm" data-testid="attach-confirm">确认入账</button>
+      <button class="muted" id="attach-cancel" data-testid="attach-cancel">取消</button>
+    </div>
+  </dialog>
   <dialog id="pass-dialog">
     <h3>确认通过？</h3>
     <p>通过后，这张硬门禁记为同意。系统按规则继续；不会因为有人说「好了」就过关。</p>
@@ -82,9 +104,13 @@
       <button class="muted" id="revise-cancel">取消</button>
     </div>
   </dialog>
+  <script src="/human-attach.js"></script>
   <script>
-    const ROLE = "decision_maker";
-    const ACTOR = "you";
+    const ROLE = HarnessAttach.resolveShellRole(new URLSearchParams(location.search).get("role"));
+    const ACTOR = HarnessAttach.actorForRole(ROLE);
+    const CAN_HUMAN_ATTACH = HarnessAttach.canHumanAttach(ROLE);
+    document.body.dataset.shellRole = ROLE;
+    document.body.dataset.humanAttach = CAN_HUMAN_ATTACH ? "true" : "false";
     const KIND = { deliver_ready_v1: "交付验收", safety_only_v1: "安全审批" };
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     function isHumanTitle(name) {
@@ -105,6 +131,98 @@
       if (/github_pr|is_draft/.test(raw)) return "还差：合并请求仍是草稿";
       if (/checks|conclusion/.test(raw)) return "还差：检查未全部通过";
       return "还差：" + raw;
+    }
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+    function requiredKindsForGate(g) {
+      return HarnessAttach.requiredKindsFromContext({
+        predicate_id: g.predicate_id || (g.ready_result && g.ready_result.predicate_id),
+        missing: (g.ready_result && g.ready_result.missing) || [],
+      });
+    }
+    function evidenceListHtml(evidence) {
+      const items = evidence || [];
+      if (!items.length) {
+        return `<li class="meta" data-testid="evidence-empty">还没有挂上的文件</li>`;
+      }
+      return items.map((e) =>
+        `<li data-testid="evidence-item" data-kind="${esc(e.kind)}">${esc(HarnessAttach.evidenceKindHumanLabel(e.kind))} · ${esc(e.uri)}</li>`
+      ).join("");
+    }
+    function evidenceAreaHtml(g) {
+      const required = requiredKindsForGate(g);
+      const runId = g.run_id || "";
+      const btn = CAN_HUMAN_ATTACH && runId
+        ? `<button type="button" class="attach-from-file" data-act="attach-open" data-testid="attach-from-file" data-run-id="${esc(runId)}" data-assignment-id="${esc(g.assignment_id || "")}" data-required-kinds="${esc(required.join(","))}">从附件入账</button>`
+        : "";
+      const hint = CAN_HUMAN_ATTACH
+        ? `<p class="attach-hint" data-testid="attach-hint">Bot 回写请戴 MCP 手套；这里只给人补挂已有文件。</p>`
+        : "";
+      return `<section class="evidence-area" data-testid="evidence-area">
+        <p class="meta">证据</p>
+        <ul data-testid="evidence-list">${evidenceListHtml(g.evidence)}</ul>
+        ${btn}
+        ${hint}
+      </section>`;
+    }
+    function populateAttachKinds(requiredKinds) {
+      const required = HarnessAttach.uniqueKinds(["summary_md"].concat(requiredKinds || []));
+      const kinds = HarnessAttach.uniqueKinds(required.concat(HarnessAttach.ATTACH_KIND_OPTIONS));
+      $("attach-kind").innerHTML = kinds.map((kind) => {
+        const need = required.includes(kind);
+        return `<option value="${esc(kind)}" data-required="${need ? "true" : "false"}" class="${need ? "kind-required" : ""}" data-testid="attach-kind-option">${esc(HarnessAttach.evidenceKindHumanLabel(kind))}${need ? " · 门禁要" : ""}</option>`;
+      }).join("");
+      $("attach-kind").value = required.includes("summary_md") ? "summary_md" : required[0];
+      $("attach-kind").classList.toggle("is-required", true);
+    }
+    let pendingAttach = null;
+    function openAttachFromButton(btn) {
+      pendingAttach = {
+        runId: btn.dataset.runId || "",
+        assignmentId: btn.dataset.assignmentId || "",
+        required: HarnessAttach.uniqueKinds((btn.dataset.requiredKinds || "").split(",")),
+      };
+      populateAttachKinds(pendingAttach.required);
+      $("attach-error").hidden = true;
+      $("attach-error").textContent = "";
+      $("attach-file").value = "";
+      $("attach-dialog").showModal();
+    }
+    async function confirmAttach() {
+      if (!pendingAttach || !pendingAttach.runId) {
+        $("attach-error").textContent = "还没有可挂的工单。";
+        $("attach-error").hidden = false;
+        return;
+      }
+      const file = $("attach-file").files && $("attach-file").files[0];
+      if (!file) {
+        $("attach-error").textContent = "先选一个文件。";
+        $("attach-error").hidden = false;
+        return;
+      }
+      const kind = $("attach-kind").value || "summary_md";
+      const headers = HarnessAttach.humanAttachHeaders(ROLE, ACTOR);
+      delete headers["x-harness-entry"];
+      const res = await fetch("/v1/runs/" + encodeURIComponent(pendingAttach.runId) + "/evidence", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          items: [{ kind, uri: HarnessAttach.fileToEvidenceUri(file) }],
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        $("attach-error").textContent = HarnessAttach.humanizeAttachError(body);
+        $("attach-error").hidden = false;
+        return;
+      }
+      $("attach-dialog").close();
+      pendingAttach = null;
+      flash("已从附件入账。");
+      await load();
     }
     function relativeTime(iso) {
       if (!iso) return "";
@@ -152,8 +270,8 @@
     async function load() {
       const status = filter === "decided" ? "decided" : "ready";
       const res = await fetch(status === "ready" ? "/v1/gates?status=ready" : "/v1/gates?status=decided", { headers: headers() });
-      const body = await res.json();
-      const gates = (body.gates || []).filter((g) => g.status === status && !isAdvisory(g));
+      const body = await res.json().catch(() => ({ gates: [] }));
+      const gates = (res.ok ? (body.gates || []) : []).filter((g) => g.status === status && !isAdvisory(g));
       if (filter === "ready") {
         const label = gates.length ? "待办 · " + gates.length : "待办";
         $("count-link").textContent = label;
@@ -179,6 +297,7 @@
           <p class="meta">${rel ? "就绪 · " + rel : ""}</p>
           ${filter === "ready" ? missingHtml(missing) : ""}
           ${filter === "ready" && !missing.length ? `<p class="meta">同事已交：摘要 / 产物链接</p>` : ""}
+          ${evidenceAreaHtml(g)}
           ${actions}
           <details>
             <summary>工程详情</summary>
@@ -213,9 +332,15 @@
       else flash("已搁下，需要时还会出现。");
       await load();
     }
+    $("attach-confirm").onclick = confirmAttach;
+    $("attach-cancel").onclick = () => { $("attach-dialog").close(); pendingAttach = null; };
     $("list").addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-act]");
       if (!btn || btn.disabled) return;
+      if (btn.dataset.act === "attach-open") {
+        openAttachFromButton(btn);
+        return;
+      }
       const card = btn.closest(".card");
       const id = card.dataset.id;
       const version = Number(card.dataset.version);

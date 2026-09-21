@@ -58,6 +58,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const inboxHtml = readFileSync(join(here, "inbox.html"), "utf8");
 const officeHtml = readFileSync(join(here, "office.html"), "utf8");
 const opsHtml = readFileSync(join(here, "ops.html"), "utf8");
+const humanAttachJs = readFileSync(join(here, "human-attach.js"), "utf8");
 const openapiPath = join(here, "../../../openapi/openapi.yaml");
 const examplesRoot = join(here, "../../../examples");
 
@@ -111,17 +112,27 @@ export function createApp(harness: Harness) {
 
   app.onError((err, c) => {
     if (isHarnessError(err)) {
-      const keys =
-        err.details && typeof err.details === "object" && err.details !== null && "keys" in err.details
-          ? (err.details as { keys?: string[] }).keys
+      const details =
+        err.details && typeof err.details === "object" && err.details !== null
+          ? (err.details as Record<string, unknown>)
           : undefined;
+      const keys = Array.isArray(details?.keys) ? (details.keys as string[]) : undefined;
+      const missing_kinds = Array.isArray(details?.missing_kinds)
+        ? (details.missing_kinds as string[])
+        : undefined;
       return c.json(
         {
           code: err.code,
           message: err.message,
           keys,
+          missing_kinds,
           details: err.details ?? null,
-          error: { code: err.code, message: err.message, details: err.details ?? null },
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details ?? null,
+            missing_kinds,
+          },
         },
         err.status as 400 | 401 | 403 | 404 | 405 | 409 | 422 | 423 | 500,
       );
@@ -133,6 +144,9 @@ export function createApp(harness: Harness) {
   app.get("/", (c) => c.html(officeHtml));
   app.get("/office", (c) => c.html(officeHtml));
   app.get("/inbox", (c) => c.html(inboxHtml));
+  app.get("/human-attach.js", (c) =>
+    c.body(humanAttachJs, 200, { "content-type": "text/javascript; charset=utf-8" }),
+  );
   app.get("/ops", (c) => {
     const role = (c.req.header("x-harness-role") ?? c.req.query("role") ?? "").toLowerCase();
     if (role === "decision_maker") {
