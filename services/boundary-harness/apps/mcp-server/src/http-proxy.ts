@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { fileURLToPath } from "node:url";
 import { MCP_HTTP_TOOL_NAMES } from "@harness/domain";
 import { callTool, listTools } from "./index";
+import { handleDomainOutboundEvent, verifyWebhookHmac, type DomainOutboundEnvelope } from "./domain-events";
 
 const API = process.env.HARNESS_API_URL ?? "http://127.0.0.1:8080";
 const PORT = Number(process.env.MCP_HTTP_PORT ?? 8787);
@@ -83,6 +84,32 @@ export function createMcpHttpApp() {
       tools: listTools({ http: true }).map((t) => t.name),
     }),
   );
+
+  // P0-D: Domain outbox → wake assignee bots (no attach, no DM chat spam)
+  app.post("/hooks/domain-events", async (c) => {
+    const raw = await c.req.text();
+    const secret = process.env.HARNESS_WEBHOOK_SECRET ?? process.env.WEBHOOK_SIGNING_SECRET;
+    const sig =
+      c.req.header("x-harness-webhook-signature") ??
+      c.req.header("x-hub-signature-256") ??
+      c.req.header("x-harness-signature");
+    if (!verifyWebhookHmac(raw, sig ?? undefined, secret || undefined)) {
+      return c.json({ ok: false, code: "invalid_signature" }, 401);
+    }
+    let body: DomainOutboundEnvelope | DomainOutboundEnvelope[];
+    try {
+      body = JSON.parse(raw) as DomainOutboundEnvelope | DomainOutboundEnvelope[];
+    } catch {
+      return c.json({ ok: false, code: "parse_error" }, 400);
+    }
+    const events = Array.isArray(body) ? body : [body];
+    const results = [];
+    for (const ev of events) {
+      results.push(await handleDomainOutboundEvent(ev));
+    }
+    return c.json({ ok: true, results });
+  });
+
   app.post("/mcp", async (c) => {
     const msg = (await c.req.json()) as JsonRpc;
     const reply = await handleRpc(msg, incomingAuth(c));
@@ -95,7 +122,7 @@ export function createMcpHttpApp() {
 export function main() {
   const app = createMcpHttpApp();
   serve({ fetch: app.fetch, port: PORT }, (info) => {
-    console.log(`harness mcp http listening on :${info.port}/mcp api=${API}`);
+    console.log(`harness mcp http listening on :${info.port}/mcp + /hooks/domain-events api=${API}`);
   });
 }
 

@@ -48,6 +48,12 @@ export const STATUS_LINE_MERGE_GATES = [
   "status_line_all_slots_done_not_filling",
 ] as const;
 
+/** Bridge P0-C/D MCP glove + outbound wake — `it("…")` titles must match exactly. */
+export const BRIDGE_P0CD_MERGE_GATES = [
+  "bot_glove_default_evidence_ready",
+  "status_change_outbound_wakes_assignee",
+] as const;
+
 /** Office stage strip — Playwright `test("…")` titles must match exactly. */
 export const STAGE_STRIP_PLAYWRIGHT_GATES = [
   "stage_strip_shows_locked_downstream",
