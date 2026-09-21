@@ -373,6 +373,94 @@ describe("P1 domain dogfood fixes", () => {
     expect(errCode(stuffedFill.body)).toBe("brief_forbidden_field");
   });
 
+  it("fill_shape_follows_unlocked_stage", async () => {
+    const { app } = setup();
+    expect(DEFAULT_DELIVER_GATE_TEMPLATE).toBe("research_then_deliver_v1");
+
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ title: "先调研再交", intent: "狗粮 Goal 795a6b0c" }),
+    });
+    expect(goal.res.status).toBe(201);
+    expect(goal.body.gate_template_id).toBe("research_then_deliver_v1");
+    const researchDef = goal.body.gate_defs.find((d: { stage_key: string }) => d.stage_key === STAGE_KEY_RESEARCH);
+    const deliverDef = goal.body.gate_defs.find((d: { stage_key: string }) => d.stage_key === STAGE_KEY_DELIVER);
+    expect(researchDef?.predicate_id).toBe("research_ready_v1");
+    expect(deliverDef?.predicate_id).toBe("deliver_ready_v1");
+    expect(requiredEvidenceKinds("research_ready_v1", 1)).toEqual(["report_md"]);
+    expect(requiredEvidenceKinds("deliver_ready_v1", 1)).toEqual(["summary_md"]);
+
+    const researchFill = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "调研纪要", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    expect(researchFill.res.status).toBe(201);
+    expect(researchFill.body.brief.evidence_shape).toEqual(
+      expect.arrayContaining(["summary_md", "artifact_uri", "report_md"]),
+    );
+
+    const researchRun = await json(app, `/v1/assignments/${researchFill.body.id}/dispatch`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ idempotency_key: "fill-shape-research" }),
+    });
+    expect(researchRun.res.status).toBe(201);
+    await json(app, `/v1/runs/${researchRun.body.id}/evidence`, {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({ items: [{ kind: "report_md", uri: "file://research.md" }] }),
+    });
+    const ready = await json(app, `/v1/gates?status=ready&goal_id=${goal.body.id}`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(ready.body.gates).toHaveLength(1);
+    expect(ready.body.gates[0].predicate_id).toBe("research_ready_v1");
+    const decided = await json(app, `/v1/gates/${ready.body.gates[0].id}/decide`, {
+      method: "POST",
+      headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ decision: "pass", version: ready.body.gates[0].version }),
+    });
+    expect(decided.res.status).toBe(200);
+
+    const afterPass = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(afterPass.body.stage_strip.stages.map((s: { stage_key: string; state: string }) => [s.stage_key, s.state]))
+      .toEqual([["research", "done"], ["deliver", "current"]]);
+
+    const deliverBrief = { outcome: "交付", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] };
+    const unlocked = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: deliverBrief,
+        unlock_after_gate_def_id: researchDef.id,
+      }),
+    });
+    expect(unlocked.res.status).toBe(201);
+    expect(unlocked.body.unlock_after_gate_def_id).toBe(researchDef.id);
+    expect(unlocked.body.brief.evidence_shape).toEqual(["summary_md", "artifact_uri"]);
+    expect(unlocked.body.brief.evidence_shape).not.toContain("report_md");
+
+    const dogfoodFill = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        brief: { outcome: "写一份能读的周报", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    expect(dogfoodFill.res.status).toBe(201);
+    expect(dogfoodFill.body.brief.evidence_shape).toEqual(["summary_md", "artifact_uri"]);
+    expect(dogfoodFill.body.brief.evidence_shape).not.toContain("report_md");
+  });
+
   it("api_8080_bind_no_blip", async () => {
     const started = await startApiServer({
       port: 0,

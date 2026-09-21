@@ -355,6 +355,21 @@ function defsForAssignment(
   return after.filter((d) => d.ordinal === next);
 }
 
+/**
+ * Fill/brief required kinds follow the currently unlocked stage only.
+ * Passed GateDefs (research after PASS) must not contribute kinds.
+ */
+function defsForUnlockedStage(
+  h: Harness,
+  defs: Array<typeof gateDefs.$inferSelect>,
+): Array<typeof gateDefs.$inferSelect> {
+  if (defs.length === 0) return [];
+  const ordered = [...defs].sort((a, b) => a.ordinal - b.ordinal);
+  const current = ordered.find((d) => !priorGatePassed(h, d.id));
+  if (!current) return [];
+  return ordered.filter((d) => d.ordinal === current.ordinal);
+}
+
 function priorGatePassed(h: Harness, gateDefId: string): boolean {
   const instances = h.db.select().from(gateInstances).where(eq(gateInstances.gateDefId, gateDefId)).all();
   for (const inst of instances) {
@@ -748,13 +763,14 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
   assertStageUnlocked(h, unlockAfter, goalId);
 
   const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, goalId)).all();
-  const targetDefs = defsForAssignment(defs, unlockAfter);
+  // Kinds follow the unlocked stage only — never union passed research into deliver fill.
+  const targetDefs = defsForUnlockedStage(h, defs);
   const needed = [
     ...new Set(targetDefs.flatMap((def) => requiredEvidenceKinds(def.predicateId, def.predicateVersion))),
   ];
   // Coordinator dogfood briefs are deliver-shaped (summary_md). Default product
-  // goals now start at research (report_md). Union required kinds instead of a
-  // spurious HTTP 400 — truly invalid briefs already 422 from parseBriefV1.
+  // goals now start at research (report_md). Union required kinds for the
+  // current stage instead of a spurious HTTP 400 — invalid briefs already 422.
   const brief = mergeRequiredKinds(parsedBrief, needed);
 
   const assigneeBotId = resolveAssigneeBind(actor, input.assignee_bot_id);
