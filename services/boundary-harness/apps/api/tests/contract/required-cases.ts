@@ -37,6 +37,12 @@ export const GAME_2048_MERGE_GATES = [
   "game_2048_new_game_resets",
 ] as const;
 
+/** QA human evidence attach freeze — `it("…")` titles must match exactly. */
+export const HUMAN_EVIDENCE_MERGE_GATES = [
+  "bot_attach_requires_mcp_entry",
+  "human_attach_bearer_allowed",
+] as const;
+
 export const FORBIDDEN_ERROR_ALIASES = [
   "webhook_timestamp_skew",
   "webhook_signature_invalid",
