@@ -139,6 +139,7 @@ describe("Security acceptance case registry", () => {
     expect(P1_DOMAIN_MERGE_GATES).toEqual([
       "pool_cursor_fill_not_400",
       "product_goal_default_stage_gates",
+      "fill_shape_follows_unlocked_stage",
       "api_8080_bind_no_blip",
     ]);
   });
