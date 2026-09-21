@@ -112,6 +112,7 @@ export async function seedDeliverPending(baseURL: string, title = HUMAN_GOAL.del
       headers: headers.coordinator,
       body: JSON.stringify({
         pool_id: "pool_noop",
+        assignee_bot_id: "bot-deliver",
         brief: { outcome: "pending only", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
       }),
     }),

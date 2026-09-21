@@ -100,7 +100,7 @@ describe("Security acceptance case registry", () => {
       expect(p0bSrc, `missing it("${name}") in P0-B freeze sources`).toContain(`it("${name}"`);
     }
     expect(P0_B_MERGE_GATES).toEqual([
-      "assignment_binds_assignee_bot_id",
+      "assignment_binds_bot_id",
       "desk_busy_from_assignee_heartbeat",
       "outbound_publisher_posts_domain_events",
     ]);

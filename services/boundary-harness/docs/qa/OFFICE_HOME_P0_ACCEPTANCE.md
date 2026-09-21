@@ -58,7 +58,7 @@ Shell imports/mirrors Domain `STATUS_LINE_*` (`等你拍板` · `已交齐`). Pa
 
 | Gate | Title | File |
 |------|-------|------|
-| Assignment binds a concrete bot | `assignment_binds_assignee_bot_id` | `p0-linkage.test.ts` |
+| Assignment binds a concrete bot | `assignment_binds_bot_id` | `p0-linkage.test.ts` |
 | Desk busy only from bound assignee heartbeat | `desk_busy_from_assignee_heartbeat` | `p0-linkage.test.ts` · `desks.test.ts` |
 | Domain outbox POSTs Bridge envelope | `outbound_publisher_posts_domain_events` | `webhook.test.ts` |
 

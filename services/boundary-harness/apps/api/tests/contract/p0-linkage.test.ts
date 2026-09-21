@@ -537,7 +537,7 @@ describe("P0 linkage contracts", () => {
     expect(((await raw.json()) as { error: { message: string } }).error.message).toBe("forbidden_tool");
   });
 
-  it("assignment_binds_assignee_bot_id", async () => {
+  it("assignment_binds_bot_id", async () => {
     const { app } = setup();
     const goal = await json(app, "/v1/goals", {
       method: "POST",

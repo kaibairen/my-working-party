@@ -50,7 +50,7 @@ export const STATUS_LINE_MERGE_GATES = [
 
 /** P0-B assignee bind + desk busy from heartbeat — `it("…")` titles must match exactly. */
 export const P0_B_MERGE_GATES = [
-  "assignment_binds_assignee_bot_id",
+  "assignment_binds_bot_id",
   "desk_busy_from_assignee_heartbeat",
   "outbound_publisher_posts_domain_events",
 ] as const;
