@@ -71,6 +71,9 @@ export {
   setGoalDial,
   assertAdminNotFrozen,
   assertNoClientStatusWrite,
+  STAGE_KEY_DELIVER,
+  STAGE_KEY_RESEARCH,
+  STAGE_KEY_SAFETY,
 } from "./services";
 export {
   listDesks,

@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createCursorAdapter, type CursorAdapter } from "@harness/adapters-cursor";
 import { createNoopAdapter, type NoopAdapter } from "@harness/adapters-noop";
-import { DELIVER_READY_V1, SAFETY_ONLY_V1 } from "@harness/ready";
+import { DELIVER_READY_V1, DELIVER_REPORT_READY_V1, RESEARCH_READY_V1, SAFETY_ONLY_V1 } from "@harness/ready";
 import { assertSecretRef } from "./rbac";
 import { schema } from "./schema";
 import { SCHEMA_VERSION } from "./schema-sql";
@@ -70,6 +70,26 @@ function seed(sqlite: Database.Database, now: string): void {
        VALUES (?, ?, ?, ?)`,
     )
     .run(DELIVER_READY_V1.id, DELIVER_READY_V1.version, JSON.stringify(DELIVER_READY_V1), now);
+  sqlite
+    .prepare(
+      `INSERT OR IGNORE INTO ready_predicates (id, version, dsl_json, created_at)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run(RESEARCH_READY_V1.id, RESEARCH_READY_V1.version, JSON.stringify(RESEARCH_READY_V1), now);
+  sqlite
+    .prepare(
+      `INSERT OR IGNORE INTO ready_predicates (id, version, dsl_json, created_at)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run(
+      DELIVER_REPORT_READY_V1.id,
+      DELIVER_REPORT_READY_V1.version,
+      JSON.stringify(DELIVER_REPORT_READY_V1),
+      now,
+    );
+  sqlite
+    .prepare(`UPDATE schema_meta SET value = ? WHERE key = 'schema_version' AND CAST(value AS INTEGER) < ?`)
+    .run(String(SCHEMA_VERSION), SCHEMA_VERSION);
   const noopRef = "file:/var/lib/harness/noop.secret";
   const cursorRef = "env:CURSOR_API_KEY";
   assertSecretRef(noopRef);
@@ -135,6 +155,12 @@ function applyCompat(sqlite: Database.Database): void {
     const cols = columnNames(sqlite, "assignments");
     if (!cols.includes("created_by")) sqlite.exec("ALTER TABLE assignments ADD COLUMN created_by TEXT");
     if (!cols.includes("filler_kind")) sqlite.exec("ALTER TABLE assignments ADD COLUMN filler_kind TEXT");
+    if (!cols.includes("unlock_after_gate_def_id")) {
+      sqlite.exec("ALTER TABLE assignments ADD COLUMN unlock_after_gate_def_id TEXT");
+    }
+  }
+  if (tableExists(sqlite, "gate_defs") && !columnNames(sqlite, "gate_defs").includes("stage_key")) {
+    sqlite.exec("ALTER TABLE gate_defs ADD COLUMN stage_key TEXT");
   }
   if (!tableExists(sqlite, "agent_heartbeats")) {
     sqlite.exec(`

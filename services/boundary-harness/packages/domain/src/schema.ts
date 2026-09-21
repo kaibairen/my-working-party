@@ -37,6 +37,8 @@ export const gateDefs = sqliteTable("gate_defs", {
   predicateVersion: integer("predicate_version").notNull(),
   ordinal: integer("ordinal").notNull(),
   onFail: text("on_fail").notNull(),
+  /** Stage label (research | deliver | safety). Null = unstaged / legacy single gate. */
+  stageKey: text("stage_key"),
 });
 
 export const gateInstances = sqliteTable("gate_instances", {
@@ -65,6 +67,8 @@ export const assignments = sqliteTable("assignments", {
   createdBy: text("created_by"),
   /** `bot` | `human` — office fill-board projection. Optional extra (applyCompat). */
   fillerKind: text("filler_kind"),
+  /** Prior GateDef that must be decided pass before this assignment may fill/dispatch. */
+  unlockAfterGateDefId: text("unlock_after_gate_def_id"),
 });
 
 export const runs = sqliteTable("runs", {

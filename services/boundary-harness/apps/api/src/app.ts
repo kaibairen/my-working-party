@@ -315,6 +315,7 @@ export function createApp(harness: Harness) {
         brief: body.brief,
         budget: body.budget,
         exception_grant_id: body.exception_grant_id as string | undefined,
+        unlock_after_gate_def_id: body.unlock_after_gate_def_id as string | undefined,
       }),
       201,
     );

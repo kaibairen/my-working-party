@@ -162,3 +162,14 @@ rejected_keys → 422 brief_forbidden_field:
 - [x] Backend 签核  
 
 **下一步：** `boundary-harness` 仓内 `packages/domain` Drizzle migration = 本文件；OpenAPI `/v1` 与表同步后才合 Domain API。
+
+## Stage-edge P0 增量（schema_version = 2）
+
+Additive only. Does not rewrite M0 freeze tables.
+
+| 表 | 列 | 约束 |
+|----|----|------|
+| gate_defs | stage_key | nullable text (`research` \| `deliver` \| `safety`) |
+| assignments | unlock_after_gate_def_id | nullable FK gate_defs.id |
+
+fill / dispatch while the referenced GateDef has no `decide=pass` → **423** `stage_locked` (never `freeze_active`). Chat / oral done never unlocks. See `services/boundary-harness/docs/acceptance/STAGE_EDGE_P0_TECHLEAD.md`.
