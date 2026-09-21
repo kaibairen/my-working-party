@@ -442,7 +442,7 @@ describe("P1 domain dogfood fixes", () => {
 
     const serverSrc = readFileSync(join(here, "../../src/server.ts"), "utf8");
     const serveAt = serverSrc.indexOf("serve(");
-    const migrateAt = serverSrc.indexOf("createHarness");
+    const migrateAt = serverSrc.indexOf("createHarness({");
     expect(serveAt).toBeGreaterThan(-1);
     expect(migrateAt).toBeGreaterThan(serveAt);
   });
