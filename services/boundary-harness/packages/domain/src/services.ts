@@ -44,7 +44,28 @@ export type FillAssignmentInput = {
   brief: unknown;
   budget?: unknown;
   exception_grant_id?: string;
+  /** Prior GateDef that must already be decided pass. Jumping ahead → 423 stage_locked. */
+  unlock_after_gate_def_id?: string | null;
 };
+
+export const STAGE_KEY_RESEARCH = "research";
+export const STAGE_KEY_DELIVER = "deliver";
+export const STAGE_KEY_SAFETY = "safety";
+
+/** Frontend strip — no UUID, no path script. Only: do not jump an uncleared gate. */
+export const STAGE_LOCKED_STRIP = "上一关还没通过，先别跳到下一阶段。";
+
+const EXPLORE_GATE_TEMPLATES = new Set(["safety_only_v1", "research_ready_v1"]);
+const DELIVER_GATE_TEMPLATES = new Set([
+  "deliver_ready_v1",
+  "deliver_report_ready_v1",
+  "research_then_deliver_v1",
+]);
+const DELIVER_JAIL_TEMPLATES = new Set([
+  "deliver_ready_v1",
+  "deliver_report_ready_v1",
+  "research_then_deliver_v1",
+]);
 
 export type EvidenceAttachItem = {
   kind: string;
@@ -126,6 +147,7 @@ function publicAssignment(row: typeof assignments.$inferSelect) {
     budget: parseJson(row.budgetJson),
     status: row.status,
     risk: row.risk,
+    unlock_after_gate_def_id: row.unlockAfterGateDefId ?? null,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -172,7 +194,81 @@ function publicGate(
     version: row.version,
     predicate_id: def?.predicateId ?? ready?.predicate_id ?? null,
     predicate_version: def?.predicateVersion ?? ready?.predicate_version ?? null,
+    stage_key: def?.stageKey ?? null,
   };
+}
+
+function insertGateDef(
+  h: Harness,
+  goalId: string,
+  predicateId: string,
+  ordinal: number,
+  stageKey: string,
+): void {
+  h.db.insert(gateDefs).values({
+    id: h.newId(),
+    goalId,
+    predicateId,
+    predicateVersion: 1,
+    ordinal,
+    onFail: "keep_pending",
+    stageKey,
+  }).run();
+}
+
+function defsForAssignment(
+  defs: Array<typeof gateDefs.$inferSelect>,
+  unlockAfterId: string | null | undefined,
+): Array<typeof gateDefs.$inferSelect> {
+  if (defs.length === 0) return [];
+  const ordered = [...defs].sort((a, b) => a.ordinal - b.ordinal);
+  if (!unlockAfterId) {
+    const min = ordered[0].ordinal;
+    return ordered.filter((d) => d.ordinal === min);
+  }
+  const prior = ordered.find((d) => d.id === unlockAfterId);
+  const after = ordered.filter((d) => d.ordinal > (prior?.ordinal ?? -1));
+  if (after.length === 0) return [];
+  const next = after[0].ordinal;
+  return after.filter((d) => d.ordinal === next);
+}
+
+function priorGatePassed(h: Harness, gateDefId: string): boolean {
+  const instances = h.db.select().from(gateInstances).where(eq(gateInstances.gateDefId, gateDefId)).all();
+  for (const inst of instances) {
+    if (inst.status !== "decided") continue;
+    const decisions = h.db
+      .select()
+      .from(gateDecisions)
+      .where(eq(gateDecisions.gateInstanceId, inst.id))
+      .all();
+    if (decisions.some((d) => d.decision === "pass")) return true;
+  }
+  return false;
+}
+
+/** Block only jumping ahead of an uncleared prior gate. Never a path-choice jail. */
+function assertStageUnlocked(
+  h: Harness,
+  unlockAfterId: string | null | undefined,
+  goalId: string,
+): void {
+  if (!unlockAfterId) return;
+  const def = h.db.select().from(gateDefs).where(eq(gateDefs.id, unlockAfterId)).get();
+  if (!def || def.goalId !== goalId) {
+    throw new HarnessError(
+      "unlock_after_invalid",
+      "unlock_after_gate_def_id must belong to this goal",
+      422,
+    );
+  }
+  if (!priorGatePassed(h, unlockAfterId)) {
+    throw new HarnessError("stage_locked", STAGE_LOCKED_STRIP, 423, {
+      unlock_after_gate_def_id: unlockAfterId,
+      stage_key: def.stageKey,
+      strip: STAGE_LOCKED_STRIP,
+    });
+  }
 }
 
 export function listPools(h: Harness) {
@@ -217,6 +313,7 @@ export function getGoal(h: Harness, id: string) {
     predicate_version: d.predicateVersion,
     ordinal: d.ordinal,
     on_fail: d.onFail,
+    stage_key: d.stageKey ?? null,
   }));
   return { ...publicGoal(row), gate_defs: defs };
 }
@@ -271,7 +368,7 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
   let template = input.gate_template_id ?? null;
   if (input.safety_gate) template = "safety_only_v1";
 
-  if (mode === "explore" && template === "deliver_ready_v1") {
+  if (mode === "explore" && template && DELIVER_JAIL_TEMPLATES.has(template)) {
     throw new HarnessError(
       "mode_template_mismatch",
       "explore MUST NOT default-bind deliver_ready_v1",
@@ -279,19 +376,19 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
     );
   }
   if (mode === "deliver") {
-    if (template && template !== "deliver_ready_v1") {
+    if (template && !DELIVER_GATE_TEMPLATES.has(template)) {
       throw new HarnessError(
         "mode_template_mismatch",
-        "deliver MUST use deliver_ready_v1 in M0",
+        "deliver MUST use a deliver-node template (deliver_ready_v1 or variant)",
         422,
       );
     }
-    template = "deliver_ready_v1";
+    template = template ?? "deliver_ready_v1";
   }
-  if (mode === "explore" && template && template !== "safety_only_v1") {
+  if (mode === "explore" && template && !EXPLORE_GATE_TEMPLATES.has(template)) {
     throw new HarnessError(
       "mode_template_mismatch",
-      "explore may use null template or safety_only_v1",
+      "explore may use null template, safety_only_v1, or research_ready_v1",
       422,
     );
   }
@@ -318,23 +415,16 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
   }).run();
 
   if (template === "deliver_ready_v1") {
-    h.db.insert(gateDefs).values({
-      id: h.newId(),
-      goalId: id,
-      predicateId: "deliver_ready_v1",
-      predicateVersion: 1,
-      ordinal: 0,
-      onFail: "keep_pending",
-    }).run();
+    insertGateDef(h, id, "deliver_ready_v1", 0, STAGE_KEY_DELIVER);
+  } else if (template === "deliver_report_ready_v1") {
+    insertGateDef(h, id, "deliver_report_ready_v1", 0, STAGE_KEY_DELIVER);
+  } else if (template === "research_ready_v1") {
+    insertGateDef(h, id, "research_ready_v1", 0, STAGE_KEY_RESEARCH);
+  } else if (template === "research_then_deliver_v1") {
+    insertGateDef(h, id, "research_ready_v1", 0, STAGE_KEY_RESEARCH);
+    insertGateDef(h, id, "deliver_ready_v1", 1, STAGE_KEY_DELIVER);
   } else if (template === "safety_only_v1") {
-    h.db.insert(gateDefs).values({
-      id: h.newId(),
-      goalId: id,
-      predicateId: "safety_only_v1",
-      predicateVersion: 1,
-      ordinal: 0,
-      onFail: "keep_pending",
-    }).run();
+    insertGateDef(h, id, "safety_only_v1", 0, STAGE_KEY_SAFETY);
   }
 
   audit(h, actor, "create_goal", "goal", id, { mode, template, intent });
@@ -414,8 +504,12 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
   if (!pool) throw new HarnessError("not_found", `pool ${input.pool_id} not found`, 404);
   requirePoolAccess(actor, input.pool_id);
 
+  const unlockAfter = input.unlock_after_gate_def_id?.trim() || null;
+  assertStageUnlocked(h, unlockAfter, goalId);
+
   const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, goalId)).all();
-  for (const def of defs) {
+  const targetDefs = defsForAssignment(defs, unlockAfter);
+  for (const def of targetDefs) {
     const needed = requiredEvidenceKinds(def.predicateId, def.predicateVersion);
     const missing = needed.filter((k) => !brief.evidence_shape.includes(k as EvidenceKind));
     if (missing.length > 0) {
@@ -464,6 +558,7 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
     updatedAt: ts,
     createdBy: actor.id,
     fillerKind,
+    unlockAfterGateDefId: unlockAfter,
   }).run();
   audit(h, actor, status === "proposed" ? "propose_assignment" : "fill_assignment", "assignment", id);
   return getAssignment(h, id);
@@ -638,12 +733,10 @@ function evaluatePendingDeliverGates(h: Harness, goalId: string): void {
   }
 }
 
-function ensureDeliverGateInstance(h: Harness, goalId: string, assignmentId: string): void {
-  const defs = h.db
-    .select()
-    .from(gateDefs)
-    .where(and(eq(gateDefs.goalId, goalId), eq(gateDefs.predicateId, "deliver_ready_v1")))
-    .all();
+function ensureStageGateInstances(h: Harness, goalId: string, assignmentId: string): void {
+  const assignment = h.db.select().from(assignments).where(eq(assignments.id, assignmentId)).get();
+  const allDefs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, goalId)).all();
+  const defs = defsForAssignment(allDefs, assignment?.unlockAfterGateDefId);
   for (const def of defs) {
     const existing = h.db
       .select()
@@ -693,6 +786,7 @@ export async function dispatchAssignment(
     .get();
   if (existing) return { ...publicRun(existing), created: false };
 
+  assertStageUnlocked(h, assignment.unlockAfterGateDefId, goal.id);
   assertAdminNotFrozen(h);
 
   const dial = ((goal as { dial?: string }).dial ?? "free") as Dial;
@@ -751,7 +845,7 @@ export async function dispatchAssignment(
     .where(eq(assignments.id, assignmentId))
     .run();
 
-  ensureDeliverGateInstance(h, goal.id, assignmentId);
+  ensureStageGateInstances(h, goal.id, assignmentId);
   evaluatePendingDeliverGates(h, goal.id);
 
   audit(h, actor, "dispatch", "run", runId, { assignment_id: assignmentId, adapter: result.adapter });

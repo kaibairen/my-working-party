@@ -176,3 +176,66 @@ describe("deliver_ready_v1", () => {
     expect(r.missing).toContain("evidence:summary_md");
   });
 });
+
+describe("research_ready_v1", () => {
+  it("ok with a live report_md — research artifact, not chat", () => {
+    const r = evaluateReady(
+      "research_ready_v1",
+      1,
+      { ...empty, evidence: [{ kind: "report_md", uri: "file://research.md" }] },
+      "t",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.missing).toEqual([]);
+  });
+
+  it("verbal_screenshot_never_research_ready", () => {
+    const r = evaluateReady(
+      "research_ready_v1",
+      1,
+      { ...empty, evidence: [{ kind: "screenshot", uri: "file://chat-done.png" }] },
+      "t",
+    );
+    expect(r.ok).toBe(false);
+    expect(r.missing).toContain("evidence:report_md");
+  });
+
+  it("run_finished_alone_never_research_ready", () => {
+    const r = evaluateReady("research_ready_v1", 1, { ...empty, runFinished: true }, "t");
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe("deliver_report_ready_v1 (deliver-node variant)", () => {
+  it("needs report_md plus noop contract — screenshot never enough", () => {
+    const shot = evaluateReady(
+      "deliver_report_ready_v1",
+      1,
+      {
+        ...empty,
+        evidence: [{ kind: "screenshot", uri: "file://oral-done.png" }],
+        noopOrOfflineContract: true,
+        runFinished: true,
+      },
+      "t",
+    );
+    expect(shot.ok).toBe(false);
+    expect(shot.missing).toContain("evidence:report_md");
+
+    const ok = evaluateReady(
+      "deliver_report_ready_v1",
+      1,
+      {
+        ...empty,
+        evidence: [
+          { kind: "report_md", uri: "file://report.md" },
+          { kind: "artifact_uri", uri: "file://out.tgz" },
+        ],
+        noopOrOfflineContract: true,
+        runFinished: true,
+      },
+      "t",
+    );
+    expect(ok.ok).toBe(true);
+  });
+});

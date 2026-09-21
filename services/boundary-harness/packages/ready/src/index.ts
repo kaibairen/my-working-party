@@ -42,9 +42,60 @@ export const DELIVER_READY_V1 = {
   ],
 } as const;
 
+/** Research-stage Ready. Report artifact only — chat / oral / screenshot never unlock. */
+export const RESEARCH_READY_V1 = {
+  id: "research_ready_v1",
+  version: 1,
+  all: [
+    {
+      type: "evidence_present",
+      kinds: ["report_md"],
+    },
+  ],
+} as const;
+
+/**
+ * Deliver-node variant: report_md writeup + the same github / noop contract as deliver_ready_v1.
+ * Does not rewrite deliver_ready_v1@1. Screenshot / verbal done never satisfy this.
+ */
+export const DELIVER_REPORT_READY_V1 = {
+  id: "deliver_report_ready_v1",
+  version: 1,
+  all: [
+    {
+      type: "run_finished",
+    },
+    {
+      type: "evidence_present",
+      kinds: ["report_md"],
+    },
+    {
+      type: "any",
+      of: [
+        {
+          type: "all",
+          items: [
+            { type: "github_pr", is_draft: false },
+            { type: "github_checks", conclusion: "success" },
+          ],
+        },
+        {
+          type: "all",
+          items: [
+            { type: "evidence_present", kinds: ["artifact_uri"] },
+            { type: "noop_or_offline_contract", ok: true },
+          ],
+        },
+      ],
+    },
+  ],
+} as const;
+
 export const FROZEN_PREDICATES = {
   safety_only_v1: { 1: SAFETY_ONLY_V1 },
   deliver_ready_v1: { 1: DELIVER_READY_V1 },
+  research_ready_v1: { 1: RESEARCH_READY_V1 },
+  deliver_report_ready_v1: { 1: DELIVER_REPORT_READY_V1 },
 } as const;
 
 export type EvidenceKind =
@@ -172,6 +223,8 @@ function evalNode(node: DslNode, ctx: ReadyContext): { ok: boolean; missing: str
 
 export function requiredEvidenceKinds(predicateId: string, predicateVersion: number): string[] {
   if (predicateId === "deliver_ready_v1" && predicateVersion === 1) return ["summary_md"];
+  if (predicateId === "research_ready_v1" && predicateVersion === 1) return ["report_md"];
+  if (predicateId === "deliver_report_ready_v1" && predicateVersion === 1) return ["report_md"];
   return [];
 }
 

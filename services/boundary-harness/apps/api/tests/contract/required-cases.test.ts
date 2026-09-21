@@ -8,6 +8,7 @@ import {
   FORBIDDEN_ERROR_ALIASES,
   GAME_2048_MERGE_GATES,
   OFFICE_ROSTER_MERGE_GATES,
+  STAGE_EDGE_MERGE_GATES,
 } from "./required-cases";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -16,6 +17,7 @@ const p0Src = readFileSync(join(here, "p0-linkage.test.ts"), "utf8");
 const officeAntiSrc = readFileSync(join(here, "../security-anti/office-anti.test.ts"), "utf8");
 const desksDomainSrc = readFileSync(join(here, "../../../../packages/domain/src/desks.test.ts"), "utf8");
 const game2048Src = readFileSync(join(here, "../../../../examples/2048/board.test.ts"), "utf8");
+const stageEdgeSrc = readFileSync(join(here, "stage-edge.test.ts"), "utf8");
 const rosterSrc = [p0Src, officeAntiSrc].join("\n");
 const desksGroupSrc = [p0Src, desksDomainSrc].join("\n");
 const harnessRoot = join(here, "../../../../");
@@ -62,6 +64,16 @@ describe("Security acceptance case registry", () => {
       "game_2048_arrow_or_swipe_moves",
       "game_2048_score_updates",
       "game_2048_new_game_resets",
+    ]);
+  });
+
+  it("registers Domain Stage-edge P0 merge gates", () => {
+    for (const name of STAGE_EDGE_MERGE_GATES) {
+      expect(stageEdgeSrc, `missing it("${name}") in stage-edge.test.ts`).toContain(`it("${name}"`);
+    }
+    expect(STAGE_EDGE_MERGE_GATES).toEqual([
+      "stage_locked_blocks_downstream_dispatch",
+      "stage_unlock_after_gate_pass",
     ]);
   });
 

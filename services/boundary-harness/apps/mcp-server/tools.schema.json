@@ -32,6 +32,7 @@
           "brief": { "type": "object" },
           "budget": { "type": "object" },
           "exception_grant_id": { "type": "string" },
+          "unlock_after_gate_def_id": { "type": "string", "description": "Prior GateDef that must be decided pass. Uncleared → 423 stage_locked." },
           "role": { "type": "string" },
           "actor": { "type": "string" }
         }

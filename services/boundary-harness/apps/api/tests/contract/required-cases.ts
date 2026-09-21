@@ -37,6 +37,12 @@ export const GAME_2048_MERGE_GATES = [
   "game_2048_new_game_resets",
 ] as const;
 
+/** Domain Stage-edge P0 — `it("…")` titles must match exactly. */
+export const STAGE_EDGE_MERGE_GATES = [
+  "stage_locked_blocks_downstream_dispatch",
+  "stage_unlock_after_gate_pass",
+] as const;
+
 export const FORBIDDEN_ERROR_ALIASES = [
   "webhook_timestamp_skew",
   "webhook_signature_invalid",

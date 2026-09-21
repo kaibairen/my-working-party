@@ -11,6 +11,8 @@ info:
     Pool.secret_ref is file: or env: only; API never echoes resolved plaintext.
     policy/check returns decision, track, reason_code, redirect.
     Admin freeze POST/GET /v1/admin/freeze; new dispatch → 423 freeze_active.
+    Stage-edge P0: gate_defs.stage_key + assignments.unlock_after_gate_def_id.
+    fill/dispatch while a prior gate is not decided pass → 423 stage_locked (not freeze_active).
     Goal dial freeze remains 403 dial_frozen and is distinct from admin freeze.
     audit_log is append-only (nine columns; no PATCH/DELETE).
 servers:
@@ -381,6 +383,18 @@ paths:
           description: RBAC / human fan-out without exception
         "422":
           description: brief_forbidden_field
+        "423":
+          description: stage_locked — prior GateDef has not been decided pass
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+              example:
+                {
+                  code: stage_locked,
+                  message: "上一关还没通过，先别跳到下一阶段。",
+                  strip: "上一关还没通过，先别跳到下一阶段。",
+                }
   /v1/goals/{id}/exception-grants:
     post:
       summary: Decision-maker scoped human fan-out grant
@@ -401,7 +415,7 @@ paths:
           description: OK
   /v1/assignments/{id}/dispatch:
     post:
-      summary: Create Run; Idempotency-Key; blocked when freeze_active
+      summary: Create Run; Idempotency-Key; blocked when freeze_active or stage_locked
       description: Bot completion write. Missing X-Harness-Entry mcp → 403 mcp_entry_required.
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -431,12 +445,21 @@ paths:
         "403":
           description: forbidden | mcp_entry_required
         "423":
-          description: freeze_active — reject new dispatch (incl MCP)
+          description: freeze_active (admin freeze) or stage_locked (prior gate not passed). Do not reuse codes.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
-              example: { code: freeze_active, message: "Freeze enabled; new dispatch rejected" }
+              examples:
+                freeze:
+                  value: { code: freeze_active, message: "Freeze enabled; new dispatch rejected" }
+                stage:
+                  value:
+                    {
+                      code: stage_locked,
+                      message: "上一关还没通过，先别跳到下一阶段。",
+                      strip: "上一关还没通过，先别跳到下一阶段。",
+                    }
   /v1/runs/{id}:
     get:
       summary: Get Run (advisory; MUST NOT be used as Gate ready)
@@ -731,6 +754,9 @@ components:
         gate_template_id:
           type: string
           nullable: true
+          description: |
+            explore: null | safety_only_v1 | research_ready_v1.
+            deliver: deliver_ready_v1 (default) | deliver_report_ready_v1 | research_then_deliver_v1.
         safety_gate:
           type: boolean
         dial:
@@ -772,6 +798,29 @@ components:
               type: integer
         exception_grant_id:
           type: string
+        unlock_after_gate_def_id:
+          type: string
+          nullable: true
+          description: Prior GateDef that must be decided pass. If uncleared, fill → 423 stage_locked.
+    GateDef:
+      type: object
+      properties:
+        id:
+          type: string
+        goal_id:
+          type: string
+        predicate_id:
+          type: string
+        predicate_version:
+          type: integer
+        ordinal:
+          type: integer
+        on_fail:
+          type: string
+        stage_key:
+          type: string
+          nullable: true
+          description: research | deliver | safety. Labels the stage edge; does not script path choice.
     EvidenceKind:
       type: string
       enum: [pr, report_md, summary_md, screenshot, ci_check, artifact_uri]
@@ -883,6 +932,7 @@ components:
           enum:
             - brief_forbidden_field
             - freeze_active
+            - stage_locked
             - webhook_bad_signature
             - webhook_skew
             - pool_forbidden
@@ -891,6 +941,9 @@ components:
             - optimistic_lock
         message:
           type: string
+        strip:
+          type: string
+          description: Human Frontend strip. stage_locked has no UUID and does not script path choice.
         keys:
           type: array
           items: { type: string }
