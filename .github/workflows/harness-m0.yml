@@ -91,3 +91,46 @@ jobs:
         run: pnpm test:e2e:inbox
         env:
           CI: "true"
+
+  # api_8080_bind_no_blip — container healthy THEN 5s no-blip; port-open is not green.
+  # Complements Backend H1 early-listen + it "api_8080_bind_no_blip" (bc-cb490333).
+  compose-smoke:
+    name: compose smoke (api_8080_bind_no_blip)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/boundary-harness/deploy
+    steps:
+      - uses: actions/checkout@v4
+      - name: up api
+        run: docker compose -f docker-compose.m0.yml up -d --build api
+      - name: wait container healthy
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            cid="$(docker compose -f docker-compose.m0.yml ps -q api)"
+            if [[ -z "$cid" ]]; then
+              sleep 2
+              continue
+            fi
+            st="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid")"
+            echo "api health=${st} (attempt ${i})"
+            if [[ "$st" == "healthy" ]]; then
+              exit 0
+            fi
+            if [[ "$st" == "unhealthy" ]]; then
+              docker compose -f docker-compose.m0.yml logs api
+              exit 1
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.m0.yml logs api
+          echo "timed out waiting for api healthy" >&2
+          exit 1
+      - name: no-blip probe (NO_BLIP_SECS=5)
+        env:
+          NO_BLIP_SECS: "5"
+        run: bash ./wait-api-healthy.sh
+      - name: down
+        if: always()
+        run: docker compose -f docker-compose.m0.yml down -v

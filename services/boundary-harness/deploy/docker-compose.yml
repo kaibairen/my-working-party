@@ -1,3 +1,5 @@
 # Prefer ../docker-compose.yml (`cd services/boundary-harness && docker compose up api`)
+# M0 alias: docker-compose.m0.yml (same include). Healthcheck: api_8080_bind_no_blip.
 include:
   - ../docker-compose.yml
+

@@ -108,30 +108,35 @@ jobs:
       - name: vitest security-anti
         run: pnpm exec vitest run --reporter=verbose apps/api/tests/security-anti
 
+  # api_8080_bind_no_blip — live job is in .github/workflows/harness-m0.yml
+  # Do not treat TCP-open / first curl as green. Wait healthy, then wait-api-healthy.sh.
   compose-smoke:
-    name: compose smoke（main）
-    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    name: compose smoke (api_8080_bind_no_blip)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: services/boundary-harness/deploy
     steps:
       - uses: actions/checkout@v4
-      - name: prepare dummy secrets
-        run: |
-          mkdir -p secrets
-          openssl rand -hex 32 > secrets/auth_jwt_secret
-          openssl rand -hex 32 > secrets/webhook_signing_secret
-          echo "ci-noop-key" > secrets/cursor_pool_key
       - name: up api
         run: docker compose -f docker-compose.m0.yml up -d --build api
-      - name: healthz
+      - name: wait container healthy
         run: |
-          for i in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:8080/healthz && exit 0
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            cid="$(docker compose -f docker-compose.m0.yml ps -q api)"
+            [[ -n "$cid" ]] || { sleep 2; continue; }
+            st="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid")"
+            [[ "$st" == "healthy" ]] && exit 0
+            [[ "$st" == "unhealthy" ]] && { docker compose -f docker-compose.m0.yml logs api; exit 1; }
             sleep 2
           done
+          docker compose -f docker-compose.m0.yml logs api
           exit 1
+      - name: no-blip probe (NO_BLIP_SECS=5)
+        env:
+          NO_BLIP_SECS: "5"
+        run: bash ./wait-api-healthy.sh
       - name: down
         if: always()
         run: docker compose -f docker-compose.m0.yml down -v

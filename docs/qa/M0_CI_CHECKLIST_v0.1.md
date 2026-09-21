@@ -47,7 +47,7 @@ docker compose -f docker-compose.m0.yml --profile m1-preview up -d
 | `lint-typecheck` | `pnpm lint` + `pnpm typecheck` |
 | `openapi-contract` | `openapi:lint`；migration ↔ OpenAPI 同源 PR |
 | `unit-vitest` | 上表 include + ready-anti 14 + security-anti 8（均强制） |
-| `compose-smoke` | 起 `api` + `/healthz`（main） |
+| `compose-smoke` | 起 `api` → wait **healthy**（`/health||/healthz`）→ `wait-api-healthy.sh` `NO_BLIP_SECS=5`（`api_8080_bind_no_blip`；端口开不算绿） |
 
 ### Ready 反例（`tests/ready-anti/**/*.test.ts` · 14 · QA 最终表）
 

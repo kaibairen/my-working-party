@@ -29,3 +29,5 @@ ready-anti 路径：`apps/api/tests/ready-anti/**`
 **security-anti S1–S8**（缺任一 merge 红）：见 [M0_SECURITY_ANTI_FINAL_v1.md](M0_SECURITY_ANTI_FINAL_v1.md)。
 
 Inbox Playwright CDP（M2，**不**替代 anti 强制集）：job `e2e-gate-inbox`；清单 [GATE_INBOX_PLAYWRIGHT_CDP_v1.md](GATE_INBOX_PLAYWRIGHT_CDP_v1.md)。
+
+**compose-smoke (`api_8080_bind_no_blip`)**：`docker compose` 等 `api` **healthy**（`/health||/healthz`）后再跑 `deploy/wait-api-healthy.sh`（`NO_BLIP_SECS=5`）。端口能连 **不算** 绿。≤200ms 空窗由 Backend H1 `it("api_8080_bind_no_blip")` 验收。
