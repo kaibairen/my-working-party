@@ -112,10 +112,12 @@ describe("office anti-dispatch regressions", () => {
     expect(officeHtml).toContain("status_line");
     expect(officeHtml).toContain("goalStatusLine");
     expect(officeHtml).toContain('data-testid="goal-status"');
-    expect(officeHtml).toContain(STATUS_LINE_WAITING);
-    expect(officeHtml).not.toMatch(/status\s*=\s*["'`]同事在填["'`]/);
+    expect(officeHtml).not.toMatch(/status_line\s*\|\|\s*["'`][^"'`]+["'`]/);
     expect(officeHtml).not.toMatch(/["'`]待拍板["'`]/);
-    expect(officeHtml).not.toMatch(/status_line\s*\|\|\s*["'`]同事在填["'`]/);
+    expect(officeHtml).not.toMatch(/["'`]同事在填["'`]/);
+    expect(officeHtml).not.toContain(STATUS_LINE_FILLING);
+    expect(officeHtml).not.toContain("待拍板");
+    expect(officeHtml).not.toContain(STATUS_LINE_DONE);
     expect(zhDM.statusWaiting).toBe(STATUS_LINE_WAITING);
     expect(zhDM.statusFilling).toBe(STATUS_LINE_FILLING);
     expect(zhDM.statusWaitingEvidence).toBe(STATUS_LINE_WAITING_EVIDENCE);
@@ -123,6 +125,8 @@ describe("office anti-dispatch regressions", () => {
     expect(zhDM.statusPendingDecision).toBe("等你拍板");
     expect(zhDM.statusPendingDecision).not.toBe("待拍板");
     expect(zhDM.statusDone).toBe(STATUS_LINE_DONE);
+    expect(zhDM.statusDone).toBe("已交齐");
+    expect(zhDM.statusDone).not.toBe("已交产物");
   });
 
   it("office_desks_paint_domain_presence_only", () => {

@@ -1,5 +1,10 @@
 import { join } from "node:path";
 import {
+  STATUS_LINE_DONE,
+  STATUS_LINE_FILLING,
+  STATUS_LINE_PENDING_DECISION,
+} from "../../../../packages/domain/src/index";
+import {
   api,
   clearHeartbeats,
   drainReadyGates,
@@ -81,8 +86,12 @@ test.describe("E2E office home P0", () => {
     });
     const goal = (listed.body.goals ?? []).find((g) => g.id === ready.goal.id);
     const apiLine = goal?.status_line ?? "";
-    expect(apiLine).toBe("等你拍板");
+    expect(STATUS_LINE_PENDING_DECISION).toBe("等你拍板");
+    expect(STATUS_LINE_DONE).toBe("已交齐");
+    expect(apiLine).toBe(STATUS_LINE_PENDING_DECISION);
     expect(apiLine).not.toBe("待拍板");
+    expect(apiLine).not.toBe("已交产物");
+    expect(apiLine).not.toBe(STATUS_LINE_FILLING);
     expect(apiLine).not.toMatch(/同事在填|filling/i);
 
     await page.goto("/");
@@ -90,8 +99,8 @@ test.describe("E2E office home P0", () => {
     await expect(card).toBeVisible();
     const status = card.getByTestId("goal-status");
     await expect(status).toHaveText(apiLine);
-    await expect(status).toHaveText("等你拍板");
-    await expect(status).not.toHaveText("同事在填");
+    await expect(status).toHaveText(STATUS_LINE_PENDING_DECISION);
+    await expect(status).not.toHaveText(STATUS_LINE_FILLING);
     await expect(status).not.toHaveText("待拍板");
     expect(await status.innerText()).toBe(apiLine);
     await page.screenshot({ path: join(shotDir, "status_line_all_slots_done_not_filling.png"), fullPage: true });

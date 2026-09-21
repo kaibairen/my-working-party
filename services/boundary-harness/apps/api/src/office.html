@@ -235,7 +235,6 @@
     }
     const DESK_STATUS = { busy: "在忙", waiting_evidence: "等证据", idle: "空闲" };
     const HEARTBEAT_TTL_FALLBACK = 90;
-    const STATUS_LINE_WAITING = "等同事开工";
     function heartbeatFresh(d) {
       const iso = d && d.last_heartbeat;
       if (!iso) return false;
@@ -251,8 +250,7 @@
       return "idle";
     }
     function goalStatusLine(goal) {
-      const raw = typeof goal.status_line === "string" ? goal.status_line.trim() : "";
-      return raw || STATUS_LINE_WAITING;
+      return typeof goal.status_line === "string" ? goal.status_line.trim() : "";
     }
     function deskRowHtml(d) {
       if (!heartbeatFresh(d)) return "";
