@@ -55,6 +55,42 @@ export const STAGE_KEY_SAFETY = "safety";
 /** Frontend strip — no UUID, no path script. Only: do not jump an uncleared gate. */
 export const STAGE_LOCKED_STRIP = "上一关还没通过，先别跳到下一阶段。";
 
+/** Office 423 flash — human, no UUID. Domain lock code stays stage_locked (not freeze_active). */
+export const STAGE_LOCKED_HUMAN = "阶段未解锁：先完成上一道门禁";
+export const STAGE_NEED_PRIOR_GATE = "需先通过上一道门禁";
+export const STAGE_UNREADY = "阶段信息未就绪";
+
+export const STAGE_LABELS: Record<string, string> = {
+  research: "调研",
+  deliver: "交付",
+  safety: "安全",
+};
+
+export type StageNodeState = "done" | "current" | "locked" | "unready";
+
+export type StageNode = {
+  stage_key: string | null;
+  label: string;
+  gate_def_id: string;
+  ordinal: number;
+  state: StageNodeState;
+  gate_status: "pass" | "ready" | "pending" | null;
+  unlock_after_gate_def_id: string | null;
+  unlock_after_label: string | null;
+  tooltip: string | null;
+};
+
+export type StageStrip = {
+  stages: StageNode[];
+  ready: boolean;
+};
+
+export function stageLabel(stageKey: string | null | undefined): string {
+  const key = String(stageKey ?? "").trim();
+  if (!key) return STAGE_UNREADY;
+  return STAGE_LABELS[key] ?? key;
+}
+
 const EXPLORE_GATE_TEMPLATES = new Set(["safety_only_v1", "research_ready_v1"]);
 const DELIVER_GATE_TEMPLATES = new Set([
   "deliver_ready_v1",
@@ -269,6 +305,66 @@ function assertStageUnlocked(
       strip: STAGE_LOCKED_STRIP,
     });
   }
+}
+
+function gateStatusForDef(
+  h: Harness,
+  defId: string,
+  instances: Array<typeof gateInstances.$inferSelect>,
+): "pass" | "ready" | "pending" | null {
+  if (priorGatePassed(h, defId)) return "pass";
+  const rows = instances.filter((g) => g.gateDefId === defId);
+  if (rows.some((g) => g.status === "ready")) return "ready";
+  if (rows.some((g) => g.status === "pending")) return "pending";
+  return null;
+}
+
+/**
+ * Read-only stage strip. Domain decides lock/done/current; the office shell only paints it.
+ * Missing stage_key → unready (do not pretend unlocked).
+ */
+export function listStageStrip(h: Harness, goalId: string): StageStrip {
+  const defs = h.db
+    .select()
+    .from(gateDefs)
+    .where(eq(gateDefs.goalId, goalId))
+    .all()
+    .slice()
+    .sort((a, b) => a.ordinal - b.ordinal);
+  if (defs.length === 0) {
+    return { stages: [], ready: false };
+  }
+  const instances = h.db.select().from(gateInstances).where(eq(gateInstances.goalId, goalId)).all();
+  const stages: StageNode[] = defs.map((def, i) => {
+    const prior = i > 0 ? defs[i - 1] : null;
+    const priorPassed = !prior || priorGatePassed(h, prior.id);
+    const status = gateStatusForDef(h, def.id, instances);
+    const key = def.stageKey ?? null;
+    let state: StageNodeState;
+    if (!key) state = "unready";
+    else if (prior && !priorPassed) state = "locked";
+    else if (status === "pass") state = "done";
+    else state = "current";
+    const unlockAfterLabel = prior ? stageLabel(prior.stageKey) : null;
+    const tooltip =
+      state === "locked"
+        ? unlockAfterLabel && unlockAfterLabel !== STAGE_UNREADY
+          ? `需先通过「${unlockAfterLabel}」门禁`
+          : STAGE_NEED_PRIOR_GATE
+        : null;
+    return {
+      stage_key: key,
+      label: stageLabel(key),
+      gate_def_id: def.id,
+      ordinal: def.ordinal,
+      state,
+      gate_status: status,
+      unlock_after_gate_def_id: prior?.id ?? null,
+      unlock_after_label: unlockAfterLabel,
+      tooltip,
+    };
+  });
+  return { stages, ready: stages.every((s) => s.state !== "unready" && s.stage_key) };
 }
 
 export function listPools(h: Harness) {
@@ -578,11 +674,31 @@ export type FillSlot = {
   progress: string;
   outcome: string | null;
   artifact_uri: string | null;
+  stage_key?: string | null;
+  stage_locked?: boolean;
+  unlock_after_gate_def_id?: string | null;
+  unlock_after_label?: string | null;
 };
+
+function emptySlot(partial: Partial<FillSlot> & Pick<FillSlot, "progress">): FillSlot {
+  return {
+    assignment_id: null,
+    empty: true,
+    filler: null,
+    filler_kind: null,
+    outcome: null,
+    artifact_uri: null,
+    stage_key: null,
+    stage_locked: false,
+    unlock_after_gate_def_id: null,
+    ...partial,
+  };
+}
 
 /**
  * Fill-board projection under a goal. Read-only progress — not a dispatch board.
  * Empty goals still return one "等同事填" slot so the office home shows the board.
+ * Locked downstream stages project a grey slot; the shell must not force-start them.
  */
 export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
   requireRole(actor, ["decision_maker", "coordinator", "viewer", "service"]);
@@ -594,6 +710,8 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
   const runRows = h.db.select().from(runs).all();
   const gateRows = h.db.select().from(gateInstances).all();
   const evRows = h.db.select().from(evidenceItems).where(eq(evidenceItems.goalId, goalId)).all();
+  const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, goalId)).all();
+  const stage_strip = listStageStrip(h, goalId);
 
   const slots: FillSlot[] = asgs.map((asg) => {
     const pool = poolRows.find((p) => p.id === asg.poolId);
@@ -624,30 +742,53 @@ export function listFillSlots(h: Harness, actor: Actor, goalId: string) {
         : pool
           ? executionPoolName(pool.id, pool.kind)
           : "执行池";
+    const unlockAfter = asg.unlockAfterGateDefId ?? null;
+    const target = defsForAssignment(defs, unlockAfter)[0];
+    const node = target
+      ? stage_strip.stages.find((s) => s.gate_def_id === target.id)
+      : undefined;
+    const stage_locked = node?.state === "locked";
     return {
       assignment_id: asg.id,
       empty: false,
       filler,
       filler_kind,
-      progress,
+      progress: stage_locked ? STAGE_LOCKED_HUMAN : progress,
       outcome,
       artifact_uri: artifact?.uri ?? null,
+      stage_key: target?.stageKey ?? node?.stage_key ?? null,
+      stage_locked,
+      unlock_after_gate_def_id: unlockAfter,
+      unlock_after_label: node?.unlock_after_label ?? null,
     };
   });
 
+  const covered = new Set(slots.map((s) => s.stage_key).filter(Boolean));
+  const current = stage_strip.stages.find((s) => s.state === "current");
   if (slots.length === 0) {
-    slots.push({
-      assignment_id: null,
-      empty: true,
-      filler: null,
-      filler_kind: null,
+    slots.push(emptySlot({
       progress: "等同事填",
       outcome: goal.intent ?? null,
-      artifact_uri: null,
-    });
+      stage_key: current?.stage_key ?? null,
+      stage_locked: false,
+      unlock_after_gate_def_id: current?.unlock_after_gate_def_id ?? null,
+    }));
+    if (current?.stage_key) covered.add(current.stage_key);
+  }
+  for (const node of stage_strip.stages) {
+    if (node.state !== "locked") continue;
+    if (node.stage_key && covered.has(node.stage_key)) continue;
+    slots.push(emptySlot({
+      progress: STAGE_LOCKED_HUMAN,
+      stage_key: node.stage_key,
+      stage_locked: true,
+      unlock_after_gate_def_id: node.unlock_after_gate_def_id,
+      unlock_after_label: node.unlock_after_label,
+    }));
+    if (node.stage_key) covered.add(node.stage_key);
   }
 
-  return { slots, readonly: true as const };
+  return { slots, readonly: true as const, stage_strip };
 }
 
 function collectReadyContext(h: Harness, goalId: string): ReadyContext {

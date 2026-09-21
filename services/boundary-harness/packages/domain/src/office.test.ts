@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, type Harness } from "./db";
-import { createGoal, fillAssignment, listFillSlots, listGoals } from "./services";
+import { createGoal, fillAssignment, listFillSlots, listGoals, STAGE_LOCKED_HUMAN } from "./services";
 import type { Actor } from "./rbac";
 
 const dm: Actor = { id: "you", role: "decision_maker" };
@@ -114,5 +114,30 @@ describe("office home goals + fill slots", () => {
     expect(slots[0].filler_kind).toBe("human");
     expect(slots[0].filler).toBe("你");
     expect(slots[0].empty).toBe(false);
+  });
+
+  it("projects a read-only stage strip and greys locked downstream slots", () => {
+    harness = createHarness({ databasePath: ":memory:" });
+    const goal = createGoal(harness, coord, {
+      title: "调研后交付",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+      gate_template_id: "research_then_deliver_v1",
+      intent: "先调研再交付",
+    });
+    const { slots, readonly, stage_strip } = listFillSlots(harness, dm, goal.id);
+    expect(readonly).toBe(true);
+    expect(stage_strip.ready).toBe(true);
+    expect(stage_strip.stages.map((s) => s.stage_key)).toEqual(["research", "deliver"]);
+    expect(stage_strip.stages[0].state).toBe("current");
+    expect(stage_strip.stages[0].label).toBe("调研");
+    expect(stage_strip.stages[1].state).toBe("locked");
+    expect(stage_strip.stages[1].label).toBe("交付");
+    expect(stage_strip.stages[1].tooltip).toBe("需先通过「调研」门禁");
+    expect(slots.some((s) => s.stage_locked)).toBe(true);
+    const locked = slots.find((s) => s.stage_locked);
+    expect(locked?.progress).toBe(STAGE_LOCKED_HUMAN);
+    expect(locked?.unlock_after_gate_def_id).toBe(stage_strip.stages[1].unlock_after_gate_def_id);
+    expect(JSON.stringify({ slots, stage_strip })).not.toMatch(/强制开工|指派给|开始跑|dispatch/);
   });
 });

@@ -30,6 +30,14 @@
     .fill-slot button.human-fill { font: inherit; font-size: 13px; font-weight: 600; border-radius: 999px; border: 1px solid #245c3d; background: #163526; color: var(--ok); padding: 5px 10px; cursor: pointer; }
     .fill-slot .who { color: var(--ink); font-weight: 600; }
     .fill-slot a { color: var(--accent); }
+    .stage-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+    .stage-node { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 13px; background: #0c1218; color: var(--muted); }
+    .stage-node[data-state="done"] { color: var(--ok); border-color: #245c3d; }
+    .stage-node[data-state="current"] { color: var(--ink); border-color: #3a5a7a; box-shadow: inset 0 0 0 1px #3a5a7a; }
+    .stage-node[data-state="locked"], .stage-node[data-state="unready"] { opacity: .72; cursor: help; }
+    .stage-unready { margin: 0 0 10px; color: var(--warn); font-size: 13px; }
+    .fill-slot.is-locked { opacity: .48; filter: grayscale(.35); cursor: help; }
+    .fill-slot.is-locked .who { color: var(--muted); }
     .empty { color: var(--muted); padding: 12px 4px 4px; }
     .empty h3 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--ink); }
     .desks-hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
@@ -267,23 +275,78 @@
           <ul class="desk-list" data-testid="desk-list">${(g.desks || []).map(deskRowHtml).join("")}</ul>
         </section>`).join("");
     }
+    const STAGE_LABELS = { research: "调研", deliver: "交付", safety: "安全" };
+    const STAGE_LOCKED_HUMAN = "阶段未解锁：先完成上一道门禁";
+    const STAGE_NEED_PRIOR = "需先通过上一道门禁";
+    const STAGE_UNREADY = "阶段信息未就绪";
+    function stageLabel(key) {
+      const raw = String(key ?? "").trim();
+      if (!raw) return STAGE_UNREADY;
+      return STAGE_LABELS[raw] || raw;
+    }
+    function stageMark(state) {
+      if (state === "done") return "✓";
+      if (state === "current") return "●";
+      if (state === "locked") return "锁";
+      return "…";
+    }
+    function stageStripHtml(strip) {
+      const stages = (strip && strip.stages) || [];
+      if (!stages.length || strip.ready === false && stages.every((s) => !s.stage_key || s.state === "unready")) {
+        return `<p class="stage-unready" data-testid="stage-unready">${STAGE_UNREADY}</p>`;
+      }
+      return `<ol class="stage-strip" data-testid="stage-strip">${stages.map((n) => {
+        const state = n.state || "unready";
+        const label = n.label || stageLabel(n.stage_key);
+        const tip = state === "locked"
+          ? (n.tooltip || (n.unlock_after_label ? ("需先通过「" + n.unlock_after_label + "」门禁") : STAGE_NEED_PRIOR))
+          : (state === "current" ? "当前" : (state === "done" ? "已过关" : STAGE_UNREADY));
+        const lockedAttrs = state === "locked"
+          ? ` data-act="stage-locked" data-unlock-after="${esc(n.unlock_after_gate_def_id || "")}" title="${esc(tip)}"`
+          : ` title="${esc(tip)}"`;
+        return `<li class="stage-node" data-testid="stage-node" data-state="${esc(state)}" data-stage-key="${esc(n.stage_key || "")}"${lockedAttrs}>
+          <span aria-hidden="true">${stageMark(state)}</span>
+          <span data-testid="stage-node-label">${esc(label)}</span>
+        </li>`;
+      }).join("")}</ol>`;
+    }
+    function showStageLockedFlash(body) {
+      const flash = $("goal-flash");
+      const code = (body && (body.code || (body.error && body.error.code))) || "stage_locked";
+      const strip = (body && (body.strip || body.message || (body.error && body.error.strip))) || "";
+      const named = body && body.details && body.details.unlock_after_label;
+      let text = STAGE_LOCKED_HUMAN;
+      if (strip && strip !== STAGE_LOCKED_HUMAN) text += " " + strip;
+      if (named) text += "（需先通过「" + named + "」门禁）";
+      flash.innerHTML = `<span data-testid="stage-locked-message">${esc(STAGE_LOCKED_HUMAN)}</span> ${esc(text.slice(STAGE_LOCKED_HUMAN.length)).trim()}`;
+      flash.className = "flash show bad";
+      flash.dataset.code = code;
+      flash.dataset.freeze = code === "freeze_active" ? "true" : "false";
+    }
     function slotHtml(slot, goal) {
-      const who = slot.empty
-        ? "还没人填"
-        : slot.filler_kind === "human"
-          ? "人填 · " + (slot.filler || "你")
-          : (slot.filler || "执行池");
-      const progress = slot.progress || "等同事填";
-      const what = slot.outcome && isHumanTitle(slot.outcome) && !/^(pending|presence|demo|chat) only$/i.test(slot.outcome)
+      const locked = slot.stage_locked === true;
+      const who = locked
+        ? "未解锁"
+        : slot.empty
+          ? "还没人填"
+          : slot.filler_kind === "human"
+            ? "人填 · " + (slot.filler || "你")
+            : (slot.filler || "执行池");
+      const progress = locked ? (slot.progress || STAGE_LOCKED_HUMAN) : (slot.progress || "等同事填");
+      const what = !locked && slot.outcome && isHumanTitle(slot.outcome) && !/^(pending|presence|demo|chat) only$/i.test(slot.outcome)
         ? slot.outcome
         : "";
       const art = slot.artifact_uri
         ? `<a data-testid="slot-artifact" href="${esc(slot.artifact_uri)}">产物</a>`
         : `<span data-testid="slot-artifact">产物未交</span>`;
-      const fillBtn = slot.empty
+      const tip = locked ? (slot.unlock_after_label ? ("需先通过「" + slot.unlock_after_label + "」门禁") : STAGE_NEED_PRIOR) : "";
+      const fillBtn = slot.empty && !locked
         ? `<button type="button" class="human-fill" data-act="human-fill" data-testid="human-fill" data-goal-id="${esc(goal.id)}" data-dispatch-policy="${esc(goal.dispatch_policy || "coordinator_only")}" data-intent="${esc(goal.intent || goal.title || "")}">我来填</button>`
         : "";
-      return `<li class="fill-slot" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}">
+      const lockedAttrs = locked
+        ? ` data-act="stage-locked" data-unlock-after="${esc(slot.unlock_after_gate_def_id || "")}" title="${esc(tip)}"`
+        : "";
+      return `<li class="fill-slot${locked ? " is-locked" : ""}" data-testid="fill-slot" data-empty="${slot.empty ? "true" : "false"}" data-stage-locked="${locked ? "true" : "false"}" data-stage-key="${esc(slot.stage_key || "")}"${lockedAttrs}>
         <span class="who" data-testid="slot-filler">${esc(who)}${what ? " · " + esc(what) : ""}</span>
         <span data-testid="slot-progress">${esc(progress)}</span>
         ${art}
@@ -312,12 +375,15 @@
       $("goals").innerHTML = goals.map((g, i) => {
         const title = sanitizeCardTitle(g.title, g.intent);
         const status = g.status_line || "等同事开工";
-        const slots = (slotSets[i] && slotSets[i].slots) || [{ empty: true, progress: "等同事填", outcome: g.intent }];
+        const pack = slotSets[i] || {};
+        const slots = pack.slots || [{ empty: true, progress: "等同事填", outcome: g.intent }];
+        const strip = pack.stage_strip;
         const team = String(g.team_group || "");
         const selected = selectedGoalId === g.id ? " is-selected" : "";
         return `<article class="goal-card${selected}" data-testid="goal-card" data-goal-id="${esc(g.id)}" data-team-group="${esc(team)}">
           <h3 class="goal-name" data-testid="goal-title">${esc(title)}</h3>
           <p class="goal-status" data-testid="goal-status">${esc(status)}</p>
+          ${stageStripHtml(strip)}
           <ul class="fill-board" data-testid="fill-board">${slots.map((s) => slotHtml(s, g)).join("")}</ul>
         </article>`;
       }).join("");
@@ -350,6 +416,38 @@
       void body;
     };
     $("goals").addEventListener("click", async (e) => {
+      const locked = e.target.closest("[data-act='stage-locked']");
+      if (locked) {
+        e.preventDefault();
+        const card = locked.closest("[data-testid='goal-card']");
+        const goalId = card && card.dataset.goalId;
+        const unlockAfter = locked.getAttribute("data-unlock-after") || "";
+        if (!goalId || !unlockAfter) {
+          showStageLockedFlash({ code: "stage_locked" });
+          return;
+        }
+        const res = await fetch("/v1/goals/" + encodeURIComponent(goalId) + "/assignments", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            pool_id: "pool_noop",
+            brief: {
+              outcome: "下游阶段",
+              constraints: [],
+              evidence_shape: ["summary_md", "artifact_uri"],
+            },
+            unlock_after_gate_def_id: unlockAfter,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        const code = body.code || (body.error && body.error.code) || "";
+        if (res.status === 423 && code === "stage_locked") {
+          showStageLockedFlash(body);
+          return;
+        }
+        showStageLockedFlash({ code: code || "stage_locked", strip: body.strip || body.message });
+        return;
+      }
       const btn = e.target.closest("[data-act='human-fill']");
       if (!btn) {
         const card = e.target.closest("[data-testid='goal-card']");
@@ -395,7 +493,13 @@
             exception_grant_id: grantId,
           }),
         });
+        const fillBody = await res.json().catch(() => ({}));
         if (!res.ok) {
+          const code = fillBody.code || (fillBody.error && fillBody.error.code) || "";
+          if (res.status === 423 && code === "stage_locked") {
+            showStageLockedFlash(fillBody);
+            return;
+          }
           flash.textContent = "没填成。人填需要允许人填，或先开一次例外。";
           flash.className = "flash show bad";
           return;

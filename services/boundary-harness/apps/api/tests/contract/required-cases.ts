@@ -43,6 +43,12 @@ export const STAGE_EDGE_MERGE_GATES = [
   "stage_unlock_after_gate_pass",
 ] as const;
 
+/** Office stage strip — Playwright `test("…")` titles must match exactly. */
+export const STAGE_STRIP_PLAYWRIGHT_GATES = [
+  "stage_strip_shows_locked_downstream",
+  "stage_locked_423_human_message",
+] as const;
+
 export const FORBIDDEN_ERROR_ALIASES = [
   "webhook_timestamp_skew",
   "webhook_signature_invalid",

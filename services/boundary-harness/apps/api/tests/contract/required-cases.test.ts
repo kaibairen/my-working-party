@@ -9,6 +9,7 @@ import {
   GAME_2048_MERGE_GATES,
   OFFICE_ROSTER_MERGE_GATES,
   STAGE_EDGE_MERGE_GATES,
+  STAGE_STRIP_PLAYWRIGHT_GATES,
 } from "./required-cases";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,20 @@ describe("Security acceptance case registry", () => {
     expect(STAGE_EDGE_MERGE_GATES).toEqual([
       "stage_locked_blocks_downstream_dispatch",
       "stage_unlock_after_gate_pass",
+    ]);
+  });
+
+  it("registers office stage-strip Playwright titles", () => {
+    const stageStripPw = readFileSync(
+      join(here, "../../../web/e2e/gate-inbox/stage-strip.spec.ts"),
+      "utf8",
+    );
+    for (const name of STAGE_STRIP_PLAYWRIGHT_GATES) {
+      expect(stageStripPw, `missing test("${name}") in stage-strip.spec.ts`).toContain(`test("${name}"`);
+    }
+    expect(STAGE_STRIP_PLAYWRIGHT_GATES).toEqual([
+      "stage_strip_shows_locked_downstream",
+      "stage_locked_423_human_message",
     ]);
   });
 

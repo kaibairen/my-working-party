@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { closeHarness, createHarness, schema, STAGE_LOCKED_STRIP, type Harness } from "@harness/domain";
+import { closeHarness, createHarness, schema, STAGE_LOCKED_HUMAN, STAGE_LOCKED_STRIP, type Harness } from "@harness/domain";
 import { zhDM } from "../../../web/copy/zh-DM";
 import { createApp } from "../../src/app";
 
@@ -94,6 +94,7 @@ describe("Domain Stage-edge P0", () => {
     expect(errCode(lockedFill.body)).not.toBe("freeze_active");
     expect(errCode(lockedFill.body)).not.toBe("forbidden");
     expect(zhDM.stageLocked).toBe(STAGE_LOCKED_STRIP);
+    expect(zhDM.stageLockedHuman).toBe(STAGE_LOCKED_HUMAN);
     expect(lockedFill.body.message).toBe(STAGE_LOCKED_STRIP);
     expect(lockedFill.body.strip).toBe(STAGE_LOCKED_STRIP);
     expect(lockedFill.body.message).not.toMatch(
@@ -296,6 +297,24 @@ describe("Domain Stage-edge P0", () => {
       body: JSON.stringify({ idempotency_key: "path-a" }),
     });
     expect(run.res.status).toBe(201);
+  });
+
+  it("office assignments project stage_strip without unlocking downstream", async () => {
+    const { app } = setup();
+    const { goal, research } = await seedStagedGoal(app);
+    const slots = await json(app, `/v1/goals/${goal.id}/assignments`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(slots.res.status).toBe(200);
+    expect(slots.body.readonly).toBe(true);
+    expect(slots.body.stage_strip.ready).toBe(true);
+    expect(slots.body.stage_strip.stages.map((s: { stage_key: string; state: string }) => [s.stage_key, s.state]))
+      .toEqual([["research", "current"], ["deliver", "locked"]]);
+    expect(slots.body.slots.some((s: { stage_locked?: boolean }) => s.stage_locked)).toBe(true);
+    const locked = slots.body.slots.find((s: { stage_locked?: boolean }) => s.stage_locked);
+    expect(locked.unlock_after_gate_def_id).toBe(research.id);
+    expect(locked.progress).toBe(zhDM.stageLockedHuman);
+    expect(JSON.stringify(slots.body)).not.toMatch(/强制开工|指派给|开始跑/);
   });
 
   it("default deliver still seeds deliver_ready_v1 with stage_key", async () => {
