@@ -4,9 +4,11 @@
 **Repo:** `kaibairen/my-working-party`  
 **Main SHA:** `8319fc07add1a87708e1aba14e8b5189055a7191`  
 (`Merge pull request #32` — Domain Stage-edge P0)  
-**Path:** `services/boundary-harness/`  
+**Path:** `services/boundary-harness/docs/acceptance/` (live-acceptance tree)  
 **Gate:** short-drama reopen — TechLead scan landed; this is CTO dogfood evidence only.  
 **Lock behavior:** unchanged. This note records a green rerun; it does not edit Domain.
+
+`harness-live-acceptance/` was searched at repo root and under `services/`; it does not exist. Sibling live-acceptance notes already live here (`GAP_FIX_ADAPTER_WORKER_2026-09-19.md`, `STAGE_EDGE_P0_TECHLEAD.md`), so this evidence is filed in the same tree — not a generic `docs/` dump.
 
 Domain Stage-edge under test: template `research_then_deliver_v1`, fill/dispatch with `unlock_after_gate_def_id` stays **423 `stage_locked`** until Inbox `decide=pass`, then fill/dispatch **201**.
 
