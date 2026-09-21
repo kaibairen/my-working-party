@@ -203,6 +203,13 @@ export function applySchema(sqlite: Database.Database): void {
   applyCompat(sqlite);
 }
 
+/** Known seed pools. Fill must re-seed these if a live DB lost the rows. */
+export const SEED_POOL_IDS = ["pool_noop", "pool_cursor"] as const;
+
+export function ensureSeededPools(sqlite: Database.Database, now: string): void {
+  seed(sqlite, now);
+}
+
 export function createHarness(opts?: {
   databasePath?: string;
   now?: () => string;
@@ -213,6 +220,8 @@ export function createHarness(opts?: {
 }): Harness {
   const databasePath = opts?.databasePath ?? process.env.DATABASE_PATH ?? ":memory:";
   const sqlite = new Database(databasePath);
+  // Wait on writer locks instead of throwing SQLITE_BUSY into the API process.
+  sqlite.pragma("busy_timeout = 5000");
   sqlite.pragma("foreign_keys = ON");
   if (databasePath !== ":memory:") {
     sqlite.pragma("journal_mode = WAL");

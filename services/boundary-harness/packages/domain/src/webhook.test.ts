@@ -71,6 +71,7 @@ describe("M3 webhook outbox", () => {
         title: "出站唤醒",
         mode: "deliver",
         coordinator_ref: "c1",
+        gate_template_id: "deliver_ready_v1",
       });
       const asg = fillAssignment(h, coord, goal.id, {
         pool_id: "pool_noop",

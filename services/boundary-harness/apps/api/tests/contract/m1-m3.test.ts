@@ -190,7 +190,12 @@ describe("M1 Cursor + Dial + Brief + MCP", () => {
     const goal = await json(app, "/v1/goals", {
       method: "POST",
       headers: headers("coordinator", "c1"),
-      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+      body: JSON.stringify({
+        title: "ship",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        gate_template_id: "deliver_ready_v1",
+      }),
     });
     const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
       method: "POST",
@@ -256,7 +261,12 @@ describe("M1 Cursor + Dial + Brief + MCP", () => {
     const goal = await json(app, "/v1/goals", {
       method: "POST",
       headers: headers("coordinator", "c1"),
-      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+      body: JSON.stringify({
+        title: "ship",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        gate_template_id: "deliver_ready_v1",
+      }),
     });
     const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
       method: "POST",

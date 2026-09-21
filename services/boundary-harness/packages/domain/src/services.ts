@@ -7,7 +7,7 @@ import { signHarnessWebhook } from "./hmac";
 import type { Actor, Dial, Role } from "./rbac";
 import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
 import { executionPoolName, normalizeDeskGroup } from "./desks";
-import type { Harness } from "./db";
+import { ensureSeededPools, SEED_POOL_IDS, type Harness } from "./db";
 import {
   freezeState,
   assignments,
@@ -102,6 +102,8 @@ export function stageLabel(stageKey: string | null | undefined): string {
 }
 
 const EXPLORE_GATE_TEMPLATES = new Set(["safety_only_v1", "research_ready_v1"]);
+/** Product/deliver Goals default to the Stage-edge chain, not a bare deliver node. */
+export const DEFAULT_DELIVER_GATE_TEMPLATE = "research_then_deliver_v1";
 const DELIVER_GATE_TEMPLATES = new Set([
   "deliver_ready_v1",
   "deliver_report_ready_v1",
@@ -144,7 +146,11 @@ function audit(
 
 function parseJson<T>(raw: string | null): T | null {
   if (!raw) return null;
-  return JSON.parse(raw) as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
 function publicPool(row: typeof pools.$inferSelect) {
@@ -243,21 +249,30 @@ function enqueueOutbox(h: Harness, type: string, payload: Record<string, unknown
     lastError: null,
     nextAttemptAt: null,
   }).run();
-  h.bus.emit(type, full);
+  try {
+    h.bus.emit(type, full);
+  } catch (err) {
+    // SSE / wake listeners must not kill fill or bind (live :8080 drop).
+    console.error("outbox bus emit failed", type, err);
+  }
   return full;
 }
 
 function publishGoalStatusChanged(h: Harness, goalId: string) {
-  const goal = h.db.select().from(goals).where(eq(goals.id, goalId)).get();
-  if (!goal) return;
-  const assignmentRows = h.db.select().from(assignments).where(eq(assignments.goalId, goalId)).all();
-  const gateRows = h.db.select().from(gateInstances).where(eq(gateInstances.goalId, goalId)).all();
-  const evidenceRows = h.db.select().from(evidenceItems).where(eq(evidenceItems.goalId, goalId)).all();
-  enqueueOutbox(h, "goal.status_changed", {
-    goal_id: goalId,
-    status_line: goalStatusLine(goal, assignmentRows, gateRows, evidenceRows),
-    ...firstBoundAssigneeBotId(assignmentRows),
-  });
+  try {
+    const goal = h.db.select().from(goals).where(eq(goals.id, goalId)).get();
+    if (!goal) return;
+    const assignmentRows = h.db.select().from(assignments).where(eq(assignments.goalId, goalId)).all();
+    const gateRows = h.db.select().from(gateInstances).where(eq(gateInstances.goalId, goalId)).all();
+    const evidenceRows = h.db.select().from(evidenceItems).where(eq(evidenceItems.goalId, goalId)).all();
+    enqueueOutbox(h, "goal.status_changed", {
+      goal_id: goalId,
+      status_line: goalStatusLine(goal, assignmentRows, gateRows, evidenceRows),
+      ...firstBoundAssigneeBotId(assignmentRows),
+    });
+  } catch (err) {
+    console.error("publishGoalStatusChanged failed", goalId, err);
+  }
 }
 
 function publicRun(row: typeof runs.$inferSelect) {
@@ -576,7 +591,7 @@ export function createGoal(h: Harness, actor: Actor, input: CreateGoalInput) {
         422,
       );
     }
-    template = template ?? "deliver_ready_v1";
+    template = template ?? DEFAULT_DELIVER_GATE_TEMPLATE;
   }
   if (mode === "explore" && template && !EXPLORE_GATE_TEMPLATES.has(template)) {
     throw new HarnessError(
@@ -686,14 +701,46 @@ export function createExceptionGrant(
   return { id, goal_id: goalId, grantee: input.grantee, expires_at: expires, scope: input.scope ?? "fill_assignment" };
 }
 
+function mergeRequiredKinds(brief: ReturnType<typeof parseBriefV1>, needed: string[]) {
+  const have = new Set(brief.evidence_shape);
+  const extra = needed.filter(
+    (k): k is EvidenceKind => (EVIDENCE_KINDS as readonly string[]).includes(k) && !have.has(k as EvidenceKind),
+  );
+  if (extra.length === 0) return brief;
+  return { ...brief, evidence_shape: [...brief.evidence_shape, ...extra] };
+}
+
+function resolveSeedPool(h: Harness, poolId: string) {
+  const id = String(poolId ?? "").trim();
+  if (!id) return undefined;
+  let pool = h.db.select().from(pools).where(eq(pools.id, id)).get();
+  if (!pool && (SEED_POOL_IDS as readonly string[]).includes(id)) {
+    ensureSeededPools(h.sqlite, h.now());
+    pool = h.db.select().from(pools).where(eq(pools.id, id)).get();
+  }
+  return pool;
+}
+
+function isSqliteBusy(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /SQLITE_BUSY|database is locked/i.test(msg);
+}
+
+function throwIfBusy(err: unknown): never {
+  if (isSqliteBusy(err)) {
+    throw new HarnessError("sqlite_busy", "database is busy; retry the write", 500);
+  }
+  throw err;
+}
+
 export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: FillAssignmentInput) {
   const goal = h.db.select().from(goals).where(eq(goals.id, goalId)).get();
   if (!goal) throw new HarnessError("not_found", `goal ${goalId} not found`, 404);
 
-  const brief = parseBriefV1(input.brief);
+  const parsedBrief = parseBriefV1(input.brief);
   const budget = parseBudget(input.budget);
 
-  const pool = h.db.select().from(pools).where(eq(pools.id, input.pool_id)).get();
+  const pool = resolveSeedPool(h, input.pool_id);
   if (!pool) throw new HarnessError("not_found", `pool ${input.pool_id} not found`, 404);
   requirePoolAccess(actor, input.pool_id);
 
@@ -702,18 +749,13 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
 
   const defs = h.db.select().from(gateDefs).where(eq(gateDefs.goalId, goalId)).all();
   const targetDefs = defsForAssignment(defs, unlockAfter);
-  for (const def of targetDefs) {
-    const needed = requiredEvidenceKinds(def.predicateId, def.predicateVersion);
-    const missing = needed.filter((k) => !brief.evidence_shape.includes(k as EvidenceKind));
-    if (missing.length > 0) {
-      throw new HarnessError(
-        "predicate_evidence_mismatch",
-        "predicate kinds must be ⊆ assignment evidence_shape",
-        400,
-        { missing },
-      );
-    }
-  }
+  const needed = [
+    ...new Set(targetDefs.flatMap((def) => requiredEvidenceKinds(def.predicateId, def.predicateVersion))),
+  ];
+  // Coordinator dogfood briefs are deliver-shaped (summary_md). Default product
+  // goals now start at research (report_md). Union required kinds instead of a
+  // spurious HTTP 400 — truly invalid briefs already 422 from parseBriefV1.
+  const brief = mergeRequiredKinds(parsedBrief, needed);
 
   const assigneeBotId = resolveAssigneeBind(actor, input.assignee_bot_id);
 
@@ -741,21 +783,25 @@ export function fillAssignment(h: Harness, actor: Actor, goalId: string, input: 
   const id = h.newId();
   const ts = h.now();
   const fillerKind = actor.role === "decision_maker" ? "human" : "bot";
-  h.db.insert(assignments).values({
-    id,
-    goalId,
-    poolId: input.pool_id,
-    briefJson: JSON.stringify(brief),
-    budgetJson: JSON.stringify(budget),
-    status,
-    risk: null,
-    createdAt: ts,
-    updatedAt: ts,
-    createdBy: actor.id,
-    fillerKind,
-    unlockAfterGateDefId: unlockAfter,
-    assigneeBotId,
-  }).run();
+  try {
+    h.db.insert(assignments).values({
+      id,
+      goalId,
+      poolId: input.pool_id,
+      briefJson: JSON.stringify(brief),
+      budgetJson: JSON.stringify(budget),
+      status,
+      risk: null,
+      createdAt: ts,
+      updatedAt: ts,
+      createdBy: actor.id,
+      fillerKind,
+      unlockAfterGateDefId: unlockAfter,
+      assigneeBotId,
+    }).run();
+  } catch (err) {
+    throwIfBusy(err);
+  }
   audit(h, actor, status === "proposed" ? "propose_assignment" : "fill_assignment", "assignment", id, {
     assignee_bot_id: assigneeBotId,
   });
@@ -776,11 +822,15 @@ export function bindAssignment(
   if (!assigneeBotId) {
     throw new HarnessError("assignee_bot_id_invalid", "assignee_bot_id is required", 422);
   }
-  h.db
-    .update(assignments)
-    .set({ assigneeBotId, updatedAt: h.now() })
-    .where(eq(assignments.id, assignmentId))
-    .run();
+  try {
+    h.db
+      .update(assignments)
+      .set({ assigneeBotId, updatedAt: h.now() })
+      .where(eq(assignments.id, assignmentId))
+      .run();
+  } catch (err) {
+    throwIfBusy(err);
+  }
   audit(h, actor, "bind_assignment", "assignment", assignmentId, { assignee_bot_id: assigneeBotId });
   publishGoalStatusChanged(h, row.goalId);
   return getAssignment(h, assignmentId);

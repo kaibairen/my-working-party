@@ -382,11 +382,13 @@ paths:
         "201":
           description: Created
         "400":
-          description: predicate_evidence_mismatch
+          description: reserved — fill must not use easy/spurious 400 (brief/shape are 422)
         "403":
           description: RBAC / human fan-out without exception
         "422":
-          description: brief_forbidden_field
+          description: brief_forbidden_field / brief_invalid
+        "500":
+          description: sqlite_busy on fill/bind (retry; process stays up)
         "423":
           description: stage_locked — prior GateDef has not been decided pass
           content:

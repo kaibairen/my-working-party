@@ -63,10 +63,13 @@ describe("office home goals + fill slots", () => {
     const goal = createGoal(harness, dm, { title: "周报交付验收", intent: "写一份能读的周报" });
     const { slots, readonly } = listFillSlots(harness, dm, goal.id);
     expect(readonly).toBe(true);
-    expect(slots).toHaveLength(1);
-    expect(slots[0].empty).toBe(true);
-    expect(slots[0].progress).toBe("等同事填");
-    expect(slots[0].outcome).toBe("写一份能读的周报");
+    const open = slots.filter((s) => !s.stage_locked);
+    expect(open).toHaveLength(1);
+    expect(open[0].empty).toBe(true);
+    expect(open[0].progress).toBe("等同事填");
+    expect(open[0].outcome).toBe("写一份能读的周报");
+    expect(open[0].stage_key).toBe("research");
+    expect(slots.some((s) => s.stage_locked && s.stage_key === "deliver")).toBe(true);
     expect(JSON.stringify(slots)).not.toMatch(/指派给|开始跑|dispatch/);
   });
 
@@ -197,6 +200,7 @@ describe("office home goals + fill slots", () => {
       title: "等你拍板目标",
       mode: "deliver",
       coordinator_ref: "coord-1",
+      gate_template_id: "deliver_ready_v1",
       intent: "交产物后拍板",
     });
     const readyAsg = fillAssignment(harness, coord, readyGoal.id, {

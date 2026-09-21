@@ -57,6 +57,7 @@ describe("syncCursorAgentRuns", () => {
       title: "周报交付验收",
       mode: "deliver",
       coordinator_ref: "coord-1",
+      gate_template_id: "deliver_ready_v1",
     });
     const asg = fillAssignment(harness, coord, goal.id, {
       pool_id: "pool_cursor",

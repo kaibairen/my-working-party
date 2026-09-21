@@ -4,6 +4,13 @@ import { dirname } from "node:path";
 import { createHarness, workerTick } from "@harness/domain";
 import { createApp } from "./app";
 
+function stayUp(err: unknown) {
+  // Bind / fill must not take :8080 down. Log and keep listening.
+  console.error("harness api: non-fatal", err);
+}
+process.on("uncaughtException", stayUp);
+process.on("unhandledRejection", stayUp);
+
 const mode = process.env.HARNESS_MODE ?? "api";
 const databasePath = process.env.DATABASE_PATH ?? "data/harness.db";
 if (databasePath !== ":memory:") {
