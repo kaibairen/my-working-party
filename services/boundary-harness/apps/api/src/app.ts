@@ -36,6 +36,7 @@ import {
   expireChannelHeartbeats,
   recordHeartbeat,
   assertMcpEntry,
+  assertEvidenceWriteEntry,
   recordGithubSnapshot,
   requireRole,
   setAdminFreeze,
@@ -339,10 +340,11 @@ export function createApp(harness: Harness) {
   v1.get("/runs/:id", (c) => c.json(getRun(c.get("harness"), c.req.param("id"))));
 
   v1.post("/runs/:id/evidence", async (c) => {
-    assertMcpEntry(c.req.header("x-harness-entry"), c.req.path);
+    const actor = c.get("actor");
+    assertEvidenceWriteEntry(c.req.header("x-harness-entry"), c.req.path, actor);
     const body = (await c.req.json()) as { items?: unknown };
     return c.json(
-      attachEvidence(c.get("harness"), c.get("actor"), c.req.param("id"), (body.items ?? []) as never),
+      attachEvidence(c.get("harness"), actor, c.req.param("id"), (body.items ?? []) as never),
       201,
     );
   });

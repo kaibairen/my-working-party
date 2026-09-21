@@ -145,6 +145,68 @@ describe("P0 linkage contracts", () => {
     expect(ready.body.gates[0].ready_result.ok).toBe(true);
   });
 
+  it("human_dm_attach_evidence_without_mcp_entry_ok", async () => {
+    const { app } = setup();
+    const { run } = await seedDeliverRun(app);
+
+    const attached = await json(app, `/v1/runs/${run.id}/evidence`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer decision_maker:you",
+      },
+      body: JSON.stringify({
+        items: [
+          { kind: "summary_md", uri: "file://summary.md" },
+          { kind: "artifact_uri", uri: "file://out.tgz" },
+        ],
+      }),
+    });
+    expect(attached.res.status).toBe(201);
+    expect(attached.body.run_id).toBe(run.id);
+    expect(attached.body.items).toHaveLength(2);
+
+    const audit = await json(app, "/v1/audit", {
+      headers: { authorization: "Bearer decision_maker:you" },
+    });
+    const row = (audit.body.audit as Array<Record<string, any>>).find(
+      (entry) => entry.action === "attach_evidence",
+    );
+    expect(row).toBeTruthy();
+    expect(row?.actor_role).toBe("decision_maker");
+    expect(row?.actor_sub).toBe("you");
+    expect(row?.payload_json?.actor_kind).toBe("human");
+
+    const coordinator = await json(app, `/v1/runs/${run.id}/evidence`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer coordinator:c1",
+      },
+      body: JSON.stringify({ items: [{ kind: "summary_md", uri: "file://human-coord.md" }] }),
+    });
+    expect(coordinator.res.status).toBe(201);
+  });
+
+  it("executor_attach_without_mcp_entry_still_403", async () => {
+    const { app } = setup();
+    const { run } = await seedDeliverRun(app);
+
+    const denied = await json(app, `/v1/runs/${run.id}/evidence`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer executor:e1",
+      },
+      body: JSON.stringify({ items: [{ kind: "summary_md", uri: "file://s.md" }] }),
+    });
+    expect(denied.res.status).toBe(403);
+    expect(errCode(denied.body)).toBe("mcp_entry_required");
+    expect(denied.body.details?.path ?? denied.body.error?.details?.path).toBe(
+      "/v1/runs/{id}/evidence",
+    );
+  });
+
   it("bot_bypass_direct_cursor_forbidden", async () => {
     const { app } = setup();
     const { run } = await seedDeliverRun(app);
