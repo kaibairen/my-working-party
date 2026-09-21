@@ -315,6 +315,7 @@ describe("domain API", () => {
     expect(officeHtml).toContain("阶段未解锁：先完成上一道门禁");
     expect(officeHtml).toContain("需先通过上一道门禁");
     expect(officeHtml).toContain("阶段信息未就绪");
+    expect(officeHtml).toContain("WenQuanYi Micro Hei");
     expect(officeHtml).toContain('data-testid="stage-strip"');
     expect(officeHtml).not.toContain("强制开工");
     expect(officeHtml).toContain("exception-grants");
