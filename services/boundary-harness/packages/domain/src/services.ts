@@ -5,7 +5,7 @@ import { parseBriefV1, parseBudget, BRIEF_FORBIDDEN_KEYS, EVIDENCE_KINDS, type E
 import { HarnessError } from "./errors";
 import { signHarnessWebhook } from "./hmac";
 import type { Actor, Dial, Role } from "./rbac";
-import { DIALS, assertSecretRef, redactPayload, requirePoolAccess, requireRole } from "./rbac";
+import { DIALS, assertSecretRef, isHumanEvidenceRole, redactPayload, requirePoolAccess, requireRole } from "./rbac";
 import { executionPoolName, normalizeDeskGroup } from "./desks";
 import type { Harness } from "./db";
 import {
@@ -772,7 +772,7 @@ export function attachEvidence(
   runId: string,
   items: EvidenceAttachItem[],
 ) {
-  requireRole(actor, ["coordinator", "executor", "service"]);
+  requireRole(actor, ["decision_maker", "coordinator", "executor", "service"]);
   const run = h.db.select().from(runs).where(eq(runs.id, runId)).get();
   if (!run) throw new HarnessError("not_found", `run ${runId} not found`, 404);
   const assignment = h.db.select().from(assignments).where(eq(assignments.id, run.assignmentId)).get();
@@ -813,7 +813,10 @@ export function attachEvidence(
     evaluatePendingDeliverGates(h, assignment.goalId);
   }
 
-  audit(h, actor, "attach_evidence", "run", runId, { count: created.length });
+  audit(h, actor, "attach_evidence", "run", runId, {
+    count: created.length,
+    actor_kind: isHumanEvidenceRole(actor.role) ? "human" : "bot",
+  });
   return { run_id: runId, items: created };
 }
 

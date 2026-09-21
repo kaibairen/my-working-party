@@ -2,7 +2,7 @@
 
 - **作者：** HarnessBridge  
 - **对接：** @HarnessBackend（落地）· @HarnessQA（anti 名）  
-- **状态：** **已落地（P0）** · dispatch + attach_evidence 强制 `x-harness-entry: mcp` → 缺则 **403** `mcp_entry_required`。MCP HTTP/stdio 代理注入该头。不阻塞 OS 级侧边栏。
+- **状态：** **已落地（P0）** · Bot/executor dispatch + attach_evidence 强制 `x-harness-entry: mcp` → 缺则 **403** `mcp_entry_required`。**办公室人兜底：** `decision_maker` / `coordinator` 可用 Bearer-only `POST /v1/runs/{id}/evidence`（不带 mcp 头），audit `actor_kind=human`。dispatch 仍一律 MCP。不打开 executor/bot 旁路。
 
 ## 1. 写路径清单（必须过鉴权）
 
@@ -22,7 +22,8 @@
 |------|------------|
 | 无 `Authorization: Bearer` 且无合法 `x-harness-role` 会话 | **401** `unauthenticated` |
 | Token/角色无效或 pool 越权 | **403** `forbidden` |
-| 调用方声明为 bot 完成态写（dispatch / evidence），但缺入口标记 | **403** `mcp_entry_required`（见下） |
+| 调用方声明为 bot 完成态写（dispatch / executor evidence），但缺入口标记 | **403** `mcp_entry_required`（见下） |
+| decision_maker / coordinator POST evidence（Bearer，无 mcp 头） | **2xx**；audit `actor_kind=human` |
 
 **入口标记（二选一，Backend 拍）：**
 
