@@ -322,6 +322,23 @@ function presenceForPool(
   });
 }
 
+/** Heartbeat desk busy/waiting only from assignments bound to this actor. Pool match is not enough. */
+function presenceForAssignee(
+  actorId: string,
+  assignmentRows: Array<{ id: string; assigneeBotId?: string | null; status: string }>,
+  runRows: Array<{ assignmentId: string; status: string }>,
+  gateRows: Array<{ assignmentId: string | null; status: string }>,
+): DeskPresence {
+  const asgs = assignmentRows.filter((a) => a.assigneeBotId && a.assigneeBotId === actorId);
+  if (asgs.length === 0) return "idle";
+  const asgIds = new Set(asgs.map((a) => a.id));
+  return presenceFor({
+    runStatuses: runRows.filter((r) => asgIds.has(r.assignmentId)).map((r) => r.status),
+    assignmentStatuses: asgs.map((a) => a.status),
+    gateStatuses: gateRows.filter((g) => g.assignmentId && asgIds.has(g.assignmentId)).map((g) => g.status),
+  });
+}
+
 /**
  * Read-only office roster. Never a dispatch / assign surface.
  *
@@ -377,7 +394,7 @@ export function listDesks(h: Harness, actor: Actor, opts: ListDesksOptions = {})
       deskRow({
         id: `agent:${beat.actorId}`,
         name,
-        presence: beat.poolId ? presenceForPool(beat.poolId, assignmentRows, runRows, gateRows) : "idle",
+        presence: presenceForAssignee(beat.actorId, assignmentRows, runRows, gateRows),
         last_heartbeat: beat.lastSeenAt,
         source: "heartbeat",
         ttl_seconds: beat.ttlSeconds,

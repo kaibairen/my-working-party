@@ -90,6 +90,7 @@ describe("listDesks presence projection", () => {
     });
     fillAssignment(harness, coord, goal.id, {
       pool_id: "pool_cursor",
+      assignee_bot_id: "cursor-bot",
       brief: { outcome: "busy desk", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
     });
     expect(listDesks(harness, dm).desks).toEqual([]);
@@ -161,6 +162,7 @@ describe("listDesks presence projection", () => {
     });
     const asg = fillAssignment(harness, coord, goal.id, {
       pool_id: "pool_noop",
+      assignee_bot_id: "deliver-bot",
       brief: { outcome: "waiting", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
     });
     await dispatchAssignment(harness, coord, asg.id, "desk-pending");
@@ -239,5 +241,34 @@ describe("listDesks presence projection", () => {
     const one = expireChannelHeartbeats(harness, dm, { actor_id: "cto" });
     expect(one.deleted).toBe(1);
     expect(listDesks(harness, dm).desks).toEqual([]);
+  });
+
+  it("desk_busy_from_assignee_heartbeat", () => {
+    let nowMs = Date.parse("2026-09-21T07:00:00.000Z");
+    harness = createHarness({ databasePath: ":memory:", now: () => new Date(nowMs).toISOString() });
+    const goal = createGoal(harness, coord, {
+      title: "绑定工位",
+      mode: "deliver",
+      coordinator_ref: "coord-1",
+    });
+    fillAssignment(harness, coord, goal.id, {
+      pool_id: "pool_cursor",
+      assignee_bot_id: "bot-bound",
+      brief: { outcome: "bound busy", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+    });
+    recordHeartbeat(harness, { id: "bot-bound", role: "executor" }, { display_name: "绑定 Bot", pool_id: "pool_cursor" });
+    recordHeartbeat(harness, { id: "bot-other", role: "executor" }, { display_name: "同池闲逛", pool_id: "pool_cursor" });
+    const live = listDesks(harness, dm);
+    expect(live.desks.find((d) => d.id === "agent:bot-bound")?.presence).toBe("busy");
+    expect(live.desks.find((d) => d.id === "agent:bot-bound")?.status).toBe("在忙");
+    expect(live.desks.find((d) => d.id === "agent:bot-other")?.presence).toBe("idle");
+    expect(JSON.stringify(live)).not.toMatch(FAKE_COLLEAGUE);
+    expect(listDesks(harness, dm, { includePools: true }).desks.every((d) => d.source === "heartbeat")).toBe(true);
+
+    nowMs += (HEARTBEAT_TTL_SECONDS + 1) * 1000;
+    const expired = listDesks(harness, dm);
+    expect(expired.desks).toEqual([]);
+    expect(expired.desks.some((d) => d.presence === "busy")).toBe(false);
+    expect(JSON.stringify(expired)).not.toMatch(FAKE_COLLEAGUE);
   });
 });

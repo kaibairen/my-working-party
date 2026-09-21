@@ -536,4 +536,135 @@ describe("P0 linkage contracts", () => {
     });
     expect(((await raw.json()) as { error: { message: string } }).error.message).toBe("forbidden_tool");
   });
+
+  it("assignment_binds_bot_id", async () => {
+    const { app } = setup();
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({ title: "绑定 Bot", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    const filled = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        assignee_bot_id: "bot-bound",
+        brief: { outcome: "bind", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    expect(filled.res.status).toBe(201);
+    expect(filled.body.assignee_bot_id).toBe("bot-bound");
+
+    const got = await json(app, `/v1/assignments/${filled.body.id}`, {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    expect(got.body.assignee_bot_id).toBe("bot-bound");
+
+    const slots = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      headers: mcpHeaders("decision_maker", "you"),
+    });
+    expect(slots.body.slots[0].assignee_bot_id).toBe("bot-bound");
+    expect(slots.body.readonly).toBe(true);
+
+    const serviceGoal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({ title: "服务绑定", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    const unbound = await json(app, `/v1/goals/${serviceGoal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("service", "svc"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "later bind", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    expect(unbound.res.status).toBe(201);
+    expect(unbound.body.assignee_bot_id).toBeNull();
+    const bound = await json(app, `/v1/assignments/${unbound.body.id}/bind`, {
+      method: "POST",
+      headers: mcpHeaders("service", "svc"),
+      body: JSON.stringify({ assignee_bot_id: "bot-svc" }),
+    });
+    expect(bound.res.status).toBe(200);
+    expect(bound.body.assignee_bot_id).toBe("bot-svc");
+
+    const dmDenied = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("decision_maker", "you"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        assignee_bot_id: "bot-sneak",
+        brief: { outcome: "no dm bind", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    expect(dmDenied.res.status).toBe(403);
+
+    const dmBind = await json(app, `/v1/assignments/${filled.body.id}/bind`, {
+      method: "POST",
+      headers: mcpHeaders("decision_maker", "you"),
+      body: JSON.stringify({ assignee_bot_id: "bot-sneak" }),
+    });
+    expect(dmBind.res.status).toBe(403);
+
+    const officeAssign = await app.request("/v1/desks/agent:bot-bound/assign", {
+      method: "POST",
+      headers: mcpHeaders("decision_maker", "you"),
+      body: "{}",
+    });
+    expect(officeAssign.status).toBe(404);
+    const officeDispatch = await app.request("/v1/desks/agent:bot-bound/dispatch", {
+      method: "POST",
+      headers: mcpHeaders("decision_maker", "you"),
+      body: "{}",
+    });
+    expect(officeDispatch.status).toBe(404);
+  });
+
+  it("desk_busy_from_assignee_heartbeat", async () => {
+    let nowMs = Date.parse("2026-09-21T07:00:00.000Z");
+    const { app } = setup(() => new Date(nowMs).toISOString());
+    const goal = await json(app, "/v1/goals", {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({ title: "工位忙", mode: "deliver", coordinator_ref: "c1" }),
+    });
+    await json(app, `/v1/goals/${goal.body.id}/assignments`, {
+      method: "POST",
+      headers: mcpHeaders("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_cursor",
+        assignee_bot_id: "bot-bound",
+        brief: { outcome: "busy", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+      }),
+    });
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-bound"),
+      body: JSON.stringify({ display_name: "绑定 Bot", pool_id: "pool_cursor" }),
+    });
+    await json(app, "/v1/agents/heartbeat", {
+      method: "POST",
+      headers: mcpHeaders("executor", "bot-other"),
+      body: JSON.stringify({ display_name: "同池闲逛", pool_id: "pool_cursor" }),
+    });
+    const live = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    const bound = live.body.desks.find((d: { id: string }) => d.id === "agent:bot-bound");
+    const other = live.body.desks.find((d: { id: string }) => d.id === "agent:bot-other");
+    expect(bound.presence).toBe("busy");
+    expect(bound.status).toBe("在忙");
+    expect(other.presence).toBe("idle");
+    expect(JSON.stringify(live.body)).not.toMatch(/交付同事|Cursor 同事/);
+    expect(live.body.desks.every((d: { source: string }) => d.source === "heartbeat")).toBe(true);
+
+    nowMs += (HEARTBEAT_TTL_SECONDS + 1) * 1000;
+    const expired = await json(app, "/v1/desks", { headers: mcpHeaders("decision_maker", "you") });
+    expect(expired.body.desks).toEqual([]);
+    expect(expired.body.desks.some((d: { presence: string }) => d.presence === "busy")).toBe(false);
+    expect(JSON.stringify(expired.body)).not.toMatch(/交付同事|Cursor 同事/);
+    const dmFlag = await json(app, "/v1/desks?include_pools=1", { headers: mcpHeaders("decision_maker", "you") });
+    expect(dmFlag.body.include_pools).toBe(false);
+    expect(dmFlag.body.desks).toEqual([]);
+  });
 });

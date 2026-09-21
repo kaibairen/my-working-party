@@ -47,6 +47,7 @@ export {
   decideGate,
   dispatchAssignment,
   fillAssignment,
+  bindAssignment,
   getAdminFreeze,
   getAssignment,
   getGoal,

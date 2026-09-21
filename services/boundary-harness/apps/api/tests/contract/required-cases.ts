@@ -48,6 +48,12 @@ export const STATUS_LINE_MERGE_GATES = [
   "status_line_all_slots_done_not_filling",
 ] as const;
 
+/** P0-B assignee bind + desk busy from heartbeat — `it("…")` titles must match exactly. */
+export const P0_B_MERGE_GATES = [
+  "assignment_binds_bot_id",
+  "desk_busy_from_assignee_heartbeat",
+] as const;
+
 /** Bridge P0-C/D MCP glove + outbound wake — `it("…")` titles must match exactly. */
 export const BRIDGE_P0CD_MERGE_GATES = [
   "bot_glove_default_evidence_ready",

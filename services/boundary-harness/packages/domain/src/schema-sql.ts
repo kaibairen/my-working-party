@@ -1,9 +1,10 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Compiled IF NOT EXISTS view of Backend migrations
  * `migrations/0001_m0_schema.sql` + `migrations/0002_m0_security.sql`
- * + `migrations/0003_stage_edge.sql` (gate_defs.stage_key, assignments.unlock_after_gate_def_id).
+ * + `migrations/0003_stage_edge.sql` (gate_defs.stage_key, assignments.unlock_after_gate_def_id)
+ * + `migrations/0004_assignee_bot_id.sql` (assignments.assignee_bot_id).
  * plus M0 runtime extras (goals.dial, goals.intent, gate_instances.assignment_id).
  * applySchema() executes the migration files as source of truth.
  */
@@ -82,6 +83,7 @@ CREATE TABLE IF NOT EXISTS assignments (
   created_by TEXT,
   filler_kind TEXT,
   unlock_after_gate_def_id TEXT,
+  assignee_bot_id TEXT,
   FOREIGN KEY (goal_id) REFERENCES goals(id),
   FOREIGN KEY (pool_id) REFERENCES pools(id)
 );
