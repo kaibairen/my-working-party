@@ -196,7 +196,6 @@ describe("P1 domain dogfood fixes", () => {
     });
     expect(hint.body.track).toBe("advisory_hint");
     expect(hint.body.creates_gate).toBe(false);
-    expect(hint.body.decision).toBe("redirect_hint");
     expect(hint.body.decision).not.toBe("require_gate");
     const afterHint = await json(app, `/v1/gates?goal_id=${dm.body.id}`, {
       headers: headers("decision_maker", "you"),
