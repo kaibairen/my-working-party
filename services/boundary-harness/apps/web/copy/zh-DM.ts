@@ -22,6 +22,13 @@ export const zhDM = {
   humanFillFail: "没填成。人填需要允许人填，或先开一次例外。",
   /** 423 stage_locked strip — no UUID; do not jail path choice inside a stage. */
   stageLocked: "上一关还没通过，先别跳到下一阶段。",
+  /** Office flash when Domain returns 423 stage_locked (not freeze_active). */
+  stageLockedHuman: "阶段未解锁：先完成上一道门禁",
+  stageNeedPriorGate: "需先通过上一道门禁",
+  stageUnready: "阶段信息未就绪",
+  stageResearch: "调研",
+  stageDeliver: "交付",
+  stageSafety: "安全",
   empty: "此刻没有待办。安静是正常的。",
   filterReady: "要你决定",
   filterDecided: "已决定",

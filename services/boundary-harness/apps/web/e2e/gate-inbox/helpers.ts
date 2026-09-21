@@ -272,6 +272,33 @@ export async function seedBusyDesk(baseURL: string, poolId = "pool_cursor") {
   return { goal, assignment: asg };
 }
 
+export async function seedResearchThenDeliver(baseURL: string, title = "调研后交付") {
+  const goal = await requireOk(
+    "create staged goal",
+    await api<{
+      id: string;
+      title: string;
+      gate_defs: Array<{ id: string; stage_key: string | null; ordinal: number }>;
+    }>(baseURL, "/v1/goals", {
+      method: "POST",
+      headers: headers.coordinator,
+      body: JSON.stringify({
+        title,
+        mode: "deliver",
+        coordinator_ref: "coord-1",
+        gate_template_id: "research_then_deliver_v1",
+        intent: "先调研再交付",
+      }),
+    }),
+  );
+  const research = (goal.gate_defs ?? []).find((d) => d.stage_key === "research");
+  const deliver = (goal.gate_defs ?? []).find((d) => d.stage_key === "deliver");
+  if (!research || !deliver) {
+    throw new Error(`staged goal missing defs: ${JSON.stringify(goal.gate_defs)}`);
+  }
+  return { goal, research, deliver };
+}
+
 export async function seedExploreNoGate(baseURL: string) {
   const goal = await requireOk(
     "create explore goal",

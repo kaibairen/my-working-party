@@ -68,8 +68,13 @@ describe("office anti-dispatch regressions", () => {
   it("office_no_start_run_button", () => {
     expect(officeHtml).toContain("我来填");
     expect(officeHtml).not.toMatch(/>(开始跑|开跑)</);
+    expect(officeHtml).not.toContain("强制开工");
     expect(officeHtml).not.toContain('data-testid="start-run"');
     expect(officeHtml).toContain("exception-grants");
+    expect(officeHtml).toContain("阶段未解锁：先完成上一道门禁");
+    expect(officeHtml).toContain("需先通过上一道门禁");
+    expect(officeHtml).toContain('data-testid="stage-strip"');
+    expect(officeHtml).toContain('data-act="stage-locked"');
   });
 
   it("fill_board_not_dispatch_console", async () => {

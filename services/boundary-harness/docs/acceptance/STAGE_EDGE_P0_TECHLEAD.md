@@ -35,6 +35,17 @@
 
 Existing anti-gates unchanged: mcp_entry, brief 422, fake desks, office dispatch forbids, freeze 423, chat_done_never_ready.
 
+## Frontend strip (office home)
+
+Read-only projection of Domain `stage_strip` on Goal cards. Locked nodes have no 强制开工;
+tooltip `需先通过「…」门禁`; linked fill slots greyed. 423 `stage_locked` flash:
+`阶段未解锁：先完成上一道门禁` (+ Domain `strip` when present).
+
+Playwright exact titles:
+
+- `stage_strip_shows_locked_downstream`
+- `stage_locked_423_human_message`
+
 ## Scan questions
 
 | Q | A |

@@ -53,6 +53,7 @@ export {
   getRun,
   listFillSlots,
   listGoals,
+  listStageStrip,
   health,
   listAudit,
   listEventsAfter,
@@ -74,7 +75,12 @@ export {
   STAGE_KEY_DELIVER,
   STAGE_KEY_RESEARCH,
   STAGE_KEY_SAFETY,
+  STAGE_LABELS,
+  STAGE_LOCKED_HUMAN,
   STAGE_LOCKED_STRIP,
+  STAGE_NEED_PRIOR_GATE,
+  STAGE_UNREADY,
+  stageLabel,
 } from "./services";
 export {
   listDesks,
@@ -103,6 +109,6 @@ export {
   type ExpireHeartbeatsInput,
   type ListDesksOptions,
 } from "./desks";
-export type { FillSlot } from "./services";
+export type { FillSlot, StageNode, StageNodeState, StageStrip } from "./services";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
 export { AUTHORITY_ACTIONS, checkPolicy } from "@harness/policy";

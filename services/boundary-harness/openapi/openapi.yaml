@@ -355,11 +355,15 @@ paths:
   /v1/goals/{id}/assignments:
     get:
       summary: List fill slots under a goal (read-only board, not dispatch)
+      description: >
+        Also projects `stage_strip` (done / current / locked) from Domain GateDef
+        stage_key + prior-gate pass. Locked downstream slots are greyed; the office
+        must not force-start them. Missing stage_key → 阶段信息未就绪.
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
         "200":
-          description: OK
+          description: OK (slots + stage_strip, readonly)
         "403":
           description: forbidden
         "404":
