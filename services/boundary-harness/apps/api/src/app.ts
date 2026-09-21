@@ -149,6 +149,7 @@ export function createApp(harness: Harness) {
   mountExample(app, "2048", ["board.js", "README.md"]);
   mountExample(app, "drama", ["README.md"]);
   app.get("/health", (c) => c.json(health(c.get("harness"))));
+  app.get("/healthz", (c) => c.json(health(c.get("harness"))));
   app.get("/openapi.yaml", (c) => {
     const yaml = readFileSync(openapiPath, "utf8");
     return c.body(yaml, 200, { "content-type": "application/yaml; charset=utf-8" });
@@ -335,9 +336,15 @@ export function createApp(harness: Harness) {
 
   v1.post("/assignments/:id/bind", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { assignee_bot_id?: string };
-    return c.json(
-      bindAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), body.assignee_bot_id),
-    );
+    try {
+      return c.json(
+        bindAssignment(c.get("harness"), c.get("actor"), c.req.param("id"), body.assignee_bot_id),
+      );
+    } catch (err) {
+      if (isHarnessError(err)) throw err;
+      console.error("bindAssignment failed", err);
+      throw new HarnessError("internal", "bind failed", 500);
+    }
   });
 
   v1.post("/assignments/:id/dispatch", async (c) => {

@@ -91,3 +91,34 @@ jobs:
         run: pnpm test:e2e:inbox
         env:
           CI: "true"
+
+  compose-smoke:
+    name: compose-smoke (api_8080_bind_no_blip)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start API
+        working-directory: services/boundary-harness
+        run: docker compose up -d --build api
+      - name: Wait until container healthy
+        working-directory: services/boundary-harness
+        run: |
+          for i in $(seq 1 40); do
+            st=$(docker inspect --format='{{.State.Health.Status}}' "$(docker compose ps -q api)" 2>/dev/null || echo starting)
+            echo "health=$st"
+            if [ "$st" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs api || true
+          exit 1
+      - name: No-blip probe
+        working-directory: services/boundary-harness
+        env:
+          BASE: http://127.0.0.1:8080
+          NO_BLIP_SECS: "5"
+          TIMEOUT_SECS: "30"
+        run: bash deploy/wait-api-healthy.sh
+      - name: Stop
+        if: always()
+        working-directory: services/boundary-harness
+        run: docker compose down -v

@@ -1,0 +1,6 @@
+# api_8080_bind_no_blip — M0 compose alias (same healthcheck as ../docker-compose.yml).
+# Compose maps host:8080 before Node listen (H2 RST). Do not curl the host port
+# until the container is healthy; CI compose-smoke waits for healthy then
+# deploy/wait-api-healthy.sh (NO_BLIP_SECS=5).
+include:
+  - ../docker-compose.yml

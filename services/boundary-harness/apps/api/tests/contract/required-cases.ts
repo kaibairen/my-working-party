@@ -55,6 +55,13 @@ export const P0_B_MERGE_GATES = [
   "outbound_publisher_posts_domain_events",
 ] as const;
 
+/** P1 domain dogfood — `it("…")` titles must match exactly. */
+export const P1_DOMAIN_MERGE_GATES = [
+  "pool_cursor_fill_not_400",
+  "product_goal_default_stage_gates",
+  "api_8080_bind_no_blip",
+] as const;
+
 /** Bridge P0-C/D MCP glove + outbound wake — `it("…")` titles must match exactly. */
 export const BRIDGE_P0CD_MERGE_GATES = [
   "bot_glove_default_evidence_ready",

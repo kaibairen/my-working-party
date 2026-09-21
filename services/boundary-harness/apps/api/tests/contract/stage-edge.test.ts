@@ -317,15 +317,19 @@ describe("Domain Stage-edge P0", () => {
     expect(JSON.stringify(slots.body)).not.toMatch(/强制开工|指派给|开始跑/);
   });
 
-  it("default deliver still seeds deliver_ready_v1 with stage_key", async () => {
+  it("default deliver seeds research_then_deliver_v1 stage keys", async () => {
     const { app } = setup();
     const goal = await json(app, "/v1/goals", {
       method: "POST",
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
     });
-    expect(goal.body.gate_defs).toHaveLength(1);
-    expect(goal.body.gate_defs[0].predicate_id).toBe("deliver_ready_v1");
-    expect(goal.body.gate_defs[0].stage_key).toBe("deliver");
+    expect(goal.body.gate_template_id).toBe("research_then_deliver_v1");
+    expect(goal.body.gate_defs).toHaveLength(2);
+    expect(goal.body.gate_defs.map((d: { stage_key: string; predicate_id: string }) => [d.stage_key, d.predicate_id]))
+      .toEqual([
+        ["research", "research_ready_v1"],
+        ["deliver", "deliver_ready_v1"],
+      ]);
   });
 });

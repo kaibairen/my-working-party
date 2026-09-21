@@ -56,7 +56,12 @@ describe("P0 linkage contracts", () => {
     const goal = await json(app, "/v1/goals", {
       method: "POST",
       headers: mcpHeaders("coordinator", "c1"),
-      body: JSON.stringify({ title: "周报交付验收", mode: "deliver", coordinator_ref: "c1" }),
+      body: JSON.stringify({
+        title: "周报交付验收",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        gate_template_id: "deliver_ready_v1",
+      }),
     });
     const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
       method: "POST",

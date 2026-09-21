@@ -86,8 +86,8 @@ describe("domain API", () => {
       headers: headers("coordinator", "c1"),
       body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
     });
-    expect(body.gate_defs).toHaveLength(1);
-    expect(body.gate_defs[0].predicate_id).toBe("deliver_ready_v1");
+    expect(body.gate_defs.map((d: { predicate_id: string }) => d.predicate_id)).toContain("deliver_ready_v1");
+    expect(body.gate_defs).toHaveLength(2);
   });
 
   it("canvas_not_required_for_dispatch — goal → assignment → noop → evidence → gate", async () => {
@@ -95,7 +95,12 @@ describe("domain API", () => {
     const goal = await json(app, "/v1/goals", {
       method: "POST",
       headers: headers("coordinator", "c1"),
-      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+      body: JSON.stringify({
+        title: "ship",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        gate_template_id: "deliver_ready_v1",
+      }),
     });
     const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
       method: "POST",
@@ -216,7 +221,12 @@ describe("domain API", () => {
     const goal = await json(app, "/v1/goals", {
       method: "POST",
       headers: headers("coordinator", "c1"),
-      body: JSON.stringify({ title: "ship", mode: "deliver", coordinator_ref: "c1" }),
+      body: JSON.stringify({
+        title: "ship",
+        mode: "deliver",
+        coordinator_ref: "c1",
+        gate_template_id: "deliver_ready_v1",
+      }),
     });
     const asg = await json(app, `/v1/goals/${goal.body.id}/assignments`, {
       method: "POST",

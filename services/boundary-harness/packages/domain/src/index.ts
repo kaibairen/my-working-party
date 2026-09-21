@@ -38,7 +38,15 @@ export {
 export { WEBHOOK_SKEW_SECONDS, signHarnessWebhook, verifyHarnessWebhook } from "./hmac";
 export { schema } from "./schema";
 export { SCHEMA_SQL, SCHEMA_VERSION } from "./schema-sql";
-export { applySchema, closeHarness, createHarness, type Harness, type Db } from "./db";
+export {
+  applySchema,
+  closeHarness,
+  createHarness,
+  ensureSeededPools,
+  SEED_POOL_IDS,
+  type Harness,
+  type Db,
+} from "./db";
 export {
   attachEvidence,
   createExceptionGrant,
@@ -73,6 +81,7 @@ export {
   setGoalDial,
   assertAdminNotFrozen,
   assertNoClientStatusWrite,
+  DEFAULT_DELIVER_GATE_TEMPLATE,
   STAGE_KEY_DELIVER,
   STAGE_KEY_RESEARCH,
   STAGE_KEY_SAFETY,
@@ -118,3 +127,4 @@ export {
 export type { FillSlot, StageNode, StageNodeState, StageStrip } from "./services";
 export { PolicyCheckResponse, advisoryBlocksDispatch } from "./policy-response";
 export { AUTHORITY_ACTIONS, checkPolicy } from "@harness/policy";
+export { evaluateReady, requiredEvidenceKinds, RESEARCH_READY_V1 } from "@harness/ready";

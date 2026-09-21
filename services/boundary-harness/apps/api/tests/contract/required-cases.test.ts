@@ -12,6 +12,7 @@ import {
   STAGE_EDGE_MERGE_GATES,
   STAGE_STRIP_PLAYWRIGHT_GATES,
   P0_B_MERGE_GATES,
+  P1_DOMAIN_MERGE_GATES,
   STATUS_LINE_MERGE_GATES,
   STATUS_LINE_PLAYWRIGHT_GATES,
 } from "./required-cases";
@@ -128,6 +129,18 @@ describe("Security acceptance case registry", () => {
     expect(officeHomePw).toContain("toHaveText(apiLine)");
     expect(officeHomePw).toContain("等你拍板");
     expect(STATUS_LINE_PLAYWRIGHT_GATES).toEqual(["status_line_all_slots_done_not_filling"]);
+  });
+
+  it("registers P1 domain dogfood freeze names", () => {
+    const p1Src = readFileSync(join(here, "p1-domain.test.ts"), "utf8");
+    for (const name of P1_DOMAIN_MERGE_GATES) {
+      expect(p1Src, `missing it("${name}") in p1-domain.test.ts`).toContain(`it("${name}"`);
+    }
+    expect(P1_DOMAIN_MERGE_GATES).toEqual([
+      "pool_cursor_fill_not_400",
+      "product_goal_default_stage_gates",
+      "api_8080_bind_no_blip",
+    ]);
   });
 
   it("registers Bridge P0-C/D freeze names", () => {

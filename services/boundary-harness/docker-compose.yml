@@ -18,11 +18,14 @@ services:
       - "8080:8080"
     volumes:
       - harness-data:/app/data
+    # api_8080_bind_no_blip — Backend early-listen + this healthcheck; smoke waits for healthy
+    # so host:8080 is not curled during the pre-listen RST window (compose H2).
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health || wget -qO- http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 15s
 
   worker:
     build:

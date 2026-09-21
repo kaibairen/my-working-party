@@ -26,7 +26,7 @@ req health -X GET "$BASE/health"
 req openapi -X GET "$BASE/openapi.yaml"
 
 req goal -X POST "$BASE/v1/goals" "${H[@]}" \
-  -d '{"title":"M0 e2e","mode":"deliver","coordinator_ref":"coord-1"}'
+  -d '{"title":"M0 e2e","mode":"deliver","coordinator_ref":"coord-1","gate_template_id":"deliver_ready_v1"}'
 GID=$(python3 -c 'import json;print(json.load(open("'"$OUT"'/goal.json"))["id"])')
 
 req assignment -X POST "$BASE/v1/goals/$GID/assignments" "${H[@]}" \
