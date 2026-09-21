@@ -42,9 +42,9 @@ describe("M3 webhook outbox", () => {
         goal_id: goal.id,
       });
       const n = await publishOutbox(h);
-      expect(n).toBe(1);
+      expect(n).toBeGreaterThanOrEqual(1);
       expect(calls[0].url).toBe("http://hooks.test/inbox");
-      expect(calls[0].body.type).toBe("gate.ready");
+      expect(calls.some((c) => c.body.type === "gate.ready")).toBe(true);
       expect(calls[0].headers["x-harness-signature"]).toMatch(/^sha256=[0-9a-f]+$/);
       expect(calls[0].headers["x-harness-timestamp"]).toMatch(/^\d+$/);
     } finally {

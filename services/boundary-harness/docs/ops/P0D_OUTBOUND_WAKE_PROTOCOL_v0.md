@@ -12,7 +12,7 @@
 3. 类型：`goal.status_changed` · `gate.ready` · `stage.unlocked`（`stage.unlocked` 即使 Domain 后到也先认）  
 4. **无 `assignee_bot_id` / `assignee_bot_ids[]` → 跳过唤醒**（不爆炸）  
 5. Wake = remind only：只 structured log / ping 目标 Bot；**不**刷决策人主聊天；**不**代 `attach_evidence`  
-6. P0-B 绑定列前：默认 wake = structured log（no-op 可接受）
+6. P0-B bind 已落地：`assignments.assignee_bot_id`。Domain 出站契约：[CONTRACT_DOMAIN_OUTBOUND_EVENTS_P0D_v0.md](../m4/CONTRACT_DOMAIN_OUTBOUND_EVENTS_P0D_v0.md)。Publisher：`publishOutbox` → `POST /hooks/domain-events`。
 
 ## Payload（Backend 冻结）
 

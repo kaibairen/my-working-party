@@ -12,7 +12,7 @@ if (databasePath !== ":memory:") {
 
 const harness = createHarness({
   databasePath,
-  webhookUrl: process.env.WEBHOOK_URL,
+  webhookUrl: process.env.WEBHOOK_URL ?? process.env.DOMAIN_EVENTS_URL,
 });
 const port = Number(process.env.PORT ?? 8080);
 
