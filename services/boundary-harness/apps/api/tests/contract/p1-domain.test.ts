@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
@@ -427,12 +427,33 @@ describe("P1 domain dogfood fixes", () => {
     }
 
     const here = dirname(fileURLToPath(import.meta.url));
-    const wait = readFileSync(join(here, "../../../../deploy/wait-api-healthy.sh"), "utf8");
+    const waitPath = join(here, "../../../../deploy/wait-api-healthy.sh");
+    const wait = readFileSync(waitPath, "utf8");
     expect(wait).toContain("api_8080_bind_no_blip");
     expect(wait).toMatch(/NO_BLIP_SECS/);
     expect(wait).toMatch(/\/healthz/);
     expect(wait).toMatch(/BASE/);
     expect(wait).toMatch(/TIMEOUT_SECS/);
+    expect(wait).toMatch(/exit 2/);
+    expect(statSync(waitPath).mode & 0o111).toBeTruthy();
+
+    const compose = readFileSync(join(here, "../../../../docker-compose.yml"), "utf8");
+    expect(compose).toContain("api_8080_bind_no_blip");
+    expect(compose).toMatch(/wget[^\\n]*\/health \|\| wget[^\\n]*\/healthz/);
+    expect(compose).toMatch(/interval:\s*2s/);
+    expect(compose).toMatch(/timeout:\s*2s/);
+    expect(compose).toMatch(/retries:\s*15/);
+    expect(compose).toMatch(/start_period:\s*15s/);
+
+    const m0 = readFileSync(join(here, "../../../../deploy/docker-compose.m0.yml"), "utf8");
+    expect(m0).toContain("api_8080_bind_no_blip");
+    expect(m0).toContain("wait-api-healthy");
+
+    const ci = readFileSync(join(here, "../../../../../../.github/workflows/harness-m0.yml"), "utf8");
+    expect(ci).toContain("compose-smoke");
+    expect(ci).toContain("wait-api-healthy.sh");
+    expect(ci).toMatch(/NO_BLIP_SECS:\s*"5"/);
+    expect(ci).toMatch(/healthy/);
 
     const indexSrc = readFileSync(join(here, "../../src/index.ts"), "utf8");
     expect(indexSrc).toContain("startApiServer({ exitOnBusy: true })");
