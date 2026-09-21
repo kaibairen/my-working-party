@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { closeHarness, createHarness, schema, type Harness } from "@harness/domain";
+import { closeHarness, createHarness, schema, STAGE_LOCKED_STRIP, type Harness } from "@harness/domain";
 import { createApp } from "../../src/app";
 
 const headers = (role: string, actor = role) => ({
@@ -92,6 +92,11 @@ describe("Domain Stage-edge P0", () => {
     expect(errCode(lockedFill.body)).toBe("stage_locked");
     expect(errCode(lockedFill.body)).not.toBe("freeze_active");
     expect(errCode(lockedFill.body)).not.toBe("forbidden");
+    expect(lockedFill.body.message).toBe(STAGE_LOCKED_STRIP);
+    expect(lockedFill.body.strip).toBe(STAGE_LOCKED_STRIP);
+    expect(lockedFill.body.message).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
 
     const ts = h.now();
     const lockedId = h.newId();
@@ -123,6 +128,8 @@ describe("Domain Stage-edge P0", () => {
     expect(errCode(lockedDispatch.body)).toBe("stage_locked");
     expect(errCode(lockedDispatch.body)).not.toBe("freeze_active");
     expect(errCode(lockedDispatch.body)).not.toBe("dial_frozen");
+    expect(lockedDispatch.body.message).toBe(STAGE_LOCKED_STRIP);
+    expect(lockedDispatch.body.strip).toBe(STAGE_LOCKED_STRIP);
     expect(lockedDispatch.body.details?.unlock_after_gate_def_id ?? lockedDispatch.body.error?.details?.unlock_after_gate_def_id)
       .toBe(research.id);
   });

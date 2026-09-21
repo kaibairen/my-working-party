@@ -74,6 +74,7 @@ export {
   STAGE_KEY_DELIVER,
   STAGE_KEY_RESEARCH,
   STAGE_KEY_SAFETY,
+  STAGE_LOCKED_STRIP,
 } from "./services";
 export {
   listDesks,

@@ -389,7 +389,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
-              example: { code: stage_locked, message: "prior stage gate has not passed" }
+              example:
+                {
+                  code: stage_locked,
+                  message: "上一关还没通过，先别跳到下一阶段。",
+                  strip: "上一关还没通过，先别跳到下一阶段。",
+                }
   /v1/goals/{id}/exception-grants:
     post:
       summary: Decision-maker scoped human fan-out grant
@@ -449,7 +454,12 @@ paths:
                 freeze:
                   value: { code: freeze_active, message: "Freeze enabled; new dispatch rejected" }
                 stage:
-                  value: { code: stage_locked, message: "prior stage gate has not passed" }
+                  value:
+                    {
+                      code: stage_locked,
+                      message: "上一关还没通过，先别跳到下一阶段。",
+                      strip: "上一关还没通过，先别跳到下一阶段。",
+                    }
   /v1/runs/{id}:
     get:
       summary: Get Run (advisory; MUST NOT be used as Gate ready)
@@ -931,6 +941,9 @@ components:
             - optimistic_lock
         message:
           type: string
+        strip:
+          type: string
+          description: Human Frontend strip. stage_locked has no UUID and does not script path choice.
         keys:
           type: array
           items: { type: string }

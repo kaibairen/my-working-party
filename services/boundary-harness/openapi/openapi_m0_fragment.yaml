@@ -59,7 +59,12 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorBody" }
-              example: { code: stage_locked, message: "prior stage gate has not passed" }
+              example:
+                {
+                  code: stage_locked,
+                  message: "上一关还没通过，先别跳到下一阶段。",
+                  strip: "上一关还没通过，先别跳到下一阶段。",
+                }
   /v1/assignments/{id}/dispatch:
     post:
       summary: Create Run; Idempotency-Key; blocked when freeze_active or stage_locked
@@ -76,7 +81,12 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorBody" }
-              example: { code: stage_locked, message: "prior stage gate has not passed" }
+              example:
+                {
+                  code: stage_locked,
+                  message: "上一关还没通过，先别跳到下一阶段。",
+                  strip: "上一关还没通过，先别跳到下一阶段。",
+                }
   /v1/runs/{id}/evidence:
     post:
       summary: Attach evidence (only completion path)
@@ -278,6 +288,9 @@ components:
             - predicate_evidence_mismatch
             - optimistic_lock
         message: { type: string }
+        strip:
+          type: string
+          description: Human Frontend strip. stage_locked has no UUID.
         keys:
           type: array
           items: { type: string }

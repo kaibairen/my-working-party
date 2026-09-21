@@ -14,6 +14,7 @@
 
 2. **Hard edge (harness ≠ jail)**
    - fill / dispatch with `unlock_after_gate_def_id` while that gate has no `gate_decisions.decision=pass` → **423 `stage_locked`**.
+   - Human body for Frontend strip (no UUID): `上一关还没通过，先别跳到下一阶段。` (`message` + `strip`).
    - Ready-but-not-passed still locks. `freeze_active` / `forbidden` / 422 are **not** used for this.
    - No unlock_after → first-stage / unstaged work. Multiple assignments and `change_path` stay free **inside** a stage.
    - Evidence-shape check is per target stage, not every GateDef on the Goal (so research briefs are not forced to carry deliver kinds).

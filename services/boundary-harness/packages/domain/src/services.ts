@@ -52,6 +52,9 @@ export const STAGE_KEY_RESEARCH = "research";
 export const STAGE_KEY_DELIVER = "deliver";
 export const STAGE_KEY_SAFETY = "safety";
 
+/** Frontend strip — no UUID, no path script. Only: do not jump an uncleared gate. */
+export const STAGE_LOCKED_STRIP = "上一关还没通过，先别跳到下一阶段。";
+
 const EXPLORE_GATE_TEMPLATES = new Set(["safety_only_v1", "research_ready_v1"]);
 const DELIVER_GATE_TEMPLATES = new Set([
   "deliver_ready_v1",
@@ -260,9 +263,10 @@ function assertStageUnlocked(
     );
   }
   if (!priorGatePassed(h, unlockAfterId)) {
-    throw new HarnessError("stage_locked", "prior stage gate has not passed", 423, {
+    throw new HarnessError("stage_locked", STAGE_LOCKED_STRIP, 423, {
       unlock_after_gate_def_id: unlockAfterId,
       stage_key: def.stageKey,
+      strip: STAGE_LOCKED_STRIP,
     });
   }
 }

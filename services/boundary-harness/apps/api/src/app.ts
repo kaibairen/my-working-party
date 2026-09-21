@@ -110,17 +110,20 @@ export function createApp(harness: Harness) {
 
   app.onError((err, c) => {
     if (isHarnessError(err)) {
-      const keys =
-        err.details && typeof err.details === "object" && err.details !== null && "keys" in err.details
-          ? (err.details as { keys?: string[] }).keys
+      const detailObj =
+        err.details && typeof err.details === "object" && err.details !== null
+          ? (err.details as { keys?: string[]; strip?: string })
           : undefined;
+      const keys = detailObj?.keys;
+      const strip = detailObj?.strip;
       return c.json(
         {
           code: err.code,
           message: err.message,
+          strip,
           keys,
           details: err.details ?? null,
-          error: { code: err.code, message: err.message, details: err.details ?? null },
+          error: { code: err.code, message: err.message, details: err.details ?? null, strip },
         },
         err.status as 400 | 401 | 403 | 404 | 405 | 409 | 422 | 423 | 500,
       );
