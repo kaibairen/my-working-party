@@ -186,6 +186,19 @@ describe("P1 domain dogfood fixes", () => {
     const lockedDeliver = slots.body.slots.find((s: { stage_locked?: boolean; stage_key?: string }) => s.stage_locked && s.stage_key === "deliver");
     expect(lockedDeliver.unlock_after_gate_def_id).toBe(researchDef.id);
 
+    const hint = await json(app, "/v1/policy/check", {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({ action: "change_path", track: "advisory_hint", goal_id: dm.body.id }),
+    });
+    expect(hint.body.track).toBe("advisory_hint");
+    expect(hint.body.creates_gate).toBe(false);
+    expect(hint.body.decision).not.toBe("require_gate");
+    const afterHint = await json(app, `/v1/gates?goal_id=${dm.body.id}`, {
+      headers: headers("decision_maker", "you"),
+    });
+    expect(afterHint.body.gates).toEqual([]);
+
     const researchAsg = await json(app, `/v1/goals/${dm.body.id}/assignments`, {
       method: "POST",
       headers: headers("coordinator", "c1"),
@@ -297,18 +310,13 @@ describe("P1 domain dogfood fixes", () => {
     expect(stuffed.res.status).toBe(422);
     expect(stuffed.body.code ?? stuffed.body.error?.code).toBe("brief_forbidden_field");
 
-    const hint = await json(app, "/v1/policy/check", {
+    const playbook = await json(app, "/v1/goals", {
       method: "POST",
-      headers: headers("executor", "e1"),
-      body: JSON.stringify({ action: "change_path", track: "advisory_hint", goal_id: dm.body.id }),
-    });
-    expect(hint.body.track).toBe("advisory_hint");
-    expect(hint.body.creates_gate).toBe(false);
-    expect(hint.body.decision).not.toBe("require_gate");
-    const afterHint = await json(app, `/v1/gates?goal_id=${dm.body.id}`, {
       headers: headers("decision_maker", "you"),
+      body: JSON.stringify({ title: "技能塞剧本", playbook: "先调研再交", steps: ["research.md"] }),
     });
-    expect(afterHint.body.gates).toEqual([]);
+    expect(playbook.res.status).toBe(422);
+    expect(playbook.body.code ?? playbook.body.error?.code).toBe("brief_forbidden_field");
   });
 
   it("api_8080_bind_no_blip", async () => {
