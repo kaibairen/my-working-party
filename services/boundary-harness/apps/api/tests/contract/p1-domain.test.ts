@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  BRIEF_FORBIDDEN_KEYS,
   closeHarness,
   createHarness,
   DEFAULT_DELIVER_GATE_TEMPLATE,
@@ -130,13 +131,15 @@ describe("P1 domain dogfood fixes", () => {
     expect(dm.res.status).toBe(201);
     expect(dm.body.mode).toBe("deliver");
     expect(dm.body.gate_template_id).toBe("research_then_deliver_v1");
+    expect(dm.body.gate_defs).not.toEqual([]);
+    expect(dm.body.gate_defs.length).toBeGreaterThan(0);
     expect(dm.body.gate_defs.map((d: { stage_key: string; predicate_id: string }) => [d.stage_key, d.predicate_id]))
       .toEqual([
         [STAGE_KEY_RESEARCH, "research_ready_v1"],
         [STAGE_KEY_DELIVER, "deliver_ready_v1"],
       ]);
     expect(dm.body.gate_defs[0].predicate_version).toBe(1);
-    expect(dm.body.gate_defs).not.toHaveLength(0);
+    expect(BRIEF_FORBIDDEN_KEYS).toEqual(expect.arrayContaining(["steps", "script", "playbook"]));
     const researchDef = dm.body.gate_defs.find((d: { stage_key: string }) => d.stage_key === STAGE_KEY_RESEARCH);
     const deliverDef = dm.body.gate_defs.find((d: { stage_key: string }) => d.stage_key === STAGE_KEY_DELIVER);
     expect(researchDef?.id).toBeTruthy();
@@ -193,6 +196,7 @@ describe("P1 domain dogfood fixes", () => {
     });
     expect(hint.body.track).toBe("advisory_hint");
     expect(hint.body.creates_gate).toBe(false);
+    expect(hint.body.decision).toBe("redirect_hint");
     expect(hint.body.decision).not.toBe("require_gate");
     const afterHint = await json(app, `/v1/gates?goal_id=${dm.body.id}`, {
       headers: headers("decision_maker", "you"),
@@ -215,6 +219,28 @@ describe("P1 domain dogfood fixes", () => {
     });
     expect(researchRun.res.status).toBe(201);
 
+    const verbal = await json(app, "/v1/policy/check", {
+      method: "POST",
+      headers: headers("executor", "e1"),
+      body: JSON.stringify({
+        action: "chat_done",
+        track: "advisory_hint",
+        goal_id: dm.body.id,
+        context: { text: "done", verbal: true, oral: true },
+      }),
+    });
+    expect(verbal.body.track).toBe("advisory_hint");
+    expect(verbal.body.creates_gate).toBe(false);
+    expect(verbal.body.decision).toBe("redirect_hint");
+
+    const dial = await json(app, `/v1/goals/${dm.body.id}/dial`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({ dial: "guided" }),
+    });
+    expect(dial.res.status).toBe(200);
+    expect(dial.body.dial).toBe("guided");
+
     await json(app, `/v1/runs/${researchRun.body.id}/evidence`, {
       method: "POST",
       headers: headers("executor", "e1"),
@@ -224,6 +250,18 @@ describe("P1 domain dogfood fixes", () => {
       headers: headers("decision_maker", "you"),
     });
     expect(shotReady.body.gates).toEqual([]);
+
+    const verbalNeverUnlock = await json(app, `/v1/goals/${dm.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: { outcome: "交付", constraints: [], evidence_shape: ["summary_md", "artifact_uri"] },
+        unlock_after_gate_def_id: researchDef.id,
+      }),
+    });
+    expect(verbalNeverUnlock.res.status).toBe(423);
+    expect(errCode(verbalNeverUnlock.body)).toBe("stage_locked");
 
     await json(app, `/v1/runs/${researchRun.body.id}/evidence`, {
       method: "POST",
@@ -313,10 +351,27 @@ describe("P1 domain dogfood fixes", () => {
     const playbook = await json(app, "/v1/goals", {
       method: "POST",
       headers: headers("decision_maker", "you"),
-      body: JSON.stringify({ title: "技能塞剧本", playbook: "先调研再交", steps: ["research.md"] }),
+      body: JSON.stringify({ title: "技能塞剧本", playbook: "先调研再交", script: "research.md" }),
     });
     expect(playbook.res.status).toBe(422);
     expect(playbook.body.code ?? playbook.body.error?.code).toBe("brief_forbidden_field");
+
+    const stuffedFill = await json(app, `/v1/goals/${explore.body.id}/assignments`, {
+      method: "POST",
+      headers: headers("coordinator", "c1"),
+      body: JSON.stringify({
+        pool_id: "pool_noop",
+        brief: {
+          outcome: "调研剧本",
+          constraints: [],
+          evidence_shape: ["report_md"],
+          playbook: "先开调研技能",
+          steps: ["写报告"],
+        },
+      }),
+    });
+    expect(stuffedFill.res.status).toBe(422);
+    expect(errCode(stuffedFill.body)).toBe("brief_forbidden_field");
   });
 
   it("api_8080_bind_no_blip", async () => {
