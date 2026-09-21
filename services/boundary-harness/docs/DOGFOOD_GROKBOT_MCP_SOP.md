@@ -12,7 +12,7 @@ pnpm --filter @harness/api dev          # Domain :8080
 pnpm --filter @harness/mcp-server start:http   # HTTP 手套 :8787/mcp
 ```
 
-健康检查：`GET http://127.0.0.1:8080/health` · `GET http://127.0.0.1:8787/healthz` → `{"ok":true,"api":"http://127.0.0.1:8080"}`。
+健康检查：`GET http://127.0.0.1:8080/health` · `GET http://127.0.0.1:8787/healthz` → `{"ok":true,"api":"http://127.0.0.1:8080"}`。Compose 起 API 后用 `deploy/wait-api-healthy.sh`（`api_8080_bind_no_blip`，`NO_BLIP_SECS=5`）再打业务口，不要把「端口已开」当绿。
 
 ## 2. Bot connector（同机）
 

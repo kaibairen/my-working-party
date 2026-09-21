@@ -18,10 +18,13 @@ services:
     volumes:
       - harness-data:/app/data
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      # api_8080_bind_no_blip — treat listen-ready /health||/healthz only; not TCP-open.
+      # Complementary to Backend H1 early-listen (bc-cb490333). CI then runs wait-api-healthy.sh.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null || wget -qO- http://127.0.0.1:8080/healthz >/dev/null"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 15s
 
   worker:
     build:
@@ -39,7 +42,8 @@ services:
     volumes:
       - harness-data:/app/data
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     profiles: ["split"]
 
 volumes:

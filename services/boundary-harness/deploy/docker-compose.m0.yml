@@ -1,0 +1,5 @@
+# M0 compose entry (api_8080_bind_no_blip).
+# Healthcheck + wait-api-healthy.sh live on ../docker-compose.yml.
+# Prefer: cd services/boundary-harness && docker compose up api
+include:
+  - ../docker-compose.yml
