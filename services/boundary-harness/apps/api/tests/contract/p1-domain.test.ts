@@ -426,12 +426,24 @@ describe("P1 domain dogfood fixes", () => {
       await started.close();
     }
 
-    const wait = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../../../../deploy/wait-api-healthy.sh"),
-      "utf8",
-    );
+    const here = dirname(fileURLToPath(import.meta.url));
+    const wait = readFileSync(join(here, "../../../../deploy/wait-api-healthy.sh"), "utf8");
     expect(wait).toContain("api_8080_bind_no_blip");
     expect(wait).toMatch(/NO_BLIP_SECS/);
     expect(wait).toMatch(/\/healthz/);
+    expect(wait).toMatch(/BASE/);
+    expect(wait).toMatch(/TIMEOUT_SECS/);
+
+    const indexSrc = readFileSync(join(here, "../../src/index.ts"), "utf8");
+    expect(indexSrc).toContain("startApiServer({ exitOnBusy: true })");
+    expect(indexSrc).toMatch(/EADDRINUSE/);
+    expect(indexSrc).toMatch(/process\.exit\(2\)/);
+    expect(indexSrc).not.toMatch(/createHarness\s*\(/);
+
+    const serverSrc = readFileSync(join(here, "../../src/server.ts"), "utf8");
+    const serveAt = serverSrc.indexOf("serve(");
+    const migrateAt = serverSrc.indexOf("createHarness");
+    expect(serveAt).toBeGreaterThan(-1);
+    expect(migrateAt).toBeGreaterThan(serveAt);
   });
 });
