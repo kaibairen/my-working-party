@@ -45,6 +45,15 @@ Registries in `apps/api/tests/contract/required-cases.ts`. CI red if a freeze na
 | Score updates | `game_2048_score_updates` | `examples/2048/board.test.ts` |
 | New game resets | `game_2048_new_game_resets` | `examples/2048/board.test.ts` |
 
+### P0-A status_line — Domain `STATUS_LINE_MERGE_GATES` + shell `STATUS_LINE_PLAYWRIGHT_GATES`
+
+| Gate | Title | File |
+|------|-------|------|
+| Domain all-slots-done / ready is not filling | `status_line_all_slots_done_not_filling` | `office.test.ts` |
+| UI mirrors API (`等你拍板`, never `待拍板` / `同事在填`) | `status_line_all_slots_done_not_filling` | `office-home.spec.ts` |
+
+Shell paints Domain `goal.status_line` as-is. Missing line → Domain waiting `等同事开工` only. Never invent `待拍板` or rewrite filling. Desks paint Domain `presence` + fresh heartbeat; no fake busy; no dispatch UI.
+
 Extra (not this freeze): `fill_slots_pool_labels_not_colleague`. English 2048 merge smokes stay as non-gate cases.
 
 M4 MCP glove dogfood: [DOGFOOD_GROKBOT_MCP_SOP.md](../DOGFOOD_GROKBOT_MCP_SOP.md).

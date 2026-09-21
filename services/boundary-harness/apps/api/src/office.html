@@ -233,10 +233,32 @@
         el.classList.toggle("is-focus", Boolean(focus) && el.getAttribute("data-group") === focus);
       });
     }
+    const DESK_STATUS = { busy: "在忙", waiting_evidence: "等证据", idle: "空闲" };
+    const HEARTBEAT_TTL_FALLBACK = 90;
+    const STATUS_LINE_WAITING = "等同事开工";
+    function heartbeatFresh(d) {
+      const iso = d && d.last_heartbeat;
+      if (!iso) return false;
+      const then = Date.parse(iso);
+      if (!Number.isFinite(then)) return false;
+      const ttl = Number(d.ttl_seconds);
+      const windowSec = Number.isFinite(ttl) && ttl > 0 ? ttl : HEARTBEAT_TTL_FALLBACK;
+      return Date.now() - then < windowSec * 1000;
+    }
+    function deskPresence(d) {
+      const raw = String((d && d.presence) || "");
+      if (raw === "busy" || raw === "waiting_evidence" || raw === "idle") return raw;
+      return "idle";
+    }
+    function goalStatusLine(goal) {
+      const raw = typeof goal.status_line === "string" ? goal.status_line.trim() : "";
+      return raw || STATUS_LINE_WAITING;
+    }
     function deskRowHtml(d) {
+      if (!heartbeatFresh(d)) return "";
       const name = String(d.name || "Bot");
-      const status = String(d.status || "空闲");
-      const presence = String(d.presence || "idle");
+      const presence = deskPresence(d);
+      const status = String(d.status || "").trim() || DESK_STATUS[presence] || DESK_STATUS.idle;
       const avatar = String(d.avatar || name.slice(0, 1));
       const group = String(d.group || "其他");
       return `<li class="desk-row" data-testid="desk-row" data-presence="${esc(presence)}" data-group="${esc(group)}" draggable="false">
@@ -245,7 +267,7 @@
         <span class="desk-meta">
           <span class="desk-dot" data-testid="desk-dot" aria-hidden="true"></span>
           <span data-testid="desk-status">${esc(status)}</span>
-          ${d.last_heartbeat ? `<span data-testid="desk-heartbeat">${esc(relativeTime(d.last_heartbeat))}</span>` : ""}
+          <span data-testid="desk-heartbeat">${esc(relativeTime(d.last_heartbeat))}</span>
         </span>
       </li>`;
     }
@@ -263,12 +285,19 @@
     }
     function renderRoster(desks, groups) {
       const root = $("roster");
-      const list = desks || [];
+      const list = (desks || []).filter(heartbeatFresh);
       if (!list.length) {
         root.innerHTML = `<p class="empty" data-testid="desks-empty">还没有 Bot 报心跳</p>`;
         return;
       }
-      const sections = rosterGroups(list, groups);
+      const liveIds = new Set(list.map((d) => d.id));
+      const liveGroups = Array.isArray(groups)
+        ? groups.map((g) => ({
+            ...g,
+            desks: (g.desks || []).filter((d) => liveIds.has(d.id) && heartbeatFresh(d)),
+          }))
+        : undefined;
+      const sections = rosterGroups(list, liveGroups).filter((g) => (g.desks || []).length > 0);
       root.innerHTML = sections.map((g) => `
         <section class="desk-group" data-testid="desk-group" data-group="${esc(g.name)}">
           <h3 class="desk-group-title" data-testid="desk-group-title">${esc(g.name)}</h3>
@@ -374,7 +403,7 @@
       ));
       $("goals").innerHTML = goals.map((g, i) => {
         const title = sanitizeCardTitle(g.title, g.intent);
-        const status = g.status_line || "等同事开工"; // Domain SoT — ready=等你拍板; do not invent 待拍板/同事在填
+        const status = goalStatusLine(g);
         const pack = slotSets[i] || {};
         const slots = pack.slots || [{ empty: true, progress: "等同事填", outcome: g.intent }];
         const strip = pack.stage_strip;

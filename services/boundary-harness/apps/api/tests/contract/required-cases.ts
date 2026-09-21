@@ -54,6 +54,11 @@ export const STAGE_STRIP_PLAYWRIGHT_GATES = [
   "stage_locked_423_human_message",
 ] as const;
 
+/** Office status_line — Playwright `test("…")` titles must match Domain gate name. */
+export const STATUS_LINE_PLAYWRIGHT_GATES = [
+  "status_line_all_slots_done_not_filling",
+] as const;
+
 export const FORBIDDEN_ERROR_ALIASES = [
   "webhook_timestamp_skew",
   "webhook_signature_invalid",
