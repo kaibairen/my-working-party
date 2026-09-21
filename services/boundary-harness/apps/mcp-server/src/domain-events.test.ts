@@ -141,7 +141,9 @@ describe("P0-C/D ops freeze names", () => {
     expect(p0c).toContain("bot_glove_default_evidence_ready");
     expect(p0d).toContain("status_change_outbound_wakes_assignee");
     expect(`${p0c}\n${p0d}\n${checklist}`).toContain("等你拍板");
-    expect(`${p0c}\n${p0d}\n${checklist}`).not.toContain("待拍板");
+    expect(p0c).toMatch(/不发明「待拍板」/);
+    expect(p0d).toMatch(/不发明「待拍板」/);
+    expect(checklist).not.toContain("待拍板");
   });
 });
 
