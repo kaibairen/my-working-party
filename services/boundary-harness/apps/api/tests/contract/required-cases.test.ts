@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   ACCEPTANCE_CASE_NAMES,
+  BRIDGE_P0CD_MERGE_GATES,
   DESKS_GROUP_MERGE_GATES,
   FORBIDDEN_ERROR_ALIASES,
   GAME_2048_MERGE_GATES,
@@ -21,6 +22,10 @@ const officeAntiSrc = readFileSync(join(here, "../security-anti/office-anti.test
 const desksDomainSrc = readFileSync(join(here, "../../../../packages/domain/src/desks.test.ts"), "utf8");
 const game2048Src = readFileSync(join(here, "../../../../examples/2048/board.test.ts"), "utf8");
 const stageEdgeSrc = readFileSync(join(here, "stage-edge.test.ts"), "utf8");
+const bridgeP0cdSrc = readFileSync(
+  join(here, "../../../mcp-server/src/domain-events.test.ts"),
+  "utf8",
+);
 const rosterSrc = [p0Src, officeAntiSrc].join("\n");
 const desksGroupSrc = [p0Src, desksDomainSrc].join("\n");
 const harnessRoot = join(here, "../../../../");
@@ -102,6 +107,16 @@ describe("Security acceptance case registry", () => {
     expect(officeHomePw).toContain("toHaveText(apiLine)");
     expect(officeHomePw).toContain("等你拍板");
     expect(STATUS_LINE_PLAYWRIGHT_GATES).toEqual(["status_line_all_slots_done_not_filling"]);
+  });
+
+  it("registers Bridge P0-C/D freeze names", () => {
+    for (const name of BRIDGE_P0CD_MERGE_GATES) {
+      expect(bridgeP0cdSrc, `missing it("${name}") in domain-events.test.ts`).toContain(`it("${name}"`);
+    }
+    expect(BRIDGE_P0CD_MERGE_GATES).toEqual([
+      "bot_glove_default_evidence_ready",
+      "status_change_outbound_wakes_assignee",
+    ]);
   });
 
   it("registers office stage-strip Playwright titles", () => {

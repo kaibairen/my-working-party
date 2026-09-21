@@ -11,6 +11,7 @@ import {
   buildWakeNote,
 } from "./domain-events";
 import { createMcpHttpApp } from "./http-proxy";
+import { listTools } from "./index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const opsDocs = join(here, "../../../docs/ops");
@@ -134,16 +135,49 @@ describe("P0-D domain-events", () => {
 });
 
 describe("P0-C/D ops freeze names", () => {
-  it("docs pin bot_glove_default_evidence_ready and status_change_outbound_wakes_assignee", () => {
+  beforeEach(() => resetWakeIdempotencyForTests());
+
+  it("bot_glove_default_evidence_ready", () => {
     const p0c = readFileSync(join(opsDocs, "P0C_DEFAULT_MCP_GLOVE_v1.md"), "utf8");
-    const p0d = readFileSync(join(opsDocs, "P0D_OUTBOUND_WAKE_PROTOCOL_v0.md"), "utf8");
     const checklist = readFileSync(join(opsDocs, "SIDEBAR_BOT_MCP_GLOVE_CHECKLIST_v1.md"), "utf8");
     expect(p0c).toContain("bot_glove_default_evidence_ready");
+    expect(checklist).toContain("bot_glove_default_evidence_ready");
+    const names = listTools({ http: true }).map((t) => t.name);
+    expect(names).toContain("harness_attach_evidence");
+    expect(names).toContain("harness_list_gates");
+    expect(names).toContain("harness_heartbeat");
+  });
+
+  it("status_change_outbound_wakes_assignee", async () => {
+    const p0d = readFileSync(join(opsDocs, "P0D_OUTBOUND_WAKE_PROTOCOL_v0.md"), "utf8");
+    const checklist = readFileSync(join(opsDocs, "SIDEBAR_BOT_MCP_GLOVE_CHECKLIST_v1.md"), "utf8");
     expect(p0d).toContain("status_change_outbound_wakes_assignee");
-    expect(`${p0c}\n${p0d}\n${checklist}`).toContain("等你拍板");
-    expect(p0c).toMatch(/不发明「待拍板」/);
+    expect(checklist).toContain("status_change_outbound_wakes_assignee");
+    expect(p0d).toContain("goal.status_changed");
+    expect(p0d).toContain("gate.ready");
+    expect(p0d).toContain("stage.unlocked");
+    expect(p0d).toContain("/hooks/domain-events");
+    expect(p0d).toContain("等你拍板");
     expect(p0d).toMatch(/不发明「待拍板」/);
-    expect(checklist).not.toContain("待拍板");
+    const skip = await handleDomainOutboundEvent({
+      id: "freeze-no-assignee",
+      type: "goal.status_changed",
+      payload: { goal_id: "g", status_line: "等你拍板" },
+    });
+    expect(skip.action).toBe("skipped_no_assignee");
+    const woke: string[] = [];
+    const hit = await handleDomainOutboundEvent(
+      {
+        id: "freeze-wake",
+        type: "goal.status_changed",
+        payload: { goal_id: "g", status_line: "等你拍板", assignee_bot_id: "bot-a" },
+      },
+      { wake: async (id) => woke.push(id) },
+    );
+    expect(hit.action).toBe("woke");
+    expect(woke).toEqual(["bot-a"]);
+    expect(hit.note).toContain("等你拍板");
+    expect(hit.note).not.toContain("待拍板");
   });
 });
 
