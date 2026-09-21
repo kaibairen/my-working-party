@@ -2,7 +2,17 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { closeHarness, createHarness, type Harness } from "@harness/domain";
+import {
+  closeHarness,
+  createHarness,
+  STATUS_LINE_DONE,
+  STATUS_LINE_FILLING,
+  STATUS_LINE_PENDING_DECISION,
+  STATUS_LINE_WAITING,
+  STATUS_LINE_WAITING_EVIDENCE,
+  type Harness,
+} from "@harness/domain";
+import { zhDM } from "../../../web/copy/zh-DM";
 import { createApp } from "../../src/app";
 
 /** Extra office anti names — do not add to the frozen S1–S8 registry of 8. */
@@ -96,5 +106,16 @@ describe("office anti-dispatch regressions", () => {
       body: JSON.stringify({ owner: "you", pool_id: "pool_noop" }),
     });
     expect(desksWrite.status).toBe(404);
+  });
+
+  it("office_consumes_domain_status_line", () => {
+    expect(officeHtml).toContain("g.status_line");
+    expect(officeHtml).toContain('data-testid="goal-status"');
+    expect(officeHtml).not.toMatch(/status\s*=\s*["'`]同事在填["'`]/);
+    expect(zhDM.statusWaiting).toBe(STATUS_LINE_WAITING);
+    expect(zhDM.statusFilling).toBe(STATUS_LINE_FILLING);
+    expect(zhDM.statusWaitingEvidence).toBe(STATUS_LINE_WAITING_EVIDENCE);
+    expect(zhDM.statusPendingDecision).toBe(STATUS_LINE_PENDING_DECISION);
+    expect(zhDM.statusDone).toBe(STATUS_LINE_DONE);
   });
 });

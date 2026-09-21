@@ -10,6 +10,7 @@ import {
   OFFICE_ROSTER_MERGE_GATES,
   STAGE_EDGE_MERGE_GATES,
   STAGE_STRIP_PLAYWRIGHT_GATES,
+  STATUS_LINE_MERGE_GATES,
 } from "./required-cases";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -76,6 +77,17 @@ describe("Security acceptance case registry", () => {
       "stage_locked_blocks_downstream_dispatch",
       "stage_unlock_after_gate_pass",
     ]);
+  });
+
+  it("registers office status_line merge gates", () => {
+    const officeDomainSrc = readFileSync(
+      join(here, "../../../../packages/domain/src/office.test.ts"),
+      "utf8",
+    );
+    for (const name of STATUS_LINE_MERGE_GATES) {
+      expect(officeDomainSrc, `missing it("${name}") in office.test.ts`).toContain(`it("${name}"`);
+    }
+    expect(STATUS_LINE_MERGE_GATES).toEqual(["status_line_all_slots_done_not_filling"]);
   });
 
   it("registers office stage-strip Playwright titles", () => {
