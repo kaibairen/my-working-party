@@ -29,5 +29,6 @@ Bridge **skips the wake path** (`skipped_no_assignee`). Do not invent office ass
 
 ## Freeze names (Domain)
 
-- `assignment_binds_bot_id`
+- `assignment_binds_assignee_bot_id`
 - `desk_busy_from_assignee_heartbeat`
+- `outbound_publisher_posts_domain_events`

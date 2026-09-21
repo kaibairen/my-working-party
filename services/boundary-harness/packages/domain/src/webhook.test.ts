@@ -53,7 +53,7 @@ describe("M3 webhook outbox", () => {
     }
   });
 
-  it("publishes bound goal.status_changed / gate.ready to Bridge /hooks/domain-events", async () => {
+  it("outbound_publisher_posts_domain_events", async () => {
     const calls: { url: string; body: any }[] = [];
     const original = globalThis.fetch;
     globalThis.fetch = (async (url, init) => {

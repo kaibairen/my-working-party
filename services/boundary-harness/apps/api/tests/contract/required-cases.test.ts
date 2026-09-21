@@ -91,11 +91,19 @@ describe("Security acceptance case registry", () => {
       join(here, "../../../../packages/domain/src/desks.test.ts"),
       "utf8",
     );
-    const p0bSrc = [p0Src, desksDomainSrc].join("\n");
+    const webhookSrc = readFileSync(
+      join(here, "../../../../packages/domain/src/webhook.test.ts"),
+      "utf8",
+    );
+    const p0bSrc = [p0Src, desksDomainSrc, webhookSrc].join("\n");
     for (const name of P0_B_MERGE_GATES) {
       expect(p0bSrc, `missing it("${name}") in P0-B freeze sources`).toContain(`it("${name}"`);
     }
-    expect(P0_B_MERGE_GATES).toEqual(["assignment_binds_bot_id", "desk_busy_from_assignee_heartbeat"]);
+    expect(P0_B_MERGE_GATES).toEqual([
+      "assignment_binds_assignee_bot_id",
+      "desk_busy_from_assignee_heartbeat",
+      "outbound_publisher_posts_domain_events",
+    ]);
   });
 
   it("registers office status_line merge gates", () => {
