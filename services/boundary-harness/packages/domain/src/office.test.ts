@@ -194,7 +194,7 @@ describe("office home goals + fill slots", () => {
     expect(line).toBe(STATUS_LINE_DONE);
 
     const readyGoal = createGoal(harness, coord, {
-      title: "待拍板目标",
+      title: "等你拍板目标",
       mode: "deliver",
       coordinator_ref: "coord-1",
       intent: "交产物后拍板",

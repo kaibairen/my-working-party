@@ -11,7 +11,7 @@ export const zhDM = {
   statusWaiting: "等同事开工",
   statusFilling: "同事在填",
   statusWaitingEvidence: "等证据",
-  statusPendingDecision: "待拍板",
+  statusPendingDecision: "等你拍板",
   statusDone: "已交齐",
   inboxTitle: "待办",
   inboxCount: (n: number) => (n > 0 ? `待办 · ${n}` : "待办"),

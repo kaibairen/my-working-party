@@ -65,7 +65,7 @@ export const STATUS_LINE_WAITING = "等同事开工";
 export const STATUS_LINE_FILLING = "同事在填";
 export const STATUS_LINE_WAITING_EVIDENCE = "等证据";
 /** Pending-decision copy (zhDM.statusPendingDecision). Ready GateInstance wins over filling. */
-export const STATUS_LINE_PENDING_DECISION = "待拍板";
+export const STATUS_LINE_PENDING_DECISION = "等你拍板";
 export const STATUS_LINE_DONE = "已交齐";
 
 export const STAGE_LABELS: Record<string, string> = {
