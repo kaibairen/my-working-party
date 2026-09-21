@@ -449,6 +449,11 @@ describe("P1 domain dogfood fixes", () => {
     expect(m0).toContain("api_8080_bind_no_blip");
     expect(m0).toContain("wait-api-healthy");
 
+    const incident = readFileSync(join(here, "../../../../deploy/api_8080_bind_no_blip_v0.md"), "utf8");
+    expect(incident).toContain("api_8080_bind_no_blip");
+    expect(incident).toContain("wait-api-healthy.sh");
+    expect(incident).toContain("compose-smoke");
+
     const ci = readFileSync(join(here, "../../../../../../.github/workflows/harness-m0.yml"), "utf8");
     expect(ci).toContain("compose-smoke");
     expect(ci).toContain("wait-api-healthy.sh");
