@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { closeHarness, createHarness, schema, STAGE_LOCKED_STRIP, type Harness } from "@harness/domain";
+import { zhDM } from "../../../web/copy/zh-DM";
 import { createApp } from "../../src/app";
 
 const headers = (role: string, actor = role) => ({
@@ -92,6 +93,7 @@ describe("Domain Stage-edge P0", () => {
     expect(errCode(lockedFill.body)).toBe("stage_locked");
     expect(errCode(lockedFill.body)).not.toBe("freeze_active");
     expect(errCode(lockedFill.body)).not.toBe("forbidden");
+    expect(zhDM.stageLocked).toBe(STAGE_LOCKED_STRIP);
     expect(lockedFill.body.message).toBe(STAGE_LOCKED_STRIP);
     expect(lockedFill.body.strip).toBe(STAGE_LOCKED_STRIP);
     expect(lockedFill.body.message).not.toMatch(
